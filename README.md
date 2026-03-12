@@ -99,6 +99,54 @@ That means an invalid deck fails early instead of producing brittle downstream b
 npm install
 ```
 
+## Quick Start
+
+The simplest way to use the framework is:
+
+1. Copy [`template.html`](template.html) to a new deck file such as `my-deck.html`
+2. Replace the placeholder copy with your actual presentation content
+3. Add any deck-specific selectors inside a deck-local `@layer content` `<style>` block or in [`css/content.css`](css/content.css)
+4. Preview the deck with `npm run start`
+5. Validate it with `npm run check -- my-deck.html`
+6. Export it with `npm run export -- my-deck.html /tmp/my-deck.pdf`
+
+If you are using an AI agent, have the agent read [`AGENTS.md`](AGENTS.md) and the docs in [`specs/`](specs) before it starts editing.
+
+## How To Use The Framework
+
+### Typical authoring workflow
+
+Use this when building or revising a deck by hand or with an agent:
+
+1. Start from [`template.html`](template.html) or duplicate an existing deck
+2. Keep the slide structure as `<section id="..." data-slide><div class="slide">...</div></section>`
+3. Reuse the existing primitives:
+   - `.slide`, `.slide-hero`, `.slide-wide`
+   - `.g2`, `.g3`, `.g4`
+   - `.icard`
+   - `.tkwy`
+   - `[data-count]`
+4. Keep deck-specific styling in `@layer content`
+5. Do not add inline styles
+6. Run `check` before `export`
+
+### Where to make changes
+
+For normal deck work, prefer editing:
+
+- the target deck HTML file
+- [`css/content.css`](css/content.css)
+- deck-local `@layer content` style blocks
+- deck assets in [`assets/`](assets)
+
+Avoid editing framework files unless you are intentionally changing the system:
+
+- [`css/canvas.css`](css/canvas.css)
+- [`css/theme-default.css`](css/theme-default.css)
+- [`css/theme-alt.css`](css/theme-alt.css)
+- [`lib/`](lib)
+- [`server.mjs`](server.mjs)
+
 ## Commands
 
 ### Start the preview server
@@ -113,11 +161,25 @@ This launches the local dev server and gives you:
 - live reload for HTML/CSS/JS edits
 - `POST /api/export` for PDF generation
 
+Open the deck in the browser from the index page or directly via:
+
+```bash
+http://localhost:3000/demo.html
+```
+
 ### Export a deck to PDF
 
 ```bash
 npm run export -- demo.html /tmp/demo.pdf
 ```
+
+You can also export from the browser UI:
+
+1. run `npm run start`
+2. open the deck in the browser
+3. click `Export to PDF`
+
+Use the CLI export in automation or agent harnesses. Use the browser export when iterating manually.
 
 ### Capture screenshots and a structured report
 
@@ -143,6 +205,42 @@ This currently fails on:
 - browser console errors during capture
 - slide overflow
 - zero discovered slides
+
+## Practical Usage Patterns
+
+### Create a new deck
+
+```bash
+cp template.html investor-update.html
+npm run start
+npm run check -- investor-update.html
+npm run export -- investor-update.html /tmp/investor-update.pdf
+```
+
+### Iterate with an agent
+
+Use this loop:
+
+1. tell the agent which deck file to edit
+2. tell it to read [`AGENTS.md`](AGENTS.md)
+3. tell it to stay in the default edit lane unless framework work is explicitly requested
+4. require it to run:
+   - `npm run check -- <deck.html>`
+   - `npm run export -- <deck.html> /tmp/<deck>.pdf`
+
+### Review what the agent produced
+
+If the deck feels off, run:
+
+```bash
+npm run capture -- <deck.html> /tmp/<deck>-capture
+```
+
+Then inspect:
+
+- `report.json`
+- per-slide PNGs
+- the exported PDF
 
 ## Deck Authoring Model
 
@@ -190,6 +288,96 @@ Protected by default:
 - framework JS files
 
 If an agent needs to edit protected files, that should be treated as framework work, not ordinary deck work.
+
+## How To Steer Claude Code, Codex, Or Another Agent
+
+The best steering is explicit and operational. Do not just say “make a deck.” Give the agent:
+
+- the target deck file
+- the audience
+- the purpose of the deck
+- the source material or constraints
+- the output requirements
+- the repo rules
+
+### Good steering pattern
+
+Use instructions shaped like this:
+
+```text
+Read AGENTS.md and specs/ first.
+Edit only my-deck.html and css/content.css unless framework work is truly required.
+Build a 6-slide deck for enterprise buyers.
+Use the existing slide primitives and keep all deck-specific styling in @layer content.
+Do not use inline styles.
+When done, run:
+- npm run check -- my-deck.html
+- npm run export -- my-deck.html /tmp/my-deck.pdf
+Summarize what changed and whether the checks passed.
+```
+
+### Prompt template for Codex
+
+```text
+Read AGENTS.md and specs/ before editing.
+Update demo.html into a buyer pitch for [audience].
+Preserve the framework contract: content < theme < canvas.
+Do not edit canvas/theme/runtime files unless you must, and if you must, say why first.
+Use existing slide primitives.
+No inline styles.
+Run npm run check -- demo.html and npm run export -- demo.html /tmp/demo.pdf before finishing.
+```
+
+### Prompt template for Claude Code
+
+```text
+Work inside this repository as an agent authoring a presentation deck.
+Start by reading AGENTS.md and the specs docs.
+Edit only the deck file and content-layer styles unless the task explicitly requires framework work.
+Create or revise [deck.html] for [audience] with [goal].
+Reuse the framework primitives rather than inventing new ones.
+After editing, run npm run check -- [deck.html] and npm run export -- [deck.html] /tmp/[deck].pdf.
+Report the final validation results and any framework-level concerns.
+```
+
+### Prompt template for other harnessed agents
+
+```text
+Repository contract:
+- read AGENTS.md
+- read specs/
+- edit only deck-surface files by default
+- no inline styles
+- no unlayered style blocks
+- preserve @layer content, theme, canvas
+
+Task:
+[describe the deck, audience, and purpose]
+
+Required verification:
+- npm run check -- [deck.html]
+- npm run export -- [deck.html] /tmp/[deck].pdf
+```
+
+### What to tell the agent when you want framework work
+
+If you actually want the system changed, say that explicitly. For example:
+
+```text
+This is framework work, not just deck work.
+You may edit canvas/theme/runtime files if needed.
+Please explain the invariant you are changing, update AGENTS.md/specs if needed, and rerun check/export on the example decks.
+```
+
+### What not to tell the agent
+
+Avoid vague instructions like:
+
+- “make it nicer”
+- “redesign everything”
+- “just do whatever is needed”
+
+Those tend to encourage drift. Better prompts anchor the target file, audience, constraints, and required verification.
 
 ## Recommended Harness Workflow
 
