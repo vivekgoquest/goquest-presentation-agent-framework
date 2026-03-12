@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Framework Demo Deck</title>
+
+  <!-- Layer order declaration -->
+  <style>@layer content, theme, canvas;</style>
+
+  <!-- Layer 1: Canvas -->
+  <link rel="stylesheet" href="css/canvas.css">
+
+  <!-- Layer 2: Theme (swap to theme-alt.css for green variant) -->
+  <link rel="stylesheet" href="css/theme-default.css">
+
+  <!-- Layer 3: Content additions -->
+  <link rel="stylesheet" href="css/content.css">
+
+  <!-- Demo-specific content additions -->
+  <style>
+    @layer content {
+      #hero .hero-bar {
+        display: flex;
+        gap: 2rem;
+        padding-top: 1.5rem;
+        margin-top: auto;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        width: 100%;
+        justify-content: center;
+      }
+
+      #features .badge-row {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+      }
+
+      #hero .hero-bar .stat-value {
+        color: var(--accent-light);
+        font-size: clamp(1.5rem, 3vw, 2.2rem);
+      }
+
+      #hero .hero-bar .stat-label {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.75rem;
+      }
+
+      #team .team-photo {
+        width: 100%;
+        height: 200px;
+        background: var(--card-alt);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+
+      #team .metric-row {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      #team .visual-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      #close .closing-actions {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+        margin-top: 2rem;
+      }
+
+      #timeline .tl {
+        display: flex;
+        gap: 0;
+        margin-top: 1.5rem;
+      }
+
+      #timeline .tl-item {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        padding-top: 2rem;
+      }
+
+      #timeline .tl-item::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--accent-bg);
+      }
+
+      #timeline .tl-item::after {
+        content: '';
+        position: absolute;
+        top: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Export Bar ── -->
+  <div class="export-bar">
+    <span class="status" id="export-status"></span>
+    <button onclick="exportPDF()">Export to PDF</button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SLIDE 1: HERO
+       ══════════════════════════════════════ -->
+  <section id="hero" data-slide>
+    <div class="slide slide-hero">
+      <p class="eyebrow rv">Demo Presentation</p>
+      <h1 class="hero-title rv mt-xs">
+        Framework<br><span class="text-accent-light">Demo Deck</span>
+      </h1>
+      <p class="body-lg rv mt-lg max-w-650">
+        This demonstrates the layered CSS architecture, responsive grids,
+        reveal animations, and PDF export capabilities.
+      </p>
+      <div class="hero-bar rv">
+        <div class="stat-card">
+          <div class="stat-value" data-count="3">0</div>
+          <div class="stat-label">CSS Layers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" data-count="5">0</div>
+          <div class="stat-label">Demo Slides</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" data-count="16" data-suffix=":9">0</div>
+          <div class="stat-label">Aspect Ratio</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SLIDE 2: OVERVIEW TABLE
+       ══════════════════════════════════════ -->
+  <section id="overview" data-slide>
+    <div class="slide">
+      <p class="eyebrow rv">Overview</p>
+      <h2 class="sect-title rv mt-xs">At a Glance</h2>
+
+      <table class="rv mt-lg">
+        <tbody>
+          <tr><th>Framework</th><td>Pitch Framework v1.0</td></tr>
+          <tr><th>Architecture</th><td>3 CSS layers via @layer (content, theme, canvas)</td></tr>
+          <tr><th>Slide Format</th><td>16:9 landscape, 960 x 540pt PDF pages</td></tr>
+          <tr><th>PDF Export</th><td>Playwright screenshots at 3x DPI + pdf-lib assembly</td></tr>
+          <tr><th>Animations</th><td>GSAP + ScrollTrigger reveal system</td></tr>
+          <tr><th>Typography</th><td>Inter font, responsive clamp() sizing</td></tr>
+          <tr><th>Grids</th><td><span class="badge badge-accent">.g2</span> <span class="badge badge-green">.g3</span> <span class="badge badge-amber">.g4</span></td></tr>
+        </tbody>
+      </table>
+
+      <div class="tkwy rv mt-lg">
+        The canvas layer is sacrosanct — slide dimensions, aspect ratio, and grid system never change.
+        The theme inherits that structure, and content adds deck-specific sections without redefining framework primitives.
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SLIDE 3: FEATURE GRID
+       ══════════════════════════════════════ -->
+  <section id="features" data-slide>
+    <div class="slide">
+      <p class="eyebrow rv">Components</p>
+      <h2 class="sect-title rv mt-xs">Built-in Elements</h2>
+
+      <div class="g3 rv mt-lg">
+        <div class="icard">
+          <span class="badge badge-accent mb-xs">Layer 1</span>
+          <h3 class="body-lg body-strong">Canvas</h3>
+          <p class="body-text mt-2xs">
+            Fixed slide dimensions, 16:9 aspect ratio, grid system (.g2, .g3, .g4),
+            flex utilities, and reveal animation states.
+          </p>
+        </div>
+        <div class="icard">
+          <span class="badge badge-green mb-xs">Layer 2</span>
+          <h3 class="body-lg body-strong">Theme</h3>
+          <p class="body-text mt-2xs">
+            Colors, typography, card styling, badges, tables, logos.
+            Swap theme-default.css for theme-alt.css to change everything.
+          </p>
+        </div>
+        <div class="icard">
+          <span class="badge badge-amber mb-xs">Layer 3</span>
+          <h3 class="body-lg body-strong">Content</h3>
+          <p class="body-text mt-2xs">
+            Deck-specific selectors and modules live here, but theme and canvas
+            remain authoritative for framework primitives.
+          </p>
+        </div>
+      </div>
+
+      <div class="g3 rv mt-sm">
+        <div class="icard">
+          <h3 class="body-lg body-strong">Badges</h3>
+          <p class="badge-row mt-xs">
+            <span class="badge badge-accent">Accent</span>
+            <span class="badge badge-green">Green</span>
+            <span class="badge badge-amber">Amber</span>
+            <span class="badge badge-red">Red</span>
+            <span class="badge badge-muted">Muted</span>
+          </p>
+        </div>
+        <div class="icard">
+          <h3 class="body-lg body-strong">Stat Cards</h3>
+          <div class="stat-card mt-2xs">
+            <div class="stat-value" data-count="960" data-suffix="pt">0</div>
+            <div class="stat-label">PDF Page Width</div>
+          </div>
+        </div>
+        <div class="icard">
+          <h3 class="body-lg body-strong">Takeaway Box</h3>
+          <div class="tkwy mt-xs">
+            Use .tkwy for key messages the audience must remember.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SLIDE 4: TWO-COLUMN LAYOUT
+       ══════════════════════════════════════ -->
+  <section id="team" data-slide>
+    <div class="slide">
+      <p class="eyebrow rv">Example</p>
+      <h2 class="sect-title rv mt-xs">Two-Column Layout</h2>
+
+      <div class="g2 rv mt-lg">
+        <div>
+          <p class="body-lg body-emphasis mb-sm">
+            The .g2 grid creates a balanced two-column layout.
+          </p>
+          <p class="body-text">
+            Use this for content that pairs naturally — text with an image,
+            a profile with credentials, data with visualization. The grid
+            uses <code>clamp()</code> for responsive gap sizing.
+          </p>
+          <div class="tkwy mt-md">
+            All grids collapse to single-column on mobile (below 768px).
+          </div>
+          <div class="metric-row">
+            <div class="icard flex-1 text-center">
+              <div class="stat-value stat-value-compact" data-count="2">0</div>
+              <div class="stat-label">Columns</div>
+            </div>
+            <div class="icard flex-1 text-center">
+              <div class="stat-value stat-value-compact" data-count="768" data-suffix="px">0</div>
+              <div class="stat-label">Breakpoint</div>
+            </div>
+          </div>
+        </div>
+        <div class="visual-stack">
+          <div class="team-photo">[Image placeholder]</div>
+          <div class="icard">
+            <h3 class="body-lg body-strong">Visual Content</h3>
+            <p class="body-text mt-2xs">
+              Place images, charts, or any visual element in the second column
+              to complement the text on the left.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SLIDE 5: CLOSE
+       ══════════════════════════════════════ -->
+  <section id="close" data-slide>
+    <div class="slide slide-hero">
+      <p class="eyebrow rv">Get Started</p>
+      <h2 class="hero-title hero-title-compact rv mt-xs">
+        Build Your Deck
+      </h2>
+      <p class="body-lg rv mt-lg max-w-550">
+        Copy <strong class="text-accent-light">template.html</strong>,
+        add your content, and run
+        <strong class="text-accent-light">node export-pdf.mjs</strong>
+      </p>
+      <p class="body-text body-text-dim rv mt-sm">
+        canvas.css + theme-default.css + content.css = your presentation
+      </p>
+      <div class="closing-actions rv">
+        <span class="badge badge-accent badge-lg">
+          Pitch Framework v1.0
+        </span>
+        <span class="small-text text-on-dark-soft">
+          16:9 &bull; @layer &bull; Playwright PDF
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Scripts ── -->
+  <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="js/animations.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/counter.js"></script>
+
+  <script>
+    async function exportPDF() {
+      const status = document.getElementById('export-status');
+      const filename = location.pathname.split('/').pop() || 'demo.html';
+      status.textContent = 'Exporting...';
+
+      try {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: filename }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Export failed');
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.replace('.html', '.pdf');
+        a.click();
+        URL.revokeObjectURL(url);
+        status.textContent = 'Done!';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    }
+  </script>
+
+</body>
+</html>

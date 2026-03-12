@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pitch Deck</title>
+
+  <!-- Layer order declaration: content < theme < canvas -->
+  <style>@layer content, theme, canvas;</style>
+
+  <!-- Layer 1: Canvas (dimensions, grid, utilities) -->
+  <link rel="stylesheet" href="css/canvas.css">
+
+  <!-- Layer 2: Theme (swap to theme-alt.css for green branding, or create your own) -->
+  <link rel="stylesheet" href="css/theme-default.css">
+
+  <!-- Layer 3: Content (deck-specific additions only) -->
+  <link rel="stylesheet" href="css/content.css">
+</head>
+<body>
+
+  <!-- ── Export Bar ── -->
+  <div class="export-bar">
+    <span class="status" id="export-status"></span>
+    <button onclick="exportPDF()">Export to PDF</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SLIDES — Add sections with data-slide attribute.
+       Each section needs an id and a .slide div inside.
+       ═══════════════════════════════════════════ -->
+
+  <!-- Slide 1: Hero -->
+  <section id="hero" data-slide>
+    <div class="slide slide-hero">
+      <p class="eyebrow rv">Your Company</p>
+      <h1 class="hero-title rv mt-xs">
+        Presentation<br>Title Here
+      </h1>
+      <p class="body-lg rv mt-lg max-w-600">
+        A one-line description that captures the essence of your pitch.
+      </p>
+    </div>
+  </section>
+
+  <!-- Slide 2: Content -->
+  <section id="content" data-slide>
+    <div class="slide">
+      <p class="eyebrow rv">Section Title</p>
+      <h2 class="sect-title rv mt-xs">
+        Your Key Message
+      </h2>
+      <div class="g3 rv mt-lg">
+        <div class="icard">
+          <h3 class="body-lg body-strong">Point One</h3>
+          <p class="body-text mt-2xs">
+            Supporting detail for the first key point.
+          </p>
+        </div>
+        <div class="icard">
+          <h3 class="body-lg body-strong">Point Two</h3>
+          <p class="body-text mt-2xs">
+            Supporting detail for the second key point.
+          </p>
+        </div>
+        <div class="icard">
+          <h3 class="body-lg body-strong">Point Three</h3>
+          <p class="body-text mt-2xs">
+            Supporting detail for the third key point.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 3: Close -->
+  <section id="close" data-slide>
+    <div class="slide slide-hero">
+      <p class="eyebrow rv">Thank You</p>
+      <h2 class="hero-title hero-title-compact rv mt-xs">
+        Let's Talk
+      </h2>
+      <p class="body-lg rv mt-xs">
+        your@email.com
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Scripts ── -->
+  <!-- Lenis smooth scroll -->
+  <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+  <!-- GSAP + ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <!-- Framework JS -->
+  <script src="js/animations.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/counter.js"></script>
+
+  <script>
+    async function exportPDF() {
+      const status = document.getElementById('export-status');
+      const filename = location.pathname.split('/').pop() || 'template.html';
+      status.textContent = 'Exporting...';
+
+      try {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: filename }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Export failed');
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.replace('.html', '.pdf');
+        a.click();
+        URL.revokeObjectURL(url);
+        status.textContent = 'Done!';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    }
+  </script>
+
+</body>
+</html>

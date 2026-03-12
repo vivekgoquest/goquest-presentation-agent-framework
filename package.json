@@ -1,0 +1,17 @@
+{
+  "name": "pitch-framework",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Layered HTML/CSS presentation framework with PDF export",
+  "scripts": {
+    "start": "node server.mjs",
+    "export": "node export-pdf.mjs",
+    "capture": "node lib/deck-capture.mjs",
+    "check": "node lib/check-deck.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.58.2"
+  }
+}
