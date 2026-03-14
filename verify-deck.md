@@ -12,8 +12,14 @@ You are orchestrating a multi-agent verification swarm for an HTML presentation 
 
 Use AskUserQuestion to ask the user TWO questions:
 
-**Question 1 — "Which HTML file should I verify?"**
-List all `.html` files in the framework directory. If only one deck exists beyond template.html, confirm it.
+**Question 1 — "Which workspace should I verify?"**
+List the available example workspaces (`examples/<name>`) and deck workspaces (`decks/<slug>`). If only one candidate exists beyond the examples, confirm it.
+
+Note for slide-folder workspaces:
+
+- verify the preview at `/decks/<slug>/` or `/examples/<name>/` after runtime assembles the HTML in memory
+- fix issues in `theme.css`, `slides/<NNN-id>/slide.html`, or optional `slides/<NNN-id>/slide.css`
+- rely on `/decks/<slug>/` for the rendered deck instead of touching any rendered HTML output directly
 
 **Question 2 — "Who is the target audience for this presentation?"**
 Let the user type freely. Examples: "investors", "enterprise clients", "conference attendees", "internal team", "potential buyers", etc. This context shapes the tone and calibration checks.
@@ -33,7 +39,7 @@ Every agent prompt MUST include:
 - The absolute path to the framework directory (for running the capture script)
 - The target audience description from Step 1
 - Path to any reference documents found in Step 2 (or "none")
-- The command to run: `cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs <filename> /tmp/deck-verify-<agent-name>-$(date +%s)`
+- The command to run: `cd "<FRAMEWORK_DIR>" && npm run capture -- <filename> /tmp/deck-verify-<agent-name>-$(date +%s)`
 - Instructions to READ the resulting `report.json` after capture completes
 - Instructions to READ the screenshot PNGs (Claude can read images) for visual analysis
 - The specific checklist for that agent (copy the full checklist from the agent definition below)
@@ -54,7 +60,7 @@ Every agent prompt MUST include:
 You are a visual consistency auditor for a presentation deck. Your job is to verify that every slide looks polished, professional, and visually consistent.
 
 1. Run the capture script to get screenshots and structured data:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-visual-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-visual-$(date +%s)"
 
 2. Read the report.json from the output directory.
 
@@ -107,7 +113,7 @@ Output findings as a structured list with slide IDs. End with a visual quality s
 You are a data accuracy auditor for a presentation deck. Your job is to verify every number, statistic, and data point for internal consistency.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-data-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-data-$(date +%s)"
 
 2. Read the report.json from the output directory.
 
@@ -155,7 +161,7 @@ Output findings as a structured list with slide IDs. End with a data integrity s
 You are a content quality auditor. Your job is to check the presentation for writing quality, completeness, and professionalism.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-content-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-content-$(date +%s)"
 
 2. Read the report.json — focus on allText, headings, bodyTexts, and takeaways for each slide.
 
@@ -207,7 +213,7 @@ Output findings as a structured list with slide IDs. End with a content quality 
 You are an audience calibration specialist. Your job is to verify that this presentation is properly tailored for its target audience.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-audience-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-audience-$(date +%s)"
 
 2. Read the report.json.
 
@@ -262,7 +268,7 @@ Output findings as a structured list. End with an audience-fit score (1-10) and 
 You are a typography and readability auditor. Your job is to ensure every slide is legible and well-typeset, especially when exported to PDF.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-typo-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-typo-$(date +%s)"
 
 2. Read the report.json — focus on typography, overflowDetected, and styles fields.
 
@@ -318,7 +324,7 @@ Output findings as a structured list with slide IDs. End with a readability scor
 You are a structural integrity auditor. Your job is to verify layout symmetry, grid alignment, and overall presentation structure.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && node lib/deck-capture.mjs "<HTML_FILE>" "/tmp/deck-verify-structure-$(date +%s)"
+   cd "<FRAMEWORK_DIR>" && npm run capture -- "<HTML_FILE>" "/tmp/deck-verify-structure-$(date +%s)"
 
 2. Read the report.json — focus on grids, dimensions, innerCards, and the consistency section.
 
@@ -417,7 +423,8 @@ After presenting the report, ask the user:
 If yes:
 - Fix CRITICAL issues first, then WARNING
 - Do NOT fix NOTE-level issues unless the user specifically asks
-- Edit the HTML file for content/structure changes
-- Edit content.css (or inline `<style>@layer content{...}</style>`) for layout/styling fixes
-- NEVER edit canvas.css or theme-*.css — those are framework files
+- Edit `slides/<NNN-id>/slide.html` for content or structure changes
+- Edit optional `slides/<NNN-id>/slide.css` for slide-local styling fixes
+- Edit `theme.css` only when the fix belongs to the deck-wide visual system
+- NEVER rewrite the rendered deck directly; keep fixes in `/decks/<slug>/` slide folders instead of touching rendered HTML output or framework files
 - After fixing, re-run ONLY the affected agents to confirm resolution

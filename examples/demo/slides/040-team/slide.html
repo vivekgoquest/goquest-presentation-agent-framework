@@ -1,0 +1,37 @@
+<div class="slide">
+  <p class="eyebrow rv">Composition</p>
+  <h2 class="sect-title rv mt-xs">Two-column slide with local slide-owned modules</h2>
+
+  <div class="g2 rv mt-lg">
+    <div>
+      <p class="body-lg body-emphasis mb-sm">
+        The demo keeps custom layout additions inside each slide folder instead of a shared deck-level content file.
+      </p>
+      <p class="body-text">
+        This lets the deck add custom modules like a hero stat row, a timeline, or a visual placeholder without redefining the global card, badge, or canvas rules.
+      </p>
+      <div class="tkwy mt-md">
+        Slide-local CSS can shape local composition, but colors, typography, shadows, and borders still belong to theme.css.
+      </div>
+      <div class="deck-demo-metric-row">
+        <div class="icard flex-1 text-center">
+          <div class="stat-value stat-value-compact" data-count="2">0</div>
+          <div class="stat-label">Sacred Layers</div>
+        </div>
+        <div class="icard flex-1 text-center">
+          <div class="stat-value stat-value-compact" data-count="4">0</div>
+          <div class="stat-label">Finalize Outputs</div>
+        </div>
+      </div>
+    </div>
+    <div class="deck-demo-visual-stack">
+      <div class="deck-demo-team-photo">Slide-owned visual placeholder</div>
+      <div class="icard">
+        <h3 class="body-lg body-strong">Local Assets</h3>
+        <p class="body-text mt-2xs">
+          Each slide can keep its own assets folder beside the source fragment while the framework still handles preview, export, and validation centrally.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

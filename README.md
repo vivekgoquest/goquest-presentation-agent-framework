@@ -1,434 +1,389 @@
 # Goquest Presentation Agent Framework
 
-A constrained HTML/CSS presentation framework for AI-assisted deck creation.
+An agent-first presentation framework for non-technical users and coding agents. The user describes the deck in plain English, the agent builds a local project folder, and the framework handles preview, validation, capture, and PDF export.
 
-This repo is built for an agent harness workflow:
+## Start Here
 
-- agents can edit deck content quickly
-- the framework protects structural and visual primitives
-- preview, capture, export, and validation all run through stable Node + Playwright tooling
+If you are non-technical, start with [`START-HERE.md`](START-HERE.md).
 
-The goal is not just to generate slides. The goal is to let agents produce decks repeatedly without slowly breaking the framework.
+That file gives you:
 
-## Why This Exists
+- one copy-paste prompt for any agent
+- the expected review loop
+- the exact files and outputs the agent should hand back
 
-Most agent-generated presentation repos drift over time because:
+## The Core Idea
 
-- inline styles bypass the design system
-- every deck invents new layout primitives
-- export and screenshot logic diverge
-- preview works, but capture/export break
-- agents do not know which files are safe to edit
+This repo is organized by ownership, not just by CSS theory:
 
-This framework addresses that by combining:
+```text
+framework/
+  canvas/
+  client/
+  runtime/
+decks/
+  <slug>/
+examples/
+  template/
+  demo/
+templates/
+outputs/
+prompts/
+specs/
+```
 
-- a strict cascade contract
-- a policy validator
-- shared Playwright runtime helpers
-- agent-facing repo docs
-- a single `check` command that catches structural regressions early
+- `framework/canvas/` owns the structural slide layer and is protected
+- `framework/client/` owns browser behavior such as reveals, nav, counters, and export
+- `framework/runtime/` owns preview, validation, capture, export, setup, finalize, and deck assembly
+- each deck in `decks/<slug>/` owns its deck-wide theme, slide source folders, local assets, and notes
+- `examples/` mirrors real workspace shape so agents can inspect and copy from it safely
 
-## Core Design Contract
+## Talk To Your Agent
 
-The framework enforces this CSS layer order:
+The default workflow is:
+
+1. Have the agent run `npm run setup` once initially, or again only if dependencies are missing.
+2. Tell the agent what the deck is for in plain English.
+3. Give it a deck slug, or let it propose one.
+4. Let it create or update a project folder with `npm run new -- --project /abs/path`.
+5. Have it run `npm run finalize -- --project /abs/path`.
+6. Review the PDF, screenshots, and summary inside that project's `outputs/`.
+
+The user should not need to think about CSS layers, Playwright, assembly, or export internals.
+
+## Project Model
+
+New work lives in a self-contained presentation project:
+
+```text
+<project-root>/
+  theme.css
+  brief.md
+  outline.md
+  revisions.md
+  assets/
+  slides/
+    010-hero/
+      slide.html
+      slide.css
+      assets/
+    020-story/
+      slide.html
+    030-close/
+      slide.html
+  outputs/
+  deck.pdf
+  report.json
+  full-page.png
+  slides/
+  summary.md
+  .presentation/
+    project.json
+    framework/
+      base/
+      overrides/
+```
+
+Notes:
+
+- `theme.css` is the deck-wide visual authority
+- `outline.md` is required for decks with more than 10 slides
+- `slides/<NNN-id>/slide.html` is the source of truth for slide content
+- `slides/<NNN-id>/slide.css` is optional and only for that slide
+- assets must stay deck-shared in `assets/` or slide-local in `slides/<NNN-id>/assets/`
+- `/preview/` is the canonical route for project-folder mode
+- `.presentation/project.json` stores project metadata
+- `.presentation/framework/base/` is the copied framework snapshot in copied mode
+- `.presentation/framework/overrides/` is the advanced lane for project-local framework changes
+
+Legacy workspaces under `decks/<slug>/` and `examples/<name>/` remain supported during transition.
+
+Note for technical users:
+
+- all new work should use the slide-folder model
+
+## Layer Contract
+
+The enforced cascade order is:
 
 `content < theme < canvas`
 
-Meaning:
+Interpretation:
 
-- `canvas` is structural and highest-priority
-- `theme` inherits canvas and defines the visual system
-- `content` adds deck-specific composition
+- `canvas` is structural and authoritative
+- `theme` inherits canvas and defines the reusable visual system for one deck
+- `content` comes from slide fragments plus optional slide-local `slide.css`, and stays local to that slide
 
-The intent is:
+The validator checks deck-authored surfaces together:
 
-- `canvas` is sacrosanct
-- `theme` cannot redefine canvas primitives
-- `content` cannot redefine canvas or theme primitives
+- `theme.css`
+- `slides/*/slide.html`
+- optional `slides/*/slide.css`
+- the assembled HTML that runtime serves for preview/export
 
-## What Is In The Repo
+Validation fails on:
 
-### Framework layers
-
-- [`css/canvas.css`](css/canvas.css): structural primitives, slide sizing, grids, utilities, responsive behavior
-- [`css/theme-default.css`](css/theme-default.css): default visual system, colors, typography, cards, badges
-- [`css/theme-alt.css`](css/theme-alt.css): alternate theme implementation
-- [`css/content.css`](css/content.css): deck-specific additions layer
-
-### Runtime and validation
-
-- [`server.mjs`](server.mjs): local preview server with live reload and PDF export endpoint
-- [`lib/deck-policy.js`](lib/deck-policy.js): hard validation for deck source rules
-- [`lib/deck-runtime.js`](lib/deck-runtime.js): shared Playwright page-prep and slide discovery helpers
-- [`lib/deck-capture.mjs`](lib/deck-capture.mjs): screenshot + structured deck capture
-- [`lib/pdf-export.js`](lib/pdf-export.js): deterministic PDF export from slide screenshots
-- [`lib/check-deck.mjs`](lib/check-deck.mjs): validation-oriented capture check
-
-### Authoring examples
-
-- [`template.html`](template.html): starter deck
-- [`demo.html`](demo.html): richer example deck
-- [`verify-deck.md`](verify-deck.md): multi-agent verification workflow prompt
-
-### Agent guidance
-
-- [`AGENTS.md`](AGENTS.md): editing contract for AI harnesses
-- [`specs/`](specs): repo-local source-of-truth docs for structure, tokens, patterns, and boundaries
-
-## Policy Rules
-
-Decks are rejected if they violate the authoring contract.
-
-Current hard checks include:
-
-- required layer declaration must be `@layer content, theme, canvas;`
-- no inline `style=""` attributes
-- no unlayered `<style>` blocks
-
-These checks run in:
-
-- preview
-- capture
-- export
-
-That means an invalid deck fails early instead of producing brittle downstream behavior.
+- missing `@layer content, theme, canvas`
+- inline `style=""`
+- raw `<style>` blocks inside slide fragments
+- `!important` in deck `theme.css` or slide-local `slide.css`
+- theme overrides of protected canvas selectors
+- slide CSS that is not scoped to its generated `#<slide-id>`
+- slide CSS that restyles theme primitives with colors, typography, borders, or shadows
+- authoring slide fragments with outer `<section>`, `<body>`, or full-document wrappers
 
 ## Install
 
 ```bash
-npm install
+npm run setup
 ```
+
+This installs npm packages and ensures the Playwright Chromium browser used by capture and export is available. The setup script is idempotent: it skips work when dependencies are already present.
 
 ## Quick Start
 
-The simplest way to use the framework is:
+Create a new project:
 
-1. Copy [`template.html`](template.html) to a new deck file such as `my-deck.html`
-2. Replace the placeholder copy with your actual presentation content
-3. Add any deck-specific selectors inside a deck-local `@layer content` `<style>` block or in [`css/content.css`](css/content.css)
-4. Preview the deck with `npm run start`
-5. Validate it with `npm run check -- my-deck.html`
-6. Export it with `npm run export -- my-deck.html /tmp/my-deck.pdf`
+```bash
+npm run setup
+npm run new -- --project /abs/path/to/acme-pitch
+```
 
-If you are using an AI agent, have the agent read [`AGENTS.md`](AGENTS.md) and the docs in [`specs/`](specs) before it starts editing.
+For long decks, scaffold the full slide count up front:
 
-## How To Use The Framework
+```bash
+npm run new -- --project /abs/path/to/city-after-dark --slides 20
+```
 
-### Typical authoring workflow
+If the project needs a vendored framework snapshot:
 
-Use this when building or revising a deck by hand or with an agent:
+```bash
+npm run new -- --project /abs/path/to/city-after-dark --slides 20 --copy-framework
+```
 
-1. Start from [`template.html`](template.html) or duplicate an existing deck
-2. Keep the slide structure as `<section id="..." data-slide><div class="slide">...</div></section>`
-3. Reuse the existing primitives:
-   - `.slide`, `.slide-hero`, `.slide-wide`
-   - `.g2`, `.g3`, `.g4`
-   - `.icard`
-   - `.tkwy`
-   - `[data-count]`
-4. Keep deck-specific styling in `@layer content`
-5. Do not add inline styles
-6. Run `check` before `export`
+Start the workspace server:
 
-### Where to make changes
+```bash
+npm run start
+```
 
-For normal deck work, prefer editing:
+Open the operator console:
 
-- the target deck HTML file
-- [`css/content.css`](css/content.css)
-- deck-local `@layer content` style blocks
-- deck assets in [`assets/`](assets)
+- `http://127.0.0.1:3000/`
 
-Avoid editing framework files unless you are intentionally changing the system:
+From there:
 
-- [`css/canvas.css`](css/canvas.css)
-- [`css/theme-default.css`](css/theme-default.css)
-- [`css/theme-alt.css`](css/theme-alt.css)
-- [`lib/`](lib)
-- [`server.mjs`](server.mjs)
+- use `Open Folder` to open an existing project or `Create Presentation` to initialize a new one
+- keep the current project in one browser workspace instead of bouncing between terminal and preview tabs
+
+Once a project is open, the console gives you:
+
+- a left workspace column with project files on top and an agent launcher / terminal panel below
+- a live preview pane on the right pointed at `/preview/` for the opened project
+- explicit `Launch Codex`, `Launch Claude`, and `Open Shell` actions instead of an auto-started raw shell
+- a task composer that can send the first prompt straight to Claude or Codex
+- project progress and outputs status above the preview
+- the same hot reload and Export PDF flow as the raw preview routes
+
+The raw routes remain available if you want them directly:
+
+- `http://localhost:3000/preview/`
+- `http://localhost:3000/examples/template/`
+- `http://localhost:3000/examples/demo/`
+- `http://localhost:3000/workspaces/` for the old bare workspace browser
+
+Finalize the deck:
+
+```bash
+npm run finalize -- --project /abs/path/to/acme-pitch
+```
+
+Review the outputs:
+
+- `/abs/path/to/acme-pitch/outputs/deck.pdf`
+- `/abs/path/to/acme-pitch/outputs/slides/`
+- `/abs/path/to/acme-pitch/outputs/report.json`
+- `/abs/path/to/acme-pitch/outputs/summary.md`
 
 ## Commands
 
-### Start the preview server
+### `npm run new -- --deck <slug> [--slides <count>]`
+
+Scaffolds a new workspace using the repo templates.
+
+Creates:
+
+- `decks/<slug>/theme.css`
+- `decks/<slug>/brief.md`
+- `decks/<slug>/outline.md` for decks with more than 10 slides
+- `decks/<slug>/revisions.md`
+- `decks/<slug>/assets/`
+- `decks/<slug>/slides/010-hero/slide.html`
+- additional slide folders based on the requested slide count
+- preview `/decks/<slug>/` to see the assembled HTML once theme and slides are ready
+
+For decks with more than 10 slides:
+
+- replace `brief.md` first
+- replace every `[[TODO_...]]` marker in `outline.md`
+- build the slides in batches of 5
+- run `npm run check -- --deck <slug>` after each batch
+
+### `npm run finalize -- --deck <slug>`
+
+Runs the end-to-end deck workflow:
+
+- deck assembly
+- policy validation
+- Playwright capture
+- PDF export
+- summary generation
+
+Outputs:
+
+- `outputs/<slug>/deck.pdf`
+- `outputs/<slug>/report.json`
+- `outputs/<slug>/full-page.png`
+- `outputs/<slug>/slides/`
+- `outputs/<slug>/summary.md`
+
+Notes:
+
+- finalize clears the old output directory first, so reruns are deterministic
+- `summary.md` is rendered from `templates/summary.md`
+- finalize exits non-zero when the deck still needs review
+
+### Low-level commands
+
+These remain available for agents and technical users:
+
+```bash
+npm run check -- --deck acme-pitch
+npm run capture -- --deck acme-pitch /tmp/acme-capture
+npm run export -- --deck acme-pitch /tmp/acme.pdf
+```
+
+Even in slide-folder mode, those commands talk to workspace slugs because the runtime assembles the HTML on demand.
+
+You can also export or inspect examples directly:
+
+```bash
+npm run check -- --example demo
+npm run export -- --example template /tmp/template.pdf
+```
+
+Operator-console baseline smoke:
+
+```bash
+npm run ui-smoke -- --project /abs/path/to/acme-pitch
+```
+
+That opens the real project workspace through Playwright, launches a shell from the Agent panel, verifies the terminal and preview are live, clicks the top-bar Export PDF action, runs finalize, and saves proof artifacts under the project's `outputs/ui-smoke-*` directory.
+
+## Preview Server
+
+Run:
 
 ```bash
 npm run start
 ```
 
-This launches the local dev server and gives you:
+The server provides:
 
-- deck listing at `/`
-- live reload for HTML/CSS/JS edits
-- `POST /api/export` for PDF generation
+- an operator console at `/`
+- a raw workspace browser at `/workspaces/`
+- example previews at `/examples/template/` and `/examples/demo/`
+- deck workspace previews at `/decks/<slug>/`
+- live reload
+- browser-triggered PDF export through `POST /api/export`
 
-Open the deck in the browser from the index page or directly via:
+The operator console is the default human entrypoint:
 
-```bash
-http://localhost:3000/demo.html
-```
+1. start the server
+2. open `/`
+3. browse the project files in the left column
+4. launch `codex`, `claude`, or a shell from the Agent panel
+5. watch the live preview update on the right
 
-### Export a deck to PDF
+The export endpoint accepts workspace references such as:
 
-```bash
-npm run export -- demo.html /tmp/demo.pdf
-```
+- `{ "ownerType": "deck", "ownerName": "acme-pitch" }`
+- `{ "ownerType": "example", "ownerName": "demo" }`
 
-You can also export from the browser UI:
+When a workspace uses slide folders, preview regenerates the deck automatically when `theme.css` or any file under `slides/` changes.
 
-1. run `npm run start`
-2. open the deck in the browser
-3. click `Export to PDF`
+## How To Use With Agents
 
-Use the CLI export in automation or agent harnesses. Use the browser export when iterating manually.
+The operator console is the main human UI, and the terminal inside it is where the agent runs.
 
-### Capture screenshots and a structured report
+The user should describe:
 
-```bash
-npm run capture -- demo.html /tmp/demo-capture
-```
+- goal
+- audience
+- tone
+- must-include facts
+- any documents or assets to use
 
-Outputs include:
+The agent should normalize that into:
 
-- `report.json`
-- per-slide PNG screenshots
-- one full-page PNG
+- `brief.md` for initial direction
+- `revisions.md` for later changes
 
-### Run the framework check
+Suggested prompt files live in [`prompts/`](prompts).
 
-```bash
-npm run check -- demo.html
-```
+## Steering Codex, Claude Code, Or Another Agent
 
-This currently fails on:
+Use this pattern:
 
-- policy violations
-- browser console errors during capture
-- slide overflow
-- zero discovered slides
+1. Tell the agent to read [`START-HERE.md`](START-HERE.md) and [`AGENTS.md`](AGENTS.md).
+2. Ask it to create or update a deck workspace.
+3. Ask it to finalize the deck before handing it back.
 
-## Practical Usage Patterns
+The agent should return:
 
-### Create a new deck
+- the deck workspace path
+- the PDF path
+- the screenshot path
+- the summary path
+- what changed
+- anything that still needs your decision
 
-```bash
-cp template.html investor-update.html
-npm run start
-npm run check -- investor-update.html
-npm run export -- investor-update.html /tmp/investor-update.pdf
-```
-
-### Iterate with an agent
-
-Use this loop:
-
-1. tell the agent which deck file to edit
-2. tell it to read [`AGENTS.md`](AGENTS.md)
-3. tell it to stay in the default edit lane unless framework work is explicitly requested
-4. require it to run:
-   - `npm run check -- <deck.html>`
-   - `npm run export -- <deck.html> /tmp/<deck>.pdf`
-
-### Review what the agent produced
-
-If the deck feels off, run:
-
-```bash
-npm run capture -- <deck.html> /tmp/<deck>-capture
-```
-
-Then inspect:
-
-- `report.json`
-- per-slide PNGs
-- the exported PDF
-
-## Deck Authoring Model
-
-Each slide should be authored as:
-
-```html
-<section id="intro" data-slide>
-  <div class="slide">
-    ...
-  </div>
-</section>
-```
-
-Supported slide roots:
-
-- `.slide`
-- `.slide.slide-hero`
-- `.slide-wide`
-
-Preferred composition primitives:
-
-- `.g2`
-- `.g3`
-- `.g4`
-- `.icard`
-- `.tkwy`
-- `[data-count]` stat counters
-
-## How Agents Should Work In This Repo
-
-Default edit lane:
-
-- target deck `*.html`
-- `css/content.css`
-- deck-local `@layer content` style blocks
-- assets used by the deck
-
-Protected by default:
-
-- `css/canvas.css`
-- `css/theme-default.css`
-- `css/theme-alt.css`
-- `lib/`
-- `server.mjs`
-- framework JS files
-
-If an agent needs to edit protected files, that should be treated as framework work, not ordinary deck work.
-
-## How To Steer Claude Code, Codex, Or Another Agent
-
-The best steering is explicit and operational. Do not just say “make a deck.” Give the agent:
-
-- the target deck file
-- the audience
-- the purpose of the deck
-- the source material or constraints
-- the output requirements
-- the repo rules
-
-### Good steering pattern
-
-Use instructions shaped like this:
+## Repo Structure
 
 ```text
-Read AGENTS.md and specs/ first.
-Edit only my-deck.html and css/content.css unless framework work is truly required.
-Build a 6-slide deck for enterprise buyers.
-Use the existing slide primitives and keep all deck-specific styling in @layer content.
-Do not use inline styles.
-When done, run:
-- npm run check -- my-deck.html
-- npm run export -- my-deck.html /tmp/my-deck.pdf
-Summarize what changed and whether the checks passed.
+framework/
+  canvas/
+    canvas.css
+  client/
+    animations.js
+    nav.js
+    counter.js
+    export.js
+  runtime/
+    server.mjs
+    deck-policy.js
+    deck-capture.mjs
+    pdf-export.js
+    finalize-deck.mjs
+    new-deck.mjs
+    setup.mjs
+decks/
+examples/
+templates/
+outputs/
+prompts/
+specs/
 ```
 
-### Prompt template for Codex
+## Protected Core
 
-```text
-Read AGENTS.md and specs/ before editing.
-Update demo.html into a buyer pitch for [audience].
-Preserve the framework contract: content < theme < canvas.
-Do not edit canvas/theme/runtime files unless you must, and if you must, say why first.
-Use existing slide primitives.
-No inline styles.
-Run npm run check -- demo.html and npm run export -- demo.html /tmp/demo.pdf before finishing.
-```
+Agents should treat these as framework-level files:
 
-### Prompt template for Claude Code
+- `framework/canvas/`
+- `framework/client/`
+- `framework/runtime/`
+- `templates/`
+- `prompts/`
+- `specs/`
 
-```text
-Work inside this repository as an agent authoring a presentation deck.
-Start by reading AGENTS.md and the specs docs.
-Edit only the deck file and content-layer styles unless the task explicitly requires framework work.
-Create or revise [deck.html] for [audience] with [goal].
-Reuse the framework primitives rather than inventing new ones.
-After editing, run npm run check -- [deck.html] and npm run export -- [deck.html] /tmp/[deck].pdf.
-Report the final validation results and any framework-level concerns.
-```
-
-### Prompt template for other harnessed agents
-
-```text
-Repository contract:
-- read AGENTS.md
-- read specs/
-- edit only deck-surface files by default
-- no inline styles
-- no unlayered style blocks
-- preserve @layer content, theme, canvas
-
-Task:
-[describe the deck, audience, and purpose]
-
-Required verification:
-- npm run check -- [deck.html]
-- npm run export -- [deck.html] /tmp/[deck].pdf
-```
-
-### What to tell the agent when you want framework work
-
-If you actually want the system changed, say that explicitly. For example:
-
-```text
-This is framework work, not just deck work.
-You may edit canvas/theme/runtime files if needed.
-Please explain the invariant you are changing, update AGENTS.md/specs if needed, and rerun check/export on the example decks.
-```
-
-### What not to tell the agent
-
-Avoid vague instructions like:
-
-- “make it nicer”
-- “redesign everything”
-- “just do whatever is needed”
-
-Those tend to encourage drift. Better prompts anchor the target file, audience, constraints, and required verification.
-
-## Recommended Harness Workflow
-
-For an agent harness, the most reliable loop is:
-
-1. Read [`AGENTS.md`](AGENTS.md)
-2. Read the docs in [`specs/`](specs)
-3. Edit only deck-surface files unless the task explicitly requires framework work
-4. Run `npm run check -- <deck.html>`
-5. Run `npm run export -- <deck.html> /tmp/<deck>.pdf`
-
-That gives you prompt guidance plus code-level enforcement.
-
-## Why This Is Better Than Skill-Only Guidance
-
-A skill or system prompt is useful, but not sufficient by itself.
-
-This repo keeps the source of truth in code and repo-local docs:
-
-- prompts tell agents what to do
-- validators reject invalid patterns
-- shared runtime helpers keep export/capture behavior aligned
-
-That combination is more stable than relying on prompt discipline alone.
-
-## Verification Workflow
-
-For deeper QA, use the capture output directly or follow the review flow in [`verify-deck.md`](verify-deck.md).
-
-The framework is designed so multi-agent review can analyze:
-
-- screenshots
-- layout integrity
-- copy quality
-- consistency
-- overflow
-- structured extracted data
-
-## Public Repo Notes
-
-This repository is intended to be safe for public sharing:
-
-- machine-specific paths are not required for normal usage
-- runtime entrypoints are standard Node scripts
-- `node_modules` and generated PDFs are ignored
-
-## Next Good Additions
-
-If you want to extend this framework further, the highest-leverage next steps are:
-
-- move decks into `decks/<name>/`
-- add screenshot snapshots for regression testing
-- add stricter selector protection in the policy validator
-- add a deck manifest format for richer harness automation
+Normal deck work should stay inside `decks/<slug>/`.

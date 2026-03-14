@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goquest Presentation Workspace</title>
+  <link rel="stylesheet" href="/framework/console/launcher.css">
+</head>
+<body>
+  <main class="launcher-shell">
+    <section class="launcher-hero">
+      <p class="launcher-kicker">Goquest Presentation Workspace</p>
+      <h1>Open a presentation project, launch an agent, and watch the deck build live.</h1>
+      <p class="launcher-copy">Choose an existing project folder or initialize a new one. Once a project is open, the workspace keeps the agent terminal, preview, progress, and outputs in one place.</p>
+
+      <div class="launcher-actions">
+        <button id="open-folder" type="button">Open Folder</button>
+        <button id="create-presentation" type="button">Create Presentation</button>
+      </div>
+
+      <p id="launcher-status" class="launcher-status">No project is open yet.</p>
+    </section>
+
+    <section class="launcher-grid">
+      <article class="launcher-card">
+        <div class="card-head">
+          <h2>Create or initialize</h2>
+          <p>Pick a folder, set the slide count, and choose whether to vendor a framework snapshot into the project.</p>
+        </div>
+
+        <form id="create-form" class="create-form">
+          <label class="field">
+            <span>Project folder</span>
+            <div class="path-field">
+              <input id="project-root" name="projectRoot" type="text" placeholder="/abs/path/to/project-folder" spellcheck="false" autocomplete="off">
+              <button id="browse-folder" type="button">Browse…</button>
+            </div>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Slides</span>
+              <input id="slide-count" name="slides" type="number" min="1" max="99" value="20">
+            </label>
+
+            <label class="toggle-field">
+              <input id="copy-framework" name="copyFramework" type="checkbox">
+              <span>Copy framework snapshot into <code>.presentation/framework</code></span>
+            </label>
+          </div>
+
+          <div class="create-actions">
+            <button id="open-existing" type="button">Open Existing Project</button>
+            <button id="initialize-project" type="submit">Initialize Folder</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="launcher-card">
+        <div class="card-head">
+          <h2>Open recent</h2>
+          <p>Recent projects are stored locally in this browser and reopen the workspace instantly.</p>
+        </div>
+
+        <div id="recent-list" class="recent-list">
+          <p class="recent-empty">No recent projects yet.</p>
+        </div>
+
+        <a class="workspace-link" href="/workspaces/">Browse legacy workspaces</a>
+      </article>
+    </section>
+  </main>
+
+  <script src="/framework/console/launcher.js"></script>
+</body>
+</html>

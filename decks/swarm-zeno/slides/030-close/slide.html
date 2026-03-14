@@ -1,0 +1,47 @@
+<div class="slide">
+  <p class="eyebrow rv">Minimum Evidence</p>
+  <h2 class="sect-title rv mt-xs">
+    The go / no-go packet should fit on one screen
+  </h2>
+  <div class="evidence-layout rv mt-lg">
+    <div class="evidence-card">
+      <div class="evidence-list">
+        <div class="evidence-item">
+          <p class="panel-title">Build evidence</p>
+          <p class="body-text mt-2xs">
+            Commit SHA, deployed version, and the exact config or feature-flag state.
+          </p>
+        </div>
+        <div class="evidence-item">
+          <p class="panel-title">User-path evidence</p>
+          <p class="body-text mt-2xs">
+            One screenshot or short note that the core journey worked in the target environment.
+          </p>
+        </div>
+        <div class="evidence-item">
+          <p class="panel-title">Ops evidence</p>
+          <p class="body-text mt-2xs">
+            The monitoring dashboard, alert channel, and escalation owner are already live.
+          </p>
+        </div>
+        <div class="evidence-item">
+          <p class="panel-title">Rollback evidence</p>
+          <p class="body-text mt-2xs">
+            The rollback step is written down, timed, and understood by the release owner.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="evidence-card">
+      <span class="badge badge-accent">Ship packet</span>
+      <p class="body-lg mt-md">
+        If a reviewer cannot scan the evidence in under two minutes, the release is not yet
+        ready for a confident decision.
+      </p>
+      <div class="note-banner">
+        Keep the packet lightweight: links over long prose, owners over vague status, and
+        real stop conditions over “we’ll keep an eye on it.”
+      </div>
+    </div>
+  </div>
+</div>

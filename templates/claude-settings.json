@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-slide-quality.mjs",
+            "timeout": 15,
+            "statusMessage": "Checking slide quality…"
+          }
+        ]
+      }
+    ]
+  }
+}

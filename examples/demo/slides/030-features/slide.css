@@ -1,0 +1,7 @@
+@layer content {
+  #features .deck-demo-badge-row {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+}

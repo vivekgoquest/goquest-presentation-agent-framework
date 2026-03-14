@@ -1,0 +1,10 @@
+@layer content {
+  #close .deck-demo-closing-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

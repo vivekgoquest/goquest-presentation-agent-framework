@@ -1,0 +1,16 @@
+@layer content {
+  #story .three-up {
+    grid-template-columns: 1fr 1.05fr;
+  }
+
+  #story .incident-visual {
+    width: 100%;
+    border: 1px solid rgba(16, 32, 51, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(238, 244, 248, 0.9));
+    min-height: 22rem;
+  }
+
+  #story .move-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,33 @@
+@layer content {
+  #team .deck-demo-team-photo {
+    width: 100%;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(165, 32, 32, 0.08) 0%, rgba(38, 109, 77, 0.12) 100%);
+    color: #6e7078;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 1.25rem;
+  }
+
+  #team .deck-demo-metric-row {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  #team .deck-demo-visual-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  @media (max-width: 900px) {
+    #team .deck-demo-metric-row {
+      flex-direction: column;
+    }
+  }
+}
