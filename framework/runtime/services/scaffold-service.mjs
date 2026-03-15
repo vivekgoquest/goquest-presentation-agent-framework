@@ -233,9 +233,32 @@ function scaffoldIntoPaths(paths, options = {}) {
 
   const claudeDir = resolve(paths.sourceDirAbs, '.claude');
   const claudeHooksDir = resolve(claudeDir, 'hooks');
+  const claudeRulesDir = resolve(claudeDir, 'rules');
+  const claudeSkillsDir = resolve(claudeDir, 'skills');
   mkdirSync(claudeHooksDir, { recursive: true });
+  mkdirSync(claudeRulesDir, { recursive: true });
+  mkdirSync(claudeSkillsDir, { recursive: true });
+
+  // Settings and hooks
   cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-settings.json'), resolve(claudeDir, 'settings.json'));
   cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-hooks', 'check-slide-quality.mjs'), resolve(claudeHooksDir, 'check-slide-quality.mjs'));
+
+  // CLAUDE.md — per-project agent contract
+  cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-claude-md.md'), resolve(claudeDir, 'CLAUDE.md'));
+
+  // Rules — framework specs for auto-discovery
+  const rulesSourceDir = resolve(FRAMEWORK_ROOT, 'templates', 'claude-rules');
+  for (const entry of readdirSync(rulesSourceDir)) {
+    cpSync(resolve(rulesSourceDir, entry), resolve(claudeRulesDir, entry));
+  }
+
+  // Skills — invocable workflows (/new-deck, /revise-deck, etc.)
+  const skillsSourceDir = resolve(FRAMEWORK_ROOT, 'templates', 'claude-skills');
+  for (const entry of readdirSync(skillsSourceDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      cpSync(resolve(skillsSourceDir, entry.name), resolve(claudeSkillsDir, entry.name), { recursive: true });
+    }
+  }
 
   writeFileSync(paths.themeCssAbs, renderTemplate('theme.css'));
   writeFileSync(paths.briefAbs, renderTemplate('brief.md'));
@@ -285,6 +308,9 @@ function scaffoldIntoPaths(paths, options = {}) {
     `${paths.outputsDirRel}/`,
     '.claude/settings.json',
     '.claude/hooks/check-slide-quality.mjs',
+    '.claude/CLAUDE.md',
+    '.claude/rules/',
+    '.claude/skills/',
   ];
 
   if (paths.kind === 'project') {
