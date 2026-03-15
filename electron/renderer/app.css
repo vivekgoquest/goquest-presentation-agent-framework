@@ -124,7 +124,7 @@ button, input { font: inherit; color: inherit; }
 .terminal-container .xterm { height: 100%; padding: 6px 0 0 10px; }
 .terminal-container .xterm-viewport { overflow-y: auto !important; }
 
-.preview-pane { flex: 1; flex-direction: row; background: #f0f0f0; }
+.preview-pane { flex: 1.2; flex-direction: row; background: #f0f0f0; }
 .preview-canvas { flex: 1; position: relative; display: flex; flex-direction: column; }
 .preview-frame { width: 100%; flex: 1; border: none; }
 

@@ -14,7 +14,6 @@ const el = {
   runFinalize: $('run-finalize'),
   moreActions: $('more-actions'),
   moreMenu: $('more-menu'),
-  startShell: $('start-shell'),
   stopTerminal: $('stop-terminal'),
   clearTerminal: $('clear-terminal'),
   welcomePanel: $('welcome-panel'),
@@ -45,7 +44,7 @@ const el = {
   projectStatusBadge: $('project-status-badge'),
 };
 
-const state = { meta: null, projectState: null, files: null, terminalMeta: null, hasProject: false, diagnosticsOpen: false, splitRatio: 0.35, terminalVisible: false, currentSlide: 0, slideEntries: [] };
+const state = { meta: null, projectState: null, files: null, terminalMeta: null, hasProject: false, diagnosticsOpen: false, currentSlide: 0, slideEntries: [] };
 
 // ── xterm ──
 const FitAddonClass = (typeof FitAddon === 'function') ? FitAddon : FitAddon.FitAddon;
@@ -102,27 +101,12 @@ function showToast(msg, type = 'error', ms = 4000) {
 }
 
 // ── Layout ──
-function showTerminal() {
-  if (state.terminalVisible) return;
-  state.terminalVisible = true;
-  el.terminalPane.style.display = 'flex';
-  el.splitHandle.style.display = 'block';
-  applySplitRatio();
-  requestAnimationFrame(() => { mountXterm(); fitTerminal(); });
-}
-
 function showProjectLayout() {
   el.welcomePanel.style.display = 'none';
   el.previewPane.style.display = 'flex';
-  // Terminal stays in whatever state it's in
-  if (state.terminalVisible) {
-    el.terminalPane.style.display = 'flex';
-    el.splitHandle.style.display = 'block';
-    applySplitRatio();
-    requestAnimationFrame(() => { mountXterm(); fitTerminal(); });
-  } else {
-    el.previewPane.style.flex = '1';
-  }
+  el.terminalPane.style.display = 'flex';
+  el.splitHandle.style.display = 'block';
+  requestAnimationFrame(() => { mountXterm(); fitTerminal(); });
 }
 
 function showWelcomeLayout() {
@@ -132,36 +116,6 @@ function showWelcomeLayout() {
   el.splitHandle.style.display = 'none';
 }
 
-function applySplitRatio() {
-  // Preview on the left (hero), terminal on the right
-  const r = state.splitRatio; // terminal ratio
-  el.previewPane.style.flex = `${1 - r}`;
-  el.terminalPane.style.flex = `${r}`;
-  el.splitHandle.style.left = `${(1 - r) * 100}%`;
-}
-
-// ── Split drag ──
-(function initSplit() {
-  let dragging = false;
-  el.splitHandle.addEventListener('mousedown', (e) => {
-    e.preventDefault(); dragging = true;
-    el.splitHandle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-  });
-  document.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    const rect = el.previewPane.parentElement.getBoundingClientRect();
-    const previewRatio = (e.clientX - rect.left) / rect.width;
-    state.splitRatio = Math.max(0.15, Math.min(0.7, 1 - previewRatio));
-    applySplitRatio(); fitTerminal();
-  });
-  document.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    dragging = false; el.splitHandle.classList.remove('dragging');
-    document.body.style.cursor = ''; document.body.style.userSelect = '';
-    fitTerminal();
-  });
-})();
 window.addEventListener('resize', () => fitTerminal());
 
 // ── State ──
@@ -318,8 +272,6 @@ function updateTerminalState(meta) {
   el.stopTerminal.style.display = alive ? '' : 'none';
   el.clearTerminal.style.display = (alive || stopped) ? '' : 'none';
   if (alive && xtermMounted) term.focus();
-  // Auto-show terminal pane when a session starts
-  if (alive && state.hasProject && !state.terminalVisible) showTerminal();
 }
 
 async function refreshProjectPanels() {
@@ -362,6 +314,8 @@ async function openProject(path) {
     showToast('Project opened', 'success', 2500);
     return r;
   });
+  // Auto-start shell in the project folder (projectContext is already set by onProjectChanged)
+  window.electron.terminal.start('shell').catch(() => {});
 }
 
 async function createProject() {
@@ -374,6 +328,8 @@ async function createProject() {
     showToast('Presentation created', 'success', 2500);
     return r;
   }, el.createProject);
+  // Auto-start shell in the project folder
+  window.electron.terminal.start('shell').catch(() => {});
 }
 
 async function toolbarOpen() {
@@ -423,7 +379,6 @@ el.runExport.addEventListener('click', () => runAction(() => window.electron.run
 el.runCheck.addEventListener('click', () => { el.moreMenu.style.display = 'none'; runAction(() => window.electron.runtime.check({ outputDir: outputPath('electron-check') }), el.runCheck); });
 el.runCapture.addEventListener('click', () => { el.moreMenu.style.display = 'none'; runAction(() => window.electron.runtime.capture({ outputDir: outputPath('electron-capture') }), el.runCapture); });
 
-el.startShell.addEventListener('click', () => { showTerminal(); runAction(() => window.electron.terminal.start('shell'), el.startShell); });
 el.stopTerminal.addEventListener('click', () => runAction(() => window.electron.terminal.stop(), el.stopTerminal));
 el.clearTerminal.addEventListener('click', () => runAction(async () => { term.clear(); return window.electron.terminal.clear(); }, el.clearTerminal));
 
