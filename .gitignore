@@ -4,3 +4,4 @@ node_modules/
 /tmp/
 outputs/*
 !outputs/.gitkeep
+__pycache__/
