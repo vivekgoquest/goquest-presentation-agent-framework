@@ -119,7 +119,7 @@ button, input { font: inherit; color: inherit; }
 /* ── Panes ── */
 .pane { display: flex; flex-direction: column; overflow: hidden; min-width: 180px; }
 
-.terminal-pane { background: #1e1e1e; }
+.terminal-pane { flex: 1; background: #1e1e1e; }
 .terminal-container { width: 100%; height: 100%; overflow: hidden; }
 .terminal-container .xterm { height: 100%; padding: 6px 0 0 10px; }
 .terminal-container .xterm-viewport { overflow-y: auto !important; }
