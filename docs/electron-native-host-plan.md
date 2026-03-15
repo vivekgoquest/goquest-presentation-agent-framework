@@ -20,8 +20,9 @@ This is a bigger change than the embedded-server approach, but it yields a clean
 
 ## Short ADR
 
-- Status: Proposed
+- Status: Accepted — Phases 1-4 implemented, Phase 5 partial
 - Date: 2026-03-14
+- Updated: 2026-03-15
 - Decision owner: Presentation framework maintainers
 - Compared options:
   - current packaging plan in `docs/electron-packaging-plan.md`
@@ -51,6 +52,18 @@ Keep the current embedded HTTP packaging plan available as a fallback for fast s
 - Browser/server mode remains supported during migration, but it becomes a compatibility surface rather than the packaged-app foundation.
 - Desktop renderer code must not depend on `/api/...`, `/preview/`, WebSocket terminal transport, or SSE live reload.
 - Delivery takes longer than the embedded-server shell, so early milestones should be organized around service extraction, not UI polish.
+
+### Implementation status (as of 2026-03-15)
+
+| Phase | Status | What was built |
+| --- | --- | --- |
+| P1: Extract shared services | Done | `framework/runtime/services/` — scaffold, check, export, capture, finalize |
+| P2: Extract terminal core | Done | `framework/runtime/terminal-core.mjs`, `terminal-events.mjs` — host-agnostic PTY with Python fallback |
+| P3: Electron main + worker | Done | `electron/main.mjs`, `electron/worker/` — project, terminal, watch services over IPC |
+| P4: Desktop renderer | Done | `electron/renderer/` — filmstrip, xterm.js terminal, split-pane layout, toolbar |
+| P5: Preview protocol | Partial | `presentation://` protocol serves assembled HTML and project/framework assets. Snap-to-slide CSS and navigation JS injected at preview time. |
+| P6: Packaging | Not started | |
+| P7: Deprecate browser dependency | Not started | Browser/server mode still works as compatibility path |
 
 ---
 
