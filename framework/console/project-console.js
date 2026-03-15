@@ -879,7 +879,7 @@
   const PROMPT_ACTIONS = {
     'review-deck':       'Read prompts/review-deck.md and follow the instructions.',
     'review-deck-swarm': 'Read prompts/review-deck-swarm.md and follow the instructions.',
-    'verify-deck':       'Read verify-deck.md and follow the instructions.',
+    'verify-deck':       'Read prompts/verify-deck.md and follow the instructions.',
     'fix-warnings':      'Read prompts/fix-warnings.md and follow the instructions.',
   };
 
