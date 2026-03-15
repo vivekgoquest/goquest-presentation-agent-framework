@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presentation Desktop</title>
+  <link rel="stylesheet" href="../../node_modules/xterm/css/xterm.css">
+  <link rel="stylesheet" href="./app.css">
+  <script src="../../node_modules/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+</head>
+<body>
+  <div id="app-shell" class="app-shell" data-state="no-project">
+
+    <header class="toolbar">
+      <div class="toolbar-group">
+        <button id="choose-path" type="button" class="tb" title="Open an existing project">Open</button>
+        <button id="create-project" type="button" class="tb" title="Start a new presentation">New</button>
+      </div>
+
+      <div class="tb-sep"></div>
+      <span id="project-name-label" class="tb-name"></span>
+
+      <div class="tb-spacer"></div>
+
+      <div class="toolbar-group requires-project">
+        <button id="run-finalize" type="button" class="tb tb-primary" title="Build your presentation (check, capture, export)" disabled>Build</button>
+        <button id="run-export" type="button" class="tb" title="Download as PDF" disabled>PDF</button>
+        <button id="more-actions" type="button" class="tb tb-dim" title="More actions" disabled>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="13" cy="8" r="1.2" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <!-- More actions dropdown -->
+      <div id="more-menu" class="more-menu" style="display:none">
+        <button id="run-check" type="button" class="menu-item">Check deck policy</button>
+        <button id="run-capture" type="button" class="menu-item">Capture screenshots</button>
+      </div>
+
+      <div class="tb-sep"></div>
+
+      <div class="toolbar-group">
+        <button id="start-shell" type="button" class="tb" title="Open a terminal">Terminal</button>
+        <button id="stop-terminal" type="button" class="tb tb-danger" title="Stop the terminal session" style="display:none">Stop</button>
+        <button id="clear-terminal" type="button" class="tb tb-dim" title="Clear terminal" style="display:none">Clear</button>
+      </div>
+
+      <div class="tb-spacer"></div>
+
+      <span id="watch-status" class="tb-watch"></span>
+      <button id="toggle-diagnostics" type="button" class="tb tb-icon" title="Developer tools">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.2a5.8 5.8 0 110 11.6A5.8 5.8 0 018 2.2zM7.4 5h1.2v1.2H7.4V5zm0 2.4h1.2V11H7.4V7.4z" fill="currentColor"/></svg>
+      </button>
+    </header>
+
+    <main class="main-split">
+
+      <!-- Welcome -->
+      <div id="welcome-panel" class="welcome-panel">
+        <div class="welcome-inner">
+          <div class="welcome-mark">P</div>
+          <h2>Presentation Desktop</h2>
+          <p>Create beautiful slide decks from your browser.</p>
+          <div class="welcome-actions">
+            <button id="welcome-create" type="button" class="w-btn w-btn-primary">New presentation</button>
+            <button id="welcome-open" type="button" class="w-btn w-btn-link">or open an existing project</button>
+          </div>
+          <!-- Hidden inputs for create flow -->
+          <input id="project-path" type="hidden">
+          <input id="project-slides" type="hidden" value="3">
+        </div>
+      </div>
+
+      <!-- Preview pane — the hero -->
+      <div id="preview-pane" class="pane preview-pane" style="display:none">
+        <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+
+      <!-- Terminal pane — appears when launched -->
+      <div id="terminal-pane" class="pane terminal-pane" style="display:none">
+        <div id="terminal-container" class="terminal-container"></div>
+      </div>
+
+      <div id="split-handle" class="split-handle" style="display:none"></div>
+    </main>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <div id="diagnostics-drawer" class="diag-drawer" style="display:none">
+      <div class="diag-header">
+        <strong>Developer Tools</strong>
+        <button id="close-diagnostics" type="button" class="tb tb-icon">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="diag-body">
+        <details class="diag-section" open><summary>Meta</summary><pre id="meta-json">{}</pre></details>
+        <details class="diag-section" open><summary>State</summary><pre id="state-json">{}</pre></details>
+        <details class="diag-section"><summary>Files</summary><pre id="files-json">{}</pre></details>
+        <details class="diag-section"><summary>Action</summary><pre id="action-json">{}</pre></details>
+        <details class="diag-section"><summary>Terminal</summary><pre id="terminal-meta">{}</pre></details>
+        <details class="diag-section"><summary>Errors</summary><pre id="error-log" class="diag-errors"></pre></details>
+      </div>
+    </div>
+
+    <span id="project-title" style="display:none"></span>
+    <span id="project-path-label" style="display:none"></span>
+    <span id="slide-count" style="display:none"></span>
+    <span id="project-status-badge" style="display:none"></span>
+    <span id="status-pill" style="display:none"></span>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

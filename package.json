@@ -6,12 +6,14 @@
   "scripts": {
     "setup": "node framework/runtime/setup.mjs",
     "start": "node framework/runtime/server.mjs",
+    "desktop:start": "electron electron/main.mjs",
     "new": "node framework/runtime/new-deck.mjs",
     "finalize": "node framework/runtime/finalize-deck.mjs",
     "export": "node framework/runtime/export-pdf.mjs",
     "capture": "node framework/runtime/deck-capture.mjs",
     "check": "node framework/runtime/check-deck.mjs",
-    "ui-smoke": "node framework/runtime/operator-console-smoke.mjs"
+    "ui-smoke": "node framework/runtime/operator-console-smoke.mjs",
+    "test": "node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/terminal-core.test.mjs electron/worker/__tests__/host.test.mjs electron/__tests__/app-smoke.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -21,5 +23,8 @@
     "playwright": "^1.58.2",
     "ws": "^8.19.0",
     "xterm": "^5.3.0"
+  },
+  "devDependencies": {
+    "electron": "^41.0.2"
   }
 }

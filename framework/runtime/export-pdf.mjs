@@ -1,19 +1,9 @@
 /**
- * export-pdf.mjs — CLI PDF export
- *
- * Usage:
- *   node framework/runtime/export-pdf.mjs --deck sample
- *   node framework/runtime/export-pdf.mjs --example demo /tmp/demo.pdf
+ * export-pdf.mjs - CLI PDF export
  */
 
-import { resolve } from 'path';
-import { writeFileSync } from 'fs';
-import { generatePDF } from './pdf-export.js';
-import {
-  getSuggestedPdfName,
-  getPresentationId,
-  parsePresentationTargetCliArgs,
-} from './deck-paths.js';
+import { parsePresentationTargetCliArgs } from './deck-paths.js';
+import { exportDeckPdf } from './services/export-service.mjs';
 
 let parsed;
 try {
@@ -23,17 +13,9 @@ try {
   process.exit(1);
 }
 
-const target = parsed.target;
-const outputFile = parsed.rest[0] || getSuggestedPdfName(target);
-const outputPath = resolve(process.cwd(), outputFile);
-
-console.log(`Workspace: ${getPresentationId(target)}`);
-console.log(`Output:    ${outputPath}\n`);
-
 try {
-  const pdfBuffer = await generatePDF(target);
-  writeFileSync(outputPath, pdfBuffer);
-  console.log(`\nPDF saved: ${outputPath}`);
+  const result = await exportDeckPdf(parsed.target, parsed.rest[0]);
+  console.log(`\nPDF saved: ${result.outputPath}`);
 } catch (err) {
   console.error('Export failed:', err);
   process.exit(1);
