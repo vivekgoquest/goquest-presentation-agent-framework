@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('electron', {
     getFiles() {
       return request('project:getFiles');
     },
+    getPreviewHtml() {
+      return request('project:getPreviewHtml');
+    },
     getMeta() {
       return request('project:getMeta');
     },

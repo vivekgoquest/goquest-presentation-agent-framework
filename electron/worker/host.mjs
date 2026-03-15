@@ -57,6 +57,8 @@ export function createElectronWorkerHost(options = {}) {
         return projectService.getState();
       case WORKER_REQUEST_CHANNELS.PROJECT_GET_FILES:
         return projectService.getFiles();
+      case WORKER_REQUEST_CHANNELS.PROJECT_GET_PREVIEW_HTML:
+        return projectService.getPreviewHtml();
       case WORKER_REQUEST_CHANNELS.RUNTIME_CAPTURE: {
         const target = requireActiveTarget();
         const outputDir = payload.outputDir || projectService.getOutputPaths().outputDirAbs;

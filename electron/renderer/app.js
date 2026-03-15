@@ -25,6 +25,8 @@ const el = {
   terminalPane: $('terminal-pane'),
   terminalContainer: $('terminal-container'),
   previewPane: $('preview-pane'),
+  filmstrip: $('filmstrip'),
+  slideCounter: $('slide-counter'),
   previewFrame: $('preview-frame'),
   splitHandle: $('split-handle'),
   toastContainer: $('toast-container'),
@@ -43,7 +45,7 @@ const el = {
   projectStatusBadge: $('project-status-badge'),
 };
 
-const state = { meta: null, projectState: null, files: null, terminalMeta: null, hasProject: false, diagnosticsOpen: false, splitRatio: 0.35, terminalVisible: false };
+const state = { meta: null, projectState: null, files: null, terminalMeta: null, hasProject: false, diagnosticsOpen: false, splitRatio: 0.35, terminalVisible: false, currentSlide: 0, slideEntries: [] };
 
 // ── xterm ──
 const FitAddonClass = (typeof FitAddon === 'function') ? FitAddon : FitAddon.FitAddon;
@@ -186,7 +188,8 @@ function updateAppState() {
     if (el.slideCount) el.slideCount.textContent = sc > 0 ? `${sc} slides` : '';
   }
 
-  if (has && el.previewFrame && !el.previewFrame.srcdoc) loadBlankPreview();
+  if (has && !el.previewFrame.src?.startsWith('presentation://')) loadPreview();
+  if (has) buildFilmstrip();
 
   setJson(el.metaJson, state.meta || {});
   setJson(el.stateJson, state.projectState || {});
@@ -199,16 +202,113 @@ function countSlides(f) {
   return sd?.children ? sd.children.filter(c => c.isDirectory || c.kind === 'slide-directory').length : 0;
 }
 
-function loadBlankPreview() {
-  el.previewFrame.srcdoc = `<!DOCTYPE html>
-<html><head><style>
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#f0f0f0}
-body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif}
-.s{width:88%;max-width:960px;aspect-ratio:16/9;background:#fff;border-radius:4px;
-box-shadow:0 1px 4px rgba(0,0,0,0.08),0 8px 32px rgba(0,0,0,0.06)}
-</style></head><body><div class="s"></div></body></html>`;
+function loadPreview() {
+  el.previewFrame.src = 'presentation://preview/current';
+  el.previewFrame.onload = () => {
+    // Re-navigate to current slide after load
+    if (state.slideEntries.length > 0) {
+      setTimeout(() => selectSlide(state.currentSlide), 80);
+    }
+  };
 }
+
+// ── Filmstrip ──
+function buildFilmstrip() {
+  if (!state.files?.tree?.children) return;
+  const slidesDir = state.files.tree.children.find(c => c.name === 'slides');
+  if (!slidesDir?.children) return;
+
+  const slides = slidesDir.children
+    .filter(c => c.kind === 'slide-directory' && c.slideId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Skip rebuild if same slides
+  const ids = slides.map(s => s.slideId).join(',');
+  if (ids === state.slideEntries.map(s => s.slideId).join(',')) return;
+
+  state.slideEntries = slides;
+  if (state.currentSlide >= slides.length) state.currentSlide = Math.max(0, slides.length - 1);
+  el.filmstrip.innerHTML = '';
+
+  slides.forEach((slide, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'fs-thumb' + (i === state.currentSlide ? ' active' : '');
+
+    const preview = document.createElement('div');
+    preview.className = 'fs-preview';
+    preview.textContent = String(i + 1);
+
+    const label = document.createElement('div');
+    label.className = 'fs-label';
+    label.textContent = slide.slideId.replace(/-/g, ' ');
+
+    thumb.append(preview, label);
+    thumb.addEventListener('click', () => selectSlide(i));
+    el.filmstrip.appendChild(thumb);
+  });
+
+  updateSlideCounter();
+}
+
+function selectSlide(index) {
+  if (index < 0 || index >= state.slideEntries.length) return;
+  state.currentSlide = index;
+
+  // Update filmstrip active state
+  const thumbs = el.filmstrip.querySelectorAll('.fs-thumb');
+  thumbs.forEach((t, i) => t.classList.toggle('active', i === index));
+  thumbs[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Navigate inside iframe (when live preview is connected)
+  const slideId = state.slideEntries[index].slideId;
+  try {
+    el.previewFrame.contentWindow?.postMessage({ type: 'navigate-slide', slideId }, '*');
+  } catch { /* cross-origin */ }
+
+  updateSlideCounter();
+}
+
+function updateSlideCounter() {
+  if (!state.slideEntries.length) {
+    el.slideCounter.textContent = '';
+    return;
+  }
+  el.slideCounter.textContent = `${state.currentSlide + 1} / ${state.slideEntries.length}`;
+}
+
+// Keyboard navigation — only when terminal isn't focused
+document.addEventListener('keydown', (e) => {
+  // Skip if terminal or input has focus
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (el.terminalContainer?.contains(document.activeElement)) return;
+  if (!state.slideEntries.length) return;
+
+  switch (e.key) {
+    case 'ArrowDown': case 'ArrowRight': case 'PageDown':
+      e.preventDefault(); selectSlide(state.currentSlide + 1); break;
+    case 'ArrowUp': case 'ArrowLeft': case 'PageUp':
+      e.preventDefault(); selectSlide(state.currentSlide - 1); break;
+    case 'Home':
+      e.preventDefault(); selectSlide(0); break;
+    case 'End':
+      e.preventDefault(); selectSlide(state.slideEntries.length - 1); break;
+  }
+});
+
+// Listen for slide-visible messages from the preview iframe
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'slide-visible') {
+    const idx = state.slideEntries.findIndex(s => s.slideId === e.data.slideId);
+    if (idx >= 0 && idx !== state.currentSlide) {
+      state.currentSlide = idx;
+      const thumbs = el.filmstrip.querySelectorAll('.fs-thumb');
+      thumbs.forEach((t, i) => t.classList.toggle('active', i === idx));
+      thumbs[idx]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      updateSlideCounter();
+    }
+  }
+});
 
 function updateTerminalState(meta) {
   state.terminalMeta = meta;
@@ -297,6 +397,15 @@ document.addEventListener('click', (e) => {
   }
 });
 
+async function refreshPreview() {
+  const currentSlide = state.currentSlide;
+  el.previewFrame.src = `presentation://preview/current?t=${Date.now()}`;
+  el.previewFrame.onload = () => {
+    setTimeout(() => selectSlide(currentSlide), 80);
+  };
+  await refreshProjectPanels();
+}
+
 function toggleDiag() {
   state.diagnosticsOpen = !state.diagnosticsOpen;
   el.diagnosticsDrawer.style.display = state.diagnosticsOpen ? '' : 'none';
@@ -328,7 +437,12 @@ window.electron.events.onEvent(async (event) => {
     case 'terminal/ready':
     case 'terminal/meta':
     case 'terminal/exit': updateTerminalState(await window.electron.terminal.getMeta()); break;
-    case 'watch/change': el.watchStatus.textContent = event.file; break;
+    case 'watch/change':
+      el.watchStatus.textContent = event.file;
+      if (state.hasProject && event.file && (event.file.endsWith('.html') || event.file.endsWith('.css') || event.file === 'theme.css')) {
+        refreshPreview();
+      }
+      break;
     case 'project/changed': await refreshProjectPanels(); break;
   }
 });

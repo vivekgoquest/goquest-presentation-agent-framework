@@ -71,9 +71,13 @@
         </div>
       </div>
 
-      <!-- Preview pane — the hero -->
+      <!-- Preview pane — filmstrip + canvas -->
       <div id="preview-pane" class="pane preview-pane" style="display:none">
-        <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        <div id="filmstrip" class="filmstrip"></div>
+        <div class="preview-canvas">
+          <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+          <div id="slide-counter" class="slide-counter"></div>
+        </div>
       </div>
 
       <!-- Terminal pane — appears when launched -->

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, utilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, utilityProcess } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -136,7 +136,58 @@ ipcMain.handle('presentation:choose-directory', async () => {
   };
 });
 
+// Register custom protocol before app is ready
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'presentation',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+}]);
+
 app.whenReady().then(async () => {
+  // Handle presentation:// protocol requests
+  protocol.handle('presentation', async (request) => {
+    const url = new URL(request.url);
+
+    // presentation://preview/current — assembled deck HTML
+    if (url.host === 'preview' && url.pathname === '/current') {
+      try {
+        const response = await invokeWorker('project:getPreviewHtml');
+        if (!response?.ok || !response.data?.html) {
+          return new Response('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#999">No preview available</body></html>', {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          });
+        }
+        return new Response(response.data.html, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      } catch {
+        return new Response('Preview error', { status: 500 });
+      }
+    }
+
+    // presentation://project-files/{path} — project-local assets
+    if (url.host === 'project-files') {
+      try {
+        const metaResponse = await invokeWorker('project:getMeta');
+        const projectRoot = metaResponse?.data?.projectRoot;
+        if (!projectRoot) return new Response('No project', { status: 404 });
+        const filePath = resolve(projectRoot, url.pathname.slice(1));
+        if (!filePath.startsWith(projectRoot)) return new Response('Forbidden', { status: 403 });
+        return net.fetch(`file://${filePath}`);
+      } catch {
+        return new Response('Not found', { status: 404 });
+      }
+    }
+
+    // presentation://project-framework/{path} — framework assets
+    if (url.host === 'project-framework') {
+      const filePath = resolve(REPO_ROOT, 'framework', url.pathname.slice(1));
+      if (!filePath.startsWith(resolve(REPO_ROOT, 'framework'))) return new Response('Forbidden', { status: 403 });
+      return net.fetch(`file://${filePath}`);
+    }
+
+    return new Response('Not found', { status: 404 });
+  });
+
   ensureWorkerProcess();
   await createMainWindow();
 

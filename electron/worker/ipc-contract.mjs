@@ -17,6 +17,7 @@ export const WORKER_REQUEST_CHANNELS = Object.freeze({
   TERMINAL_RESIZE: 'terminal:resize',
   TERMINAL_REVEAL: 'terminal:reveal',
   TERMINAL_GET_META: 'terminal:getMeta',
+  PROJECT_GET_PREVIEW_HTML: 'project:getPreviewHtml',
 });
 
 export const WORKER_EVENT_CHANNELS = Object.freeze({
