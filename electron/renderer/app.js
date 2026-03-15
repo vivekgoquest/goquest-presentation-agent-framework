@@ -356,10 +356,9 @@ document.addEventListener('click', (e) => {
 async function refreshPreview() {
   const currentSlide = state.currentSlide;
   el.previewFrame.src = `presentation://preview/current?t=${Date.now()}`;
-  el.previewFrame.onload = () => {
-    setTimeout(() => selectSlide(currentSlide), 80);
-  };
+  await new Promise(resolve => { el.previewFrame.onload = resolve; });
   await refreshProjectPanels();
+  selectSlide(currentSlide);
 }
 
 function toggleDiag() {
@@ -394,7 +393,7 @@ window.electron.events.onEvent(async (event) => {
     case 'terminal/exit': updateTerminalState(await window.electron.terminal.getMeta()); break;
     case 'watch/change':
       el.watchStatus.textContent = event.file;
-      if (state.hasProject && event.file && (event.file.endsWith('.html') || event.file.endsWith('.css') || event.file === 'theme.css')) {
+      if (state.hasProject && event.file) {
         refreshPreview();
       }
       break;

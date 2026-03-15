@@ -153,11 +153,11 @@ app.whenReady().then(async () => {
         const response = await invokeWorker('project:getPreviewHtml');
         if (!response?.ok || !response.data?.html) {
           return new Response('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#999">No preview available</body></html>', {
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
           });
         }
         return new Response(response.data.html, {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
         });
       } catch {
         return new Response('Preview error', { status: 500 });
