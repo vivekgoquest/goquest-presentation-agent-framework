@@ -2,8 +2,7 @@
  * deck-capture.mjs - Playwright-based deck data extraction
  *
  * Usage:
- *   node framework/runtime/deck-capture.mjs --deck sample [output-dir]
- *   node framework/runtime/deck-capture.mjs --example demo [output-dir]
+ *   node framework/runtime/deck-capture.mjs --project /abs/path [output-dir]
  */
 
 import { pathToFileURL } from 'url';
@@ -24,7 +23,7 @@ if (isCli) {
   try {
     parsed = parsePresentationTargetCliArgs(process.argv.slice(2));
   } catch (err) {
-    console.error(`Usage: node framework/runtime/deck-capture.mjs --project /abs/path [output-dir] | --deck <slug> [output-dir] | --example <name> [output-dir]\n\n${err.message}`);
+    console.error(`Usage: node framework/runtime/deck-capture.mjs --project /abs/path [output-dir]\n\n${err.message}`);
     process.exit(1);
   }
 

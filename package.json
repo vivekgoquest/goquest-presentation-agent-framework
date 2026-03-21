@@ -5,15 +5,15 @@
   "description": "Layered HTML/CSS presentation framework with PDF export",
   "scripts": {
     "setup": "node framework/runtime/setup.mjs",
-    "start": "node framework/runtime/server.mjs",
+    "start": "electron electron/main.mjs",
     "desktop:start": "electron electron/main.mjs",
+    "debug:preview": "node framework/runtime/debug-preview.mjs",
     "new": "node framework/runtime/new-deck.mjs",
     "finalize": "node framework/runtime/finalize-deck.mjs",
     "export": "node framework/runtime/export-pdf.mjs",
     "capture": "node framework/runtime/deck-capture.mjs",
     "check": "node framework/runtime/check-deck.mjs",
-    "ui-smoke": "node framework/runtime/operator-console-smoke.mjs",
-    "test": "node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/terminal-core.test.mjs electron/worker/__tests__/host.test.mjs electron/__tests__/app-smoke.test.mjs"
+    "test": "node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/terminal-core.test.mjs framework/runtime/__tests__/deck-paths-project-only.test.mjs framework/runtime/__tests__/preview-state-page.test.mjs framework/application/__tests__/action-service.test.mjs electron/renderer/__tests__/ui-model.test.mjs electron/worker/__tests__/host.test.mjs electron/__tests__/app-smoke.test.mjs electron/__tests__/project-framework-resolver.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

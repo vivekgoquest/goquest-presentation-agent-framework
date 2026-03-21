@@ -5,7 +5,6 @@ import { PROJECT_SYSTEM_DIRNAME } from './deck-paths.js';
 const PRIMARY_PROJECT_PATHS = new Set([
   'brief.md',
   'outline.md',
-  'revisions.md',
   'theme.css',
   'assets',
   'slides',

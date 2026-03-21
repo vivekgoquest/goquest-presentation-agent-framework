@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -55,11 +55,36 @@ test('scaffold service creates a linked project scaffold', async (t) => {
   assert.equal(result.status, 'created');
   assert.equal(result.frameworkMode, 'linked');
   assert.ok(existsSync(resolve(projectRoot, 'theme.css')));
+  assert.equal(existsSync(resolve(projectRoot, 'revisions.md')), false);
   assert.ok(existsSync(resolve(projectRoot, 'slides', '010-intro', 'slide.html')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'project.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')));
+  assert.ok(existsSync(resolve(projectRoot, '.claude', 'rules', 'framework.md')));
+  assert.equal(readdirSync(resolve(projectRoot, '.claude', 'rules')).length, 5);
+  assert.equal(readdirSync(resolve(projectRoot, '.claude', 'skills'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).length, 9);
 
   const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
   assert.equal(metadata.frameworkMode, 'linked');
+});
+
+test('copied framework scaffold omits prompts and specs snapshots', async (t) => {
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const result = await createPresentationScaffold(
+    { projectRoot },
+    { slideCount: 3, copyFramework: true }
+  );
+
+  assert.equal(result.status, 'created');
+  assert.equal(result.frameworkMode, 'copied');
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'templates')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'templates')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'prompts')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'specs')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'prompts')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'specs')), false);
 });
 
 test('runtime services operate on a real scaffolded project', async (t) => {

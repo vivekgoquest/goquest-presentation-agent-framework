@@ -39,5 +39,8 @@ export function createTerminalService(options = {}) {
     stop(options = {}) {
       return terminal.stopSession(options);
     },
+    writeSystemOutput(message) {
+      return terminal.writeSystemOutput(message);
+    },
   };
 }

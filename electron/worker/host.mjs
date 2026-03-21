@@ -1,8 +1,7 @@
 import { pathToFileURL } from 'url';
-import { capturePresentation } from '../../framework/runtime/services/capture-service.mjs';
-import { runDeckCheck } from '../../framework/runtime/services/check-service.mjs';
-import { exportDeckPdf } from '../../framework/runtime/services/export-service.mjs';
-import { finalizePresentation } from '../../framework/runtime/services/finalize-service.mjs';
+import { createActionService } from '../../framework/application/action-service.mjs';
+import { createAgentActionAdapter } from '../../framework/application/agent-action-adapter.mjs';
+import { createPresentationActionAdapter } from '../../framework/application/presentation-action-adapter.mjs';
 import {
   createErrorResponse,
   createSuccessResponse,
@@ -26,6 +25,7 @@ export function createElectronWorkerHost(options = {}) {
 
   const terminalService = createTerminalService({ frameworkRoot });
   const watchService = createWatchService({ frameworkRoot });
+  const presentationAdapter = createPresentationActionAdapter();
   const projectService = createProjectService({
     onProjectChanged({ paths }) {
       terminalService.stop({ announce: false, signal: 'project-switch' });
@@ -40,9 +40,29 @@ export function createElectronWorkerHost(options = {}) {
 
   const stopTerminalEvents = terminalService.onEvent((event) => emit(event));
   const stopWatchEvents = watchService.onEvent((event) => emit(event));
+  const actionService = createActionService({
+    frameworkRoot,
+    projectService,
+    terminalService,
+    presentationAdapter,
+    agentAdapter: createAgentActionAdapter({ frameworkRoot }),
+    emitEvent(event) {
+      emit(createWorkerEvent(event.channel, event));
+    },
+  });
 
   function requireActiveTarget() {
     return projectService.requireActiveProjectTarget();
+  }
+
+  function createPresentationRequestContext(payload = {}) {
+    return {
+      args: payload,
+      meta: projectService.getMeta(),
+      outputPaths: projectService.getOutputPaths(),
+      projectState: projectService.getState(),
+      target: requireActiveTarget(),
+    };
   }
 
   async function dispatch(channel, payload = {}) {
@@ -59,19 +79,20 @@ export function createElectronWorkerHost(options = {}) {
         return projectService.getFiles();
       case WORKER_REQUEST_CHANNELS.PROJECT_GET_PREVIEW_HTML:
         return projectService.getPreviewHtml();
-      case WORKER_REQUEST_CHANNELS.RUNTIME_CAPTURE: {
-        const target = requireActiveTarget();
-        const outputDir = payload.outputDir || projectService.getOutputPaths().outputDirAbs;
-        return capturePresentation(target, outputDir, payload.options || {});
-      }
+      case WORKER_REQUEST_CHANNELS.ACTION_LIST:
+        return {
+          actions: await actionService.listActions(),
+        };
+      case WORKER_REQUEST_CHANNELS.ACTION_INVOKE:
+        return actionService.invokeAction(payload.actionId, payload.args || {});
+      case WORKER_REQUEST_CHANNELS.RUNTIME_CAPTURE:
+        return presentationAdapter.invoke('capture_screenshots', createPresentationRequestContext(payload));
       case WORKER_REQUEST_CHANNELS.RUNTIME_CHECK:
-        return runDeckCheck(requireActiveTarget(), payload.options || {});
-      case WORKER_REQUEST_CHANNELS.RUNTIME_EXPORT: {
-        const target = requireActiveTarget();
-        return exportDeckPdf(target, payload.outputFile || null, payload.options || {});
-      }
+        return presentationAdapter.invoke('check_presentation', createPresentationRequestContext(payload));
+      case WORKER_REQUEST_CHANNELS.RUNTIME_EXPORT:
+        return presentationAdapter.invoke('export_pdf', createPresentationRequestContext(payload));
       case WORKER_REQUEST_CHANNELS.RUNTIME_FINALIZE:
-        return finalizePresentation(requireActiveTarget(), payload.options || {});
+        return presentationAdapter.invoke('build_presentation', createPresentationRequestContext(payload));
       case WORKER_REQUEST_CHANNELS.TERMINAL_GET_META:
         return terminalService.getMeta();
       case WORKER_REQUEST_CHANNELS.TERMINAL_START:

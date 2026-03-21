@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import {
   createPresentationTarget,
-  createWorkspaceRef,
   getPresentationId,
   getPresentationOutputPaths,
   getPresentationPaths,
@@ -52,10 +51,7 @@ function rewriteHtmlAssetReferences(fragment, paths, slideEntry) {
 }
 
 function getExportBar(target) {
-  if (target.kind === 'workspace' && target.ownerType !== 'deck') {
-    return '';
-  }
-
+  void target;
   return `
   <div class="export-bar">
     <span class="status" id="export-status"></span>
@@ -66,17 +62,11 @@ function getExportBar(target) {
 function buildHtmlDataAttributes(target, savePath, previewPath) {
   const attrs = [
     ['data-deck-source', 'slides'],
-    ['data-target-kind', target.kind],
+    ['data-target-kind', 'project'],
     ['data-export-save-path', savePath],
     ['data-preview-path', previewPath],
+    ['data-project-root', target.projectRootAbs],
   ];
-
-  if (target.kind === 'workspace') {
-    attrs.push(['data-owner-type', target.ownerType]);
-    attrs.push(['data-owner-name', target.ownerName]);
-  } else {
-    attrs.push(['data-project-root', target.projectRootAbs]);
-  }
 
   return attrs
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
@@ -164,16 +154,5 @@ export function renderPresentationHtml(input) {
     previewPath: getPresentationPreviewPath(target),
     paths,
     qualityWarnings: quality.warnings,
-  };
-}
-
-export function renderOwnedWorkspaceHtml(input) {
-  const workspaceRef = createWorkspaceRef(input.ownerType, input.ownerName);
-  const rendered = renderPresentationHtml(workspaceRef);
-  return {
-    ...rendered,
-    ownerType: workspaceRef.ownerType,
-    ownerName: workspaceRef.ownerName,
-    workspaceId: rendered.presentationId,
   };
 }

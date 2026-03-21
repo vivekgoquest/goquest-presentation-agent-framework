@@ -8,10 +8,8 @@ import {
   PROJECT_FRAMEWORK_BASE_DIRNAME,
   PROJECT_FRAMEWORK_OVERRIDES_DIRNAME,
   PROJECT_SYSTEM_DIRNAME,
-  createPresentationTarget,
   createProjectMetadata,
   createProjectRef,
-  getDeckWorkspacePaths,
   getProjectSystemPaths,
   parsePresentationTargetCliArgs,
   slugifyProjectName,
@@ -133,9 +131,7 @@ function copyFrameworkSnapshot(projectPaths) {
     ['framework/canvas', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/canvas`],
     ['framework/client', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/client`],
     ['framework/runtime', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/runtime`],
-    ['templates', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/templates`],
-    ['prompts', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/prompts`],
-    ['specs', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/specs`],
+    ['framework/templates', `${PROJECT_FRAMEWORK_BASE_DIRNAME}/templates`],
   ];
 
   for (const [sourceRel, targetRel] of copyTargets) {
@@ -144,7 +140,7 @@ function copyFrameworkSnapshot(projectPaths) {
     });
   }
 
-  for (const overrideDir of ['client', 'runtime', 'templates', 'prompts', 'specs']) {
+  for (const overrideDir of ['client', 'runtime', 'templates']) {
     mkdirSync(resolve(projectPaths.frameworkOverridesAbs, overrideDir), { recursive: true });
   }
 }
@@ -180,8 +176,6 @@ function createPendingProjectPaths(projectRootInput) {
     briefAbs: resolve(ref.projectRootAbs, 'brief.md'),
     outlineRel: 'outline.md',
     outlineAbs: resolve(ref.projectRootAbs, 'outline.md'),
-    revisionsRel: 'revisions.md',
-    revisionsAbs: resolve(ref.projectRootAbs, 'revisions.md'),
     assetsDirRel: 'assets',
     assetsDirAbs: resolve(ref.projectRootAbs, 'assets'),
     slidesDirRel: 'slides',
@@ -203,7 +197,7 @@ function scaffoldIntoPaths(paths, options = {}) {
     slideCount,
     copyFramework = false,
   } = options;
-  const templatesDir = resolve(FRAMEWORK_ROOT, 'templates');
+  const templatesDir = resolve(FRAMEWORK_ROOT, 'framework', 'templates');
   const deckTitle = slugToTitle(paths.slug);
   const slidePlan = createSlidePlan(slideCount);
   const outlineRequired = slideCount > LONG_DECK_OUTLINE_THRESHOLD;
@@ -240,20 +234,20 @@ function scaffoldIntoPaths(paths, options = {}) {
   mkdirSync(claudeSkillsDir, { recursive: true });
 
   // Settings and hooks
-  cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-settings.json'), resolve(claudeDir, 'settings.json'));
-  cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-hooks', 'check-slide-quality.mjs'), resolve(claudeHooksDir, 'check-slide-quality.mjs'));
+  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'settings.json'), resolve(claudeDir, 'settings.json'));
+  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'), resolve(claudeHooksDir, 'check-slide-quality.mjs'));
 
   // CLAUDE.md — per-project agent contract
-  cpSync(resolve(FRAMEWORK_ROOT, 'templates', 'claude-claude-md.md'), resolve(claudeDir, 'CLAUDE.md'));
+  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-claude-md.md'), resolve(claudeDir, 'CLAUDE.md'));
 
   // Rules — framework specs for auto-discovery
-  const rulesSourceDir = resolve(FRAMEWORK_ROOT, 'templates', 'claude-rules');
+  const rulesSourceDir = resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'rules');
   for (const entry of readdirSync(rulesSourceDir)) {
     cpSync(resolve(rulesSourceDir, entry), resolve(claudeRulesDir, entry));
   }
 
   // Skills — invocable workflows (/new-deck, /revise-deck, etc.)
-  const skillsSourceDir = resolve(FRAMEWORK_ROOT, 'templates', 'claude-skills');
+  const skillsSourceDir = resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'skills');
   for (const entry of readdirSync(skillsSourceDir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       cpSync(resolve(skillsSourceDir, entry.name), resolve(claudeSkillsDir, entry.name), { recursive: true });
@@ -262,7 +256,6 @@ function scaffoldIntoPaths(paths, options = {}) {
 
   writeFileSync(paths.themeCssAbs, renderTemplate('theme.css'));
   writeFileSync(paths.briefAbs, renderTemplate('brief.md'));
-  writeFileSync(paths.revisionsAbs, renderTemplate('revisions.md'));
   writeFileSync(resolve(paths.assetsDirAbs, '.gitkeep'), '');
   writeFileSync(resolve(paths.outputsDirAbs, '.gitkeep'), '');
 
@@ -283,27 +276,24 @@ function scaffoldIntoPaths(paths, options = {}) {
   }
 
   const systemPaths = getProjectSystemPaths(paths.sourceDirAbs);
-  if (paths.kind === 'project') {
-    mkdirSync(systemPaths.systemDirAbs, { recursive: true });
-    mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
-    mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
-    mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
-    const metadata = createProjectMetadata(paths.sourceDirAbs, {
-      frameworkMode: copyFramework ? 'copied' : 'linked',
-      overrides: {
-        projectName: deckTitle,
-      },
-    });
-    writeFileSync(systemPaths.metadataAbs, `${JSON.stringify(metadata, null, 2)}\n`);
-    if (copyFramework) {
-      copyFrameworkSnapshot(paths);
-    }
+  mkdirSync(systemPaths.systemDirAbs, { recursive: true });
+  mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
+  mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
+  mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
+  const metadata = createProjectMetadata(paths.sourceDirAbs, {
+    frameworkMode: copyFramework ? 'copied' : 'linked',
+    overrides: {
+      projectName: deckTitle,
+    },
+  });
+  writeFileSync(systemPaths.metadataAbs, `${JSON.stringify(metadata, null, 2)}\n`);
+  if (copyFramework) {
+    copyFrameworkSnapshot(paths);
   }
 
   const createdFiles = [
     paths.themeCssRel,
     paths.briefRel,
-    paths.revisionsRel,
     `${paths.assetsDirRel}/`,
     `${paths.outputsDirRel}/`,
     '.claude/settings.json',
@@ -313,12 +303,10 @@ function scaffoldIntoPaths(paths, options = {}) {
     '.claude/skills/',
   ];
 
-  if (paths.kind === 'project') {
-    createdFiles.push(paths.metadataRel);
-    if (copyFramework) {
-      createdFiles.push(paths.frameworkBaseRel);
-      createdFiles.push(paths.frameworkOverridesRel);
-    }
+  createdFiles.push(paths.metadataRel);
+  if (copyFramework) {
+    createdFiles.push(paths.frameworkBaseRel);
+    createdFiles.push(paths.frameworkOverridesRel);
   }
 
   if (outlineRequired) {
@@ -333,19 +321,15 @@ function scaffoldIntoPaths(paths, options = {}) {
     `Open ${paths.briefRel} and replace every [[TODO_...]] marker with the user's plain-English brief.`,
     `Edit ${paths.themeCssRel} and the slide fragments under ${paths.slidesDirRel}/ to build the deck.`,
     `Preview, check, export, and finalize will stay blocked until ${paths.briefRel} no longer contains TODO markers.`,
-    paths.kind === 'project'
-      ? `Preview the project at /preview/ with npm run start -- --project ${paths.sourceDirAbs}.`
-      : `Preview the virtual deck at /decks/${paths.slug}/ with npm run start.`,
+    'Launch Electron with npm run start, open this project, then review /preview/ from inside the app.',
   ];
 
   if (outlineRequired) {
     nextSteps.splice(1, 0, `Open ${paths.outlineRel}, replace every [[TODO_...]] marker, and lock the full story before slide buildout.`);
-    nextSteps.splice(2, 0, `Build ${slideCount} slides in batches of ${LONG_DECK_BATCH_SIZE} and run ${paths.kind === 'project' ? `npm run check -- --project ${paths.sourceDirAbs}` : `npm run check -- --deck ${paths.slug}`} after each batch.`);
+    nextSteps.splice(2, 0, `Build ${slideCount} slides in batches of ${LONG_DECK_BATCH_SIZE} and run npm run check -- --project ${paths.sourceDirAbs} after each batch.`);
   }
 
-  nextSteps.push(paths.kind === 'project'
-    ? `Run npm run finalize -- --project ${paths.sourceDirAbs}`
-    : `Run npm run finalize -- --deck ${paths.slug}`);
+  nextSteps.push(`Run npm run finalize -- --project ${paths.sourceDirAbs}`);
 
   const gitignoreContent = [
     'outputs/',
@@ -368,12 +352,12 @@ function scaffoldIntoPaths(paths, options = {}) {
 
   return {
     status: 'created',
-    targetKind: paths.kind,
+    targetKind: 'project',
     deck: paths.slug,
     sourceDir: paths.sourceDirDisplay,
     slideCount,
     outlineRequired,
-    frameworkMode: paths.kind === 'project' ? (copyFramework ? 'copied' : 'linked') : 'legacy-workspace',
+    frameworkMode: copyFramework ? 'copied' : 'linked',
     files: createdFiles,
     nextSteps,
   };
@@ -384,22 +368,7 @@ export function createPresentationScaffold(targetInput, options = {}) {
     slideCount = 3,
     copyFramework = false,
   } = options;
-  const target = createPresentationTarget(targetInput);
-
-  if (target.kind === 'workspace') {
-    if (target.ownerType !== 'deck') {
-      throw new Error('New deck scaffolding only supports --deck <slug> or --project /abs/path.');
-    }
-
-    const paths = getDeckWorkspacePaths(target.ownerName);
-    if (existsSync(paths.sourceDirAbs)) {
-      throw new Error(`Deck workspace already exists: ${paths.sourceDirRel}`);
-    }
-
-    return scaffoldIntoPaths(paths, { slideCount, copyFramework: false });
-  }
-
-  const projectPaths = createPendingProjectPaths(target.projectRootAbs);
+  const projectPaths = createPendingProjectPaths(targetInput.projectRootAbs || targetInput.projectRoot || targetInput);
   ensureEmptyDirectory(projectPaths.sourceDirAbs, 'Project folder');
   return scaffoldIntoPaths(projectPaths, { slideCount, copyFramework });
 }

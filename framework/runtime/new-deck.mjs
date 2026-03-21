@@ -4,7 +4,7 @@ let parsed;
 try {
   parsed = parseNewDeckCliArgs(process.argv.slice(2));
 } catch (err) {
-  console.error(`Usage: npm run new -- --project /abs/path [--slides <count>] [--copy-framework] | --deck <slug> [--slides <count>]\n\n${err.message}`);
+  console.error(`Usage: npm run new -- --project /abs/path [--slides <count>] [--copy-framework]\n\n${err.message}`);
   process.exit(1);
 }
 

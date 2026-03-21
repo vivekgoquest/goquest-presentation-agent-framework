@@ -14,7 +14,7 @@
 
     <header class="toolbar">
       <div class="toolbar-group">
-        <button id="choose-path" type="button" class="tb" title="Open an existing project">Open</button>
+        <button id="choose-path" type="button" class="tb" title="Open an existing presentation">Open</button>
         <button id="create-project" type="button" class="tb" title="Start a new presentation">New</button>
       </div>
 
@@ -24,67 +24,66 @@
       <div class="tb-spacer"></div>
 
       <div class="toolbar-group requires-project">
-        <button id="run-finalize" type="button" class="tb tb-primary" title="Build your presentation (check, capture, export)" disabled>Build</button>
-        <button id="run-export" type="button" class="tb" title="Download as PDF" disabled>PDF</button>
-        <button id="more-actions" type="button" class="tb tb-dim" title="More actions" disabled>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="13" cy="8" r="1.2" fill="currentColor"/></svg>
+        <button id="primary-action" type="button" class="tb tb-primary" style="display:none"></button>
+        <button id="secondary-action" type="button" class="tb tb-dim" style="display:none"></button>
+        <button id="more-actions" type="button" class="tb tb-dim" title="More options" disabled>
+          More
         </button>
       </div>
 
-      <!-- More actions dropdown -->
+      <span id="action-status-label" class="toolbar-status" aria-live="polite"></span>
+
       <div id="more-menu" class="more-menu" style="display:none">
-        <button id="run-check" type="button" class="menu-item">Check deck policy</button>
-        <button id="run-capture" type="button" class="menu-item">Capture screenshots</button>
+        <div id="more-menu-items"></div>
       </div>
-
-      <div class="tb-sep"></div>
-
-      <div class="toolbar-group">
-        <button id="stop-terminal" type="button" class="tb tb-danger" title="Stop the terminal session" style="display:none">Stop</button>
-        <button id="clear-terminal" type="button" class="tb tb-dim" title="Clear terminal" style="display:none">Clear</button>
-      </div>
-
-      <div class="tb-spacer"></div>
-
-      <span id="watch-status" class="tb-watch"></span>
-      <button id="toggle-diagnostics" type="button" class="tb tb-icon" title="Developer tools">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.2a5.8 5.8 0 110 11.6A5.8 5.8 0 018 2.2zM7.4 5h1.2v1.2H7.4V5zm0 2.4h1.2V11H7.4V7.4z" fill="currentColor"/></svg>
-      </button>
     </header>
 
     <main class="main-split">
 
-      <!-- Welcome -->
       <div id="welcome-panel" class="welcome-panel">
         <div class="welcome-inner">
           <div class="welcome-mark">P</div>
           <h2>Presentation Desktop</h2>
-          <p>Create beautiful slide decks from your browser.</p>
+          <p>Work with your assistant on one side and see the presentation update on the other.</p>
           <div class="welcome-actions">
             <button id="welcome-create" type="button" class="w-btn w-btn-primary">New presentation</button>
-            <button id="welcome-open" type="button" class="w-btn w-btn-link">or open an existing project</button>
+            <button id="welcome-open" type="button" class="w-btn w-btn-link">Open a presentation</button>
           </div>
-          <!-- Hidden inputs for create flow -->
           <input id="project-path" type="hidden">
           <input id="project-slides" type="hidden" value="3">
         </div>
       </div>
 
-      <!-- Preview pane — filmstrip + canvas -->
-      <div id="preview-pane" class="pane preview-pane" style="display:none">
-        <div id="filmstrip" class="filmstrip"></div>
-        <div class="preview-canvas">
-          <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
-          <div id="slide-counter" class="slide-counter"></div>
-        </div>
-      </div>
-
-      <!-- Terminal pane — always visible with preview -->
       <div id="terminal-pane" class="pane terminal-pane" style="display:none">
+        <div class="pane-header terminal-header">
+          <div>
+            <div class="pane-title terminal-title">Assistant</div>
+            <div id="terminal-state-label" class="pane-subtitle terminal-state-label"></div>
+          </div>
+          <div class="pane-actions">
+            <button id="terminal-retry" type="button" class="tb tb-dim" style="display:none">Start</button>
+            <button id="clear-terminal" type="button" class="tb tb-dim" title="Clear the terminal" style="display:none">Clear</button>
+            <button id="stop-terminal" type="button" class="tb tb-dim" title="Stop the terminal session" style="display:none">Stop</button>
+          </div>
+        </div>
+        <div id="terminal-empty-state" class="terminal-empty-state" style="display:none">
+          <strong id="terminal-empty-title"></strong>
+          <p id="terminal-empty-detail"></p>
+        </div>
         <div id="terminal-container" class="terminal-container"></div>
       </div>
 
-      <div id="split-handle" class="split-handle" style="display:none"></div>
+      <div id="preview-pane" class="pane preview-pane" style="display:none">
+        <div class="pane-header preview-header">
+          <div>
+            <div class="pane-title preview-title">Presentation</div>
+            <div class="pane-subtitle">Updates live while you work.</div>
+          </div>
+        </div>
+        <div class="preview-canvas">
+          <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
     </main>
 
     <div id="toast-container" class="toast-container"></div>

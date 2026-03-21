@@ -9,7 +9,7 @@ let parsed;
 try {
   parsed = parsePresentationTargetCliArgs(process.argv.slice(2));
 } catch (err) {
-  console.error(`Usage: node framework/runtime/export-pdf.mjs --project /abs/path [output.pdf] | --deck <slug> [output.pdf] | --example <name> [output.pdf]\n\n${err.message}`);
+  console.error(`Usage: node framework/runtime/export-pdf.mjs --project /abs/path [output.pdf]\n\n${err.message}`);
   process.exit(1);
 }
 

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import {
   PROJECT_METADATA_FILENAME,
@@ -11,7 +11,7 @@ import {
 import { buildProjectTreeNode } from '../../framework/runtime/project-tree.js';
 import { getProjectState } from '../../framework/runtime/project-state.js';
 import { renderPresentationHtml } from '../../framework/runtime/deck-assemble.js';
-import { listSlideSourceEntries } from '../../framework/runtime/deck-source.js';
+import { renderPresentationFailureHtml } from '../../framework/runtime/preview-state-page.js';
 import { createPresentationScaffold } from '../../framework/runtime/services/scaffold-service.mjs';
 
 function assertProjectDirectory(projectRootAbs) {
@@ -168,68 +168,26 @@ export function createProjectService(options = {}) {
     let html;
     let slideIds;
     let title;
+    let previewKind = 'slides';
 
     try {
       const assembled = renderPresentationHtml(target);
       html = assembled.html;
       slideIds = assembled.slideIds;
       title = assembled.title;
-    } catch {
-      // Validation may fail for incomplete projects (TODO markers, etc.)
-      // Build a minimal preview from raw slide files so the user can still see content
-      const entries = listSlideSourceEntries(paths).filter(e => e.isValidName);
-      slideIds = entries.map(e => e.slideId);
+    } catch (error) {
+      const fallback = renderPresentationFailureHtml(target, error);
+      html = fallback.html;
+      slideIds = [];
       title = paths.title || 'Preview';
-
-      const slideHtml = entries.map(entry => {
-        let content = '';
-        try { content = readFileSync(entry.slideHtmlAbs, 'utf-8').trim(); } catch { content = '<div class="slide"><p>Empty slide</p></div>'; }
-        return `<section id="${entry.slideId}" data-slide>\n${content}\n</section>`;
-      }).join('\n');
-
-      html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${title}</title>
-<style>@layer content, theme, canvas;</style>
-<link rel="stylesheet" href="/project-framework/canvas/canvas.css">
-<link rel="stylesheet" href="/project-files/theme.css">
-</head><body>\n${slideHtml}\n</body></html>`;
+      previewKind = fallback.kind;
     }
 
     // Rewrite asset URLs for the presentation:// protocol
     html = html.replaceAll('/project-files/', 'presentation://project-files/');
     html = html.replaceAll('/project-framework/', 'presentation://project-framework/');
 
-    // Inject snap-to-slide CSS (does not modify canvas.css — overlay only)
-    const snapCss = `<style>
-html, body { height: 100%; overflow: hidden; }
-body { scroll-snap-type: y mandatory; overflow-y: auto; padding: 0; gap: 0; }
-section[data-slide] { scroll-snap-align: center; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-.dot-nav, .export-bar { display: none !important; }
-</style>`;
-
-    // Inject navigation script for parent postMessage control
-    const navScript = `<script>
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'navigate-slide') {
-    var el = document.getElementById(e.data.slideId);
-    if (el) el.scrollIntoView({ behavior: 'instant', block: 'center' });
-  }
-});
-var _obs = new IntersectionObserver(function(entries) {
-  entries.forEach(function(entry) {
-    if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-      window.parent.postMessage({ type: 'slide-visible', slideId: entry.target.id }, '*');
-    }
-  });
-}, { threshold: 0.5 });
-document.querySelectorAll('[data-slide]').forEach(function(s) { _obs.observe(s); });
-</script>`;
-
-    html = html.replace('</head>', `${snapCss}\n</head>`);
-    html = html.replace('</body>', `${navScript}\n</body>`);
-
-    return { html, slideIds, title };
+    return { html, slideIds, title, kind: previewKind };
   }
 
   return {

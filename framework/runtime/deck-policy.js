@@ -268,18 +268,6 @@ function validateBriefSource(markdown, sourceName = 'brief.md') {
   }
 }
 
-function validateRevisionsSource(markdown, sourceName = 'revisions.md') {
-  const failures = [];
-
-  if (DECK_TITLE_TOKEN_RE.test(markdown) || TODO_MARKER_RE.test(markdown)) {
-    failures.push('Replace scaffold template tokens in revisions.md or leave the default "No revisions requested yet." state.');
-  }
-
-  if (failures.length > 0) {
-    formatFailures(sourceName, failures);
-  }
-}
-
 function validateOutlineSource(markdown, sourceName = 'outline.md') {
   const failures = [];
 
@@ -500,10 +488,6 @@ export function validateSlideDeckWorkspace(paths) {
     } else {
       validateOutlineSource(readFileSync(paths.outlineAbs, 'utf-8'), paths.buildDisplayPath(paths.outlineAbs));
     }
-  }
-
-  if (existsSync(paths.revisionsAbs)) {
-    validateRevisionsSource(readFileSync(paths.revisionsAbs, 'utf-8'), paths.buildDisplayPath(paths.revisionsAbs));
   }
 
   for (const entry of entries.filter((item) => item.isValidName)) {

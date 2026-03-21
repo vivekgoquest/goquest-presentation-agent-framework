@@ -1,5 +1,7 @@
 # Electron Native-Host Plan
 
+> Historical note (2026-03-15): This plan documents migration phases that referenced browser compatibility and `server.mjs`. Current contract is Electron-only UI with project-only targets and no web operator mode.
+
 ## What this plan is
 
 This is the alternate plan to `docs/electron-packaging-plan.md`.
@@ -524,7 +526,7 @@ Bundle:
 - renderer assets
 - worker code
 - shared framework core
-- templates, prompts, specs
+- templates, project-agent, and root .claude sources
 - Playwright browser bundle
 - optional portable Git distribution if we truly need packaged Git behavior
 

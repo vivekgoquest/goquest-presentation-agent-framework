@@ -1,31 +1,16 @@
 (function initDeckExport() {
   function getPresentationTarget() {
-    const targetKind = document.documentElement.dataset.targetKind;
-    if (targetKind === 'project') {
-      const projectRoot = document.documentElement.dataset.projectRoot;
-      if (!projectRoot) {
-        return null;
-      }
-      return { kind: 'project', projectRoot };
-    }
-
-    const ownerType = document.documentElement.dataset.ownerType;
-    const ownerName = document.documentElement.dataset.ownerName;
-
-    if (!ownerType || !ownerName) {
+    const projectRoot = document.documentElement.dataset.projectRoot;
+    if (!projectRoot) {
       return null;
     }
-
-    return { kind: 'workspace', ownerType, ownerName };
+    return { kind: 'project', projectRoot };
   }
 
   function getDownloadName(target) {
-    if (target.kind === 'project') {
-      const root = target.projectRoot.replace(/[\\/]+$/, '');
-      const parts = root.split(/[\\/]/);
-      return `${parts[parts.length - 1] || 'presentation'}.pdf`;
-    }
-    return `${target.ownerName}.pdf`;
+    const root = target.projectRoot.replace(/[\\/]+$/, '');
+    const parts = root.split(/[\\/]/);
+    return `${parts[parts.length - 1] || 'presentation'}.pdf`;
   }
 
   function getStatusNode() {
@@ -72,9 +57,7 @@
       const res = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(target.kind === 'project'
-          ? { projectRoot: target.projectRoot }
-          : { ownerType: target.ownerType, ownerName: target.ownerName }),
+        body: JSON.stringify({ projectRoot: target.projectRoot }),
       });
 
       if (!res.ok) {

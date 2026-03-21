@@ -1,3 +1,4 @@
+import { ACTION_EVENT_CHANNELS } from '../../framework/application/action-events.mjs';
 import { TERMINAL_EVENT_CHANNELS } from '../../framework/runtime/terminal-events.mjs';
 
 export const WORKER_REQUEST_CHANNELS = Object.freeze({
@@ -6,6 +7,8 @@ export const WORKER_REQUEST_CHANNELS = Object.freeze({
   PROJECT_GET_META: 'project:getMeta',
   PROJECT_GET_STATE: 'project:getState',
   PROJECT_GET_FILES: 'project:getFiles',
+  ACTION_LIST: 'action:list',
+  ACTION_INVOKE: 'action:invoke',
   RUNTIME_CAPTURE: 'runtime:capture',
   RUNTIME_CHECK: 'runtime:check',
   RUNTIME_EXPORT: 'runtime:export',
@@ -21,6 +24,7 @@ export const WORKER_REQUEST_CHANNELS = Object.freeze({
 });
 
 export const WORKER_EVENT_CHANNELS = Object.freeze({
+  ...ACTION_EVENT_CHANNELS,
   ...TERMINAL_EVENT_CHANNELS,
   PROJECT_CHANGED: 'project/changed',
   WATCH_CHANGE: 'watch/change',

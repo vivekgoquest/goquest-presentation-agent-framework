@@ -1,5 +1,7 @@
 # Electron Packaging Plan
 
+> Historical note (2026-03-15): This document describes the older embedded-loopback web packaging approach. The active product contract is Electron-only UI with project-only CLI targets and no browser operator mode.
+
 ## What we're building
 
 A native desktop app that wraps the existing presentation workspace UI. The user double-clicks an app icon, gets a native window with a real terminal on the left and live slide preview on the right. No browser tabs, no manual URL entry, no `npm run start`.
@@ -76,8 +78,8 @@ presentation-app/
   │   ├─ canvas/
   │   └─ client/
   ├─ templates/
-  ├─ prompts/
-  ├─ specs/
+  ├─ project-agent/
+  ├─ .claude/
   └─ build/                    (electron-builder output)
       ├─ mac/                  (.dmg)
       ├─ win/                  (.exe / .msi)
@@ -228,8 +230,8 @@ Note: The packaged app invokes `new-deck.mjs` directly via `fork()` — not `npm
       "preload.cjs",
       "framework/**",
       "templates/**",
-      "prompts/**",
-      "specs/**",
+      "project-agent/**",
+      ".claude/**",
       "node_modules/**"
     ],
     "extraResources": [
@@ -292,7 +294,7 @@ npx electron-builder --mac --win --linux
 | Node modules (xterm, node-pty, express, etc.) | ~15MB |
 | Playwright + Chromium (for PDF export) | ~150MB |
 | dugite (portable git) | ~30MB |
-| Framework code + templates + prompts | ~1MB |
+| Framework code + templates + root .claude | ~1MB |
 | **Total** | **~280MB** |
 
 Playwright's bundled Chromium is the biggest contributor. If PDF export can be deferred to a first-run download, the initial binary drops to ~130MB.
@@ -381,9 +383,9 @@ No browser tabs. No manual URL entry. No `npm run start`. The embedded Express s
 ## What stays the same
 
 - All framework code (canvas.css, deck-policy.js, deck-quality.js, etc.)
-- All prompts and specs
+- Project-agent scaffold sources
 - All templates
-- The Claude Code hooks system (.claude/ folder)
+- Root maintainer agent context (.claude/ folder)
 - The workspace UI (project-console.html/css/js) — zero changes in Phase 1
 - The terminal lifecycle contract (terminal-session.js owns PTY, Python fallback preserved)
 - The quick-action buttons and menus

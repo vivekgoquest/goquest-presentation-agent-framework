@@ -15,8 +15,7 @@ import {
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
 const BACKLOG_LIMIT = 120000;
-const STALLED_AFTER_MS = 60000;
-const VALID_MODES = new Set(['shell', 'codex', 'claude']);
+const VALID_MODES = new Set(['shell']);
 const PTY_BRIDGE_PATH = resolve(import.meta.dirname, 'pty-bridge.py');
 
 function resolveShell() {
@@ -281,6 +280,21 @@ export function createTerminalCoreSession(options = {}) {
     emitEvent(createTerminalClearEvent());
   }
 
+  function writeSystemOutput(chunk) {
+    if (typeof chunk !== 'string') {
+      throw new Error('Terminal system output must be a string.');
+    }
+
+    if (!chunk) {
+      return getMeta();
+    }
+
+    lastOutputAt = Date.now();
+    appendBacklog(chunk);
+    emitEvent(createTerminalOutputEvent(chunk));
+    return getMeta();
+  }
+
   function getEffectiveState() {
     if (!backend) {
       return terminalState === 'stopped' ? 'stopped' : 'idle';
@@ -288,10 +302,6 @@ export function createTerminalCoreSession(options = {}) {
 
     if (terminalState === 'starting') {
       return 'starting';
-    }
-
-    if (sessionMode && sessionMode !== 'shell' && lastOutputAt && (Date.now() - lastOutputAt) > STALLED_AFTER_MS) {
-      return 'stalled';
     }
 
     return 'running';
@@ -302,24 +312,9 @@ export function createTerminalCoreSession(options = {}) {
       throw new Error(`Unsupported terminal mode "${mode}".`);
     }
 
-    if (mode === 'shell') {
-      return {
-        cwd: projectRoot || frameworkRoot,
-        launchCommand: '',
-      };
-    }
-
-    if (!projectRoot) {
-      throw new Error(`Open a presentation project before launching ${mode}.`);
-    }
-
-    const command = mode === 'codex'
-      ? `codex --add-dir ${shellEscape(projectRoot)}`
-      : `claude --add-dir ${shellEscape(projectRoot)}`;
-
     return {
-      cwd: frameworkRoot,
-      launchCommand: `${command}\n`,
+      cwd: projectRoot || frameworkRoot,
+      launchCommand: '',
     };
   }
 
@@ -559,7 +554,7 @@ export function createTerminalCoreSession(options = {}) {
     }
 
     if (!backend) {
-      throw new Error('Terminal session is not running. Launch Codex, Claude, or Shell first.');
+      throw new Error('Terminal session is not running. Launch the shell first.');
     }
 
     backend.write(data);
@@ -637,6 +632,7 @@ export function createTerminalCoreSession(options = {}) {
     setProjectContext,
     startSession,
     stopSession,
+    writeSystemOutput,
   };
 }
 

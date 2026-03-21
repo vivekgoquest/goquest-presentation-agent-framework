@@ -1,8 +1,56 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
+
+function fillBrief(projectRoot, title = 'Electron Preview Brief') {
+  writeFileSync(
+    resolve(projectRoot, 'brief.md'),
+    [
+      `# ${title}`,
+      '',
+      '## Goal',
+      '',
+      'Verify the Electron preview shell against a ready presentation project.',
+      '',
+      '## Audience',
+      '',
+      'Framework maintainers.',
+      '',
+      '## Tone',
+      '',
+      'Operational and concise.',
+      '',
+      '## Must Include',
+      '',
+      '- Standard slide framing inside the Electron preview.',
+      '- Preview stays a rendering layer for the assembled HTML.',
+      '',
+      '## Constraints',
+      '',
+      '- Keep the project-folder contract intact.',
+      '',
+      '## Open Questions',
+      '',
+      '- none',
+      '',
+    ].join('\n')
+  );
+}
+
+async function waitForPreviewFrame(page) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const frame = page.frames().find((candidate) => candidate.url().startsWith('presentation://preview/current'));
+    if (frame) {
+      return frame;
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error('Timed out waiting for the Electron preview frame.');
+}
 
 test('electron shell boots and can create a project through the preload bridge', async (t) => {
   const { _electron: electron } = await import('playwright');
@@ -50,4 +98,118 @@ test('electron shell boots and can create a project through the preload bridge',
   // Verify terminal meta is available in diagnostics
   const terminalStatus = await page.locator('#terminal-meta').textContent();
   assert.match(terminalStatus || '', /"state"/);
+
+  await page.waitForSelector('#terminal-pane');
+  await page.waitForSelector('#preview-pane');
+
+  const terminalTitle = await page.locator('.terminal-title').textContent();
+  const previewTitle = await page.locator('.preview-title').textContent();
+  assert.match(terminalTitle || '', /assistant/i);
+  assert.match(previewTitle || '', /presentation/i);
+
+  const visibleActions = await page.evaluate(() => {
+    const primary = document.getElementById('primary-action');
+    const secondary = document.getElementById('secondary-action');
+    return {
+      primaryText: primary?.textContent || '',
+      primaryHidden: primary?.style.display === 'none',
+      secondaryText: secondary?.textContent || '',
+      secondaryHidden: secondary?.style.display === 'none',
+    };
+  });
+  assert.equal(visibleActions.primaryHidden, false);
+  assert.match(visibleActions.primaryText, /build presentation/i);
+  assert.equal(visibleActions.secondaryHidden, false);
+  assert.match(visibleActions.secondaryText, /export pdf/i);
+
+  const actionIds = await page.evaluate(async () => {
+    const result = await window.electron.actions.list();
+    return result.actions.map((action) => action.id);
+  });
+  assert(actionIds.includes('review_presentation'));
+
+  const filmstripCount = await page.locator('#filmstrip').count();
+  assert.equal(filmstripCount, 0);
+
+  const diagnosticsButtonCount = await page.locator('#toggle-diagnostics').count();
+  assert.equal(diagnosticsButtonCount, 0);
+
+  const welcomeCopy = await page.locator('#welcome-panel p').textContent();
+  assert.match(welcomeCopy || '', /assistant/i);
+  assert.doesNotMatch(welcomeCopy || '', /browser|deck policy/i);
+});
+
+test('electron preview applies a generic viewport shell for ready slide decks', async (t) => {
+  const [{ _electron: electron }, { createPresentationScaffold }] = await Promise.all([
+    import('playwright'),
+    import('../../framework/runtime/services/scaffold-service.mjs'),
+  ]);
+  const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-ready-preview-'));
+
+  t.after(() => {
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot, 'Electron Ready Preview Brief');
+
+  const app = await electron.launch({
+    args: [resolve(process.cwd(), 'electron/main.mjs')],
+    cwd: process.cwd(),
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const page = await app.firstWindow();
+  await page.waitForSelector('#app-shell');
+
+  await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
+  const previewFrame = await waitForPreviewFrame(page);
+  await previewFrame.waitForSelector('#electron-preview-stage');
+
+  const stageFrame = previewFrame.childFrames()[0];
+  assert.ok(stageFrame, 'expected inner preview stage frame');
+  await stageFrame.waitForSelector('section[data-slide]');
+
+  const hostDetails = await previewFrame.evaluate(() => {
+    const stage = document.getElementById('electron-preview-stage');
+
+    return {
+      host: document.documentElement.dataset.electronPreviewHost || '',
+      stageWidth: stage?.clientWidth || 0,
+      stageHeight: stage?.clientHeight || 0,
+      stageZoom: stage ? getComputedStyle(stage).zoom : '',
+    };
+  });
+
+  const stageDetails = await stageFrame.evaluate(() => {
+    const firstSection = document.querySelector('section[data-slide]');
+    const slide = document.querySelector('.slide, .slide-wide, .slide-hero');
+    const bodyStyle = getComputedStyle(document.body);
+
+    return {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      slideCount: document.querySelectorAll('section[data-slide]').length,
+      hasExportBar: Boolean(document.querySelector('.export-bar')),
+      bodyGap: bodyStyle.gap,
+      slideAspectRatio: slide ? getComputedStyle(slide).aspectRatio : '',
+      firstSectionWidth: firstSection?.clientWidth || 0,
+    };
+  });
+
+  assert.equal(hostDetails.host, 'slides');
+  assert.equal(hostDetails.stageWidth, 1280);
+  assert.equal(hostDetails.stageHeight, 720);
+  assert.notEqual(hostDetails.stageZoom, '1');
+
+  assert.equal(stageDetails.innerWidth, 1280);
+  assert.equal(stageDetails.innerHeight, 720);
+  assert.equal(stageDetails.slideCount, 2);
+  assert.equal(stageDetails.hasExportBar, true);
+  assert.match(stageDetails.bodyGap, /px/);
+  assert.equal(stageDetails.slideAspectRatio, '16 / 9');
+  assert.ok(stageDetails.firstSectionWidth >= 1200);
 });

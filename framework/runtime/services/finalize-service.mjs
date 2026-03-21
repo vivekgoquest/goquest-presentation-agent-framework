@@ -32,11 +32,9 @@ function buildSummary({ target, sourcePaths, outputPaths, status, issues, report
   const unresolved = issues.length > 0
     ? issues.map((issue) => `- ${issue}`).join('\n')
     : '- None';
-  const finalizeCommand = target.kind === 'project'
-    ? `npm run finalize -- --project ${sourcePaths.sourceDirAbs}`
-    : `npm run finalize -- --deck ${sourcePaths.slug}`;
+  const finalizeCommand = `npm run finalize -- --project ${sourcePaths.sourceDirAbs}`;
 
-  let template = readFileSync(resolve(REPO_ROOT, 'templates', 'summary.md'), 'utf-8');
+  let template = readFileSync(resolve(REPO_ROOT, 'framework', 'templates', 'summary.md'), 'utf-8');
   const replacements = new Map([
     ['{{SOURCE_ID}}', getPresentationId(target)],
     ['{{PRESENTATION_SLUG}}', sourcePaths.slug],
@@ -45,7 +43,6 @@ function buildSummary({ target, sourcePaths, outputPaths, status, issues, report
     ['{{SOURCE_THEME}}', sourcePaths.themeCssRel],
     ['{{SOURCE_SLIDES}}', `${sourcePaths.slidesDirRel}/`],
     ['{{BRIEF_PATH}}', sourcePaths.briefRel],
-    ['{{REVISIONS_PATH}}', sourcePaths.revisionsRel],
     ['{{PDF_PATH}}', outputPaths.pdfRel],
     ['{{REPORT_PATH}}', outputPaths.reportRel],
     ['{{FULL_PAGE_PATH}}', outputPaths.fullPageRel],
@@ -68,10 +65,6 @@ function buildSummary({ target, sourcePaths, outputPaths, status, issues, report
 
 export async function finalizePresentation(targetInput, options = {}) {
   const target = createPresentationTarget(targetInput);
-  if (target.kind === 'workspace' && target.ownerType !== 'deck') {
-    throw new Error('Finalize supports project folders and --deck <slug> only.');
-  }
-
   const sourcePaths = getPresentationPaths(target);
   const outputPaths = getPresentationOutputPaths(target);
 

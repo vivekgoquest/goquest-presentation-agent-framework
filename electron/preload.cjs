@@ -58,18 +58,19 @@ contextBridge.exposeInMainWorld('electron', {
       return request('project:open', options);
     },
   },
-  runtime: {
-    capture(options) {
-      return request('runtime:capture', options);
+  actions: {
+    invoke(actionId, args = {}) {
+      return request('action:invoke', { actionId, args });
     },
-    check(options) {
-      return request('runtime:check', options);
+    list() {
+      return request('action:list');
     },
-    export(options) {
-      return request('runtime:export', options);
-    },
-    finalize(options) {
-      return request('runtime:finalize', options);
+    onEvent(callback) {
+      return subscribe(null, (event) => {
+        if (typeof event.channel === 'string' && event.channel.startsWith('action/')) {
+          callback(event);
+        }
+      });
     },
   },
   system: {

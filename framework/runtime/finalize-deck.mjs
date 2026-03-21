@@ -5,18 +5,12 @@ let parsed;
 try {
   parsed = parsePresentationTargetCliArgs(process.argv.slice(2));
 } catch (err) {
-  console.error(`Usage: npm run finalize -- --project /abs/path | --deck <slug>\n\n${err.message}`);
-  process.exit(1);
-}
-
-const target = parsed.target;
-if (target.kind === 'workspace' && target.ownerType !== 'deck') {
-  console.error('Usage: npm run finalize -- --project /abs/path | --deck <slug>\n\nFinalize supports project folders and --deck <slug> only.');
+  console.error(`Usage: npm run finalize -- --project /abs/path\n\n${err.message}`);
   process.exit(1);
 }
 
 try {
-  const result = await finalizePresentation(target);
+  const result = await finalizePresentation(parsed.target);
 
   if (result.qualityWarnings.length > 0) {
     console.log('\n--- QUALITY WARNINGS ---');

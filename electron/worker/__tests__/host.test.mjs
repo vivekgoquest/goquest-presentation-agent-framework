@@ -73,7 +73,7 @@ test('electron worker host creates a project and runs runtime actions without se
       '## Must Include',
       '',
       '- Project create and open behavior.',
-      '- Runtime actions without server.mjs.',
+      '- Runtime actions through the native worker host.',
       '',
       '## Constraints',
       '',
@@ -107,6 +107,22 @@ test('electron worker host creates a project and runs runtime actions without se
   });
   assert.equal(checkResponse.ok, true);
   assert.equal(checkResponse.data.status, 'pass');
+
+  const actionListResponse = await host.handleRequest({
+    channel: 'action:list',
+    payload: {},
+  });
+  assert.equal(actionListResponse.ok, true);
+  assert(actionListResponse.data.actions.some((action) => action.id === 'build_presentation'));
+
+  const actionInvokeResponse = await host.handleRequest({
+    channel: 'action:invoke',
+    payload: {
+      actionId: 'check_presentation',
+    },
+  });
+  assert.equal(actionInvokeResponse.ok, true);
+  assert.equal(actionInvokeResponse.data.status, 'pass');
 });
 
 test('electron worker host relays terminal events from the shared core', async (t) => {
@@ -156,4 +172,107 @@ test('electron worker host relays terminal events from the shared core', async (
   await waitFor(() =>
     events.some((event) => event.channel === 'terminal/exit')
   );
+});
+
+test('electron worker host returns onboarding preview HTML instead of raw slide fallback for scaffolded projects', async (t) => {
+  const { createElectronWorkerHost } = await import('../host.mjs');
+  const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-preview-onboarding-'));
+  const host = createElectronWorkerHost({
+    frameworkRoot: process.cwd(),
+  });
+
+  t.after(async () => {
+    await host.dispose();
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  const createResponse = await host.handleRequest({
+    channel: 'project:create',
+    payload: {
+      projectRoot,
+      slides: 3,
+      copyFramework: false,
+    },
+  });
+  assert.equal(createResponse.ok, true);
+
+  const previewResponse = await host.handleRequest({
+    channel: 'project:getPreviewHtml',
+    payload: {},
+  });
+
+  assert.equal(previewResponse.ok, true);
+  assert.match(previewResponse.data.html, /Presentation in progress/i);
+  assert.doesNotMatch(previewResponse.data.html, /\[\[TODO_/i);
+});
+
+test('electron worker host returns the assembled deck HTML without preview-specific canvas overrides', async (t) => {
+  const { createElectronWorkerHost } = await import('../host.mjs');
+  const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-preview-pass-through-'));
+  const host = createElectronWorkerHost({
+    frameworkRoot: process.cwd(),
+  });
+
+  t.after(async () => {
+    await host.dispose();
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  const createResponse = await host.handleRequest({
+    channel: 'project:create',
+    payload: {
+      projectRoot,
+      slides: 2,
+      copyFramework: false,
+    },
+  });
+  assert.equal(createResponse.ok, true);
+
+  writeFileSync(
+    resolve(projectRoot, 'brief.md'),
+    [
+      '# Pass Through Preview Brief',
+      '',
+      '## Goal',
+      '',
+      'Verify that Electron preview renders the assembled deck HTML without extra layout assumptions.',
+      '',
+      '## Audience',
+      '',
+      'Framework maintainers.',
+      '',
+      '## Tone',
+      '',
+      'Operational and concise.',
+      '',
+      '## Must Include',
+      '',
+      '- The preview iframe should render the authored deck HTML as-is.',
+      '- Do not inject preview-specific canvas rules.',
+      '',
+      '## Constraints',
+      '',
+      '- Keep the project-folder contract intact.',
+      '',
+      '## Open Questions',
+      '',
+      '- none',
+      '',
+    ].join('\n')
+  );
+
+  const previewResponse = await host.handleRequest({
+    channel: 'project:getPreviewHtml',
+    payload: {},
+  });
+
+  assert.equal(previewResponse.ok, true);
+  assert.equal(previewResponse.data.kind, 'slides');
+  assert.match(previewResponse.data.html, /presentation:\/\/project-framework\/canvas\/canvas\.css/i);
+  assert.match(previewResponse.data.html, /presentation:\/\/project-framework\/client\/nav\.js/i);
+  assert.doesNotMatch(previewResponse.data.html, /scroll-snap-type:\s*y\s+mandatory/i);
+  assert.doesNotMatch(previewResponse.data.html, /min-height:\s*100vh;\s*display:\s*flex;\s*align-items:\s*center;\s*justify-content:\s*center/i);
+  assert.doesNotMatch(previewResponse.data.html, /\.dot-nav,\s*\.export-bar\s*\{\s*display:\s*none\s*!important/i);
+  assert.doesNotMatch(previewResponse.data.html, /navigate-slide/i);
+  assert.doesNotMatch(previewResponse.data.html, /slide-visible/i);
 });

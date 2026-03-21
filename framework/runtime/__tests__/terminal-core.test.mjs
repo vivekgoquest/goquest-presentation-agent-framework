@@ -101,3 +101,23 @@ test('terminal core emits transport-neutral lifecycle events', async (t) => {
   assert(events.some((event) => event.channel === 'terminal/ready'));
   assert.equal(session.getMeta().state, 'stopped');
 });
+
+test('terminal core only accepts shell sessions after agent launching moves out', async (t) => {
+  const { createTerminalCoreSession } = await import('../terminal-core.mjs');
+  const session = createTerminalCoreSession({
+    frameworkRoot: process.cwd(),
+    projectRoot: process.cwd(),
+  });
+
+  t.after(() => {
+    try {
+      session.stopSession({ announce: false });
+    } catch {
+      // ignore cleanup races in the test harness
+    }
+  });
+
+  assert.throws(() => {
+    session.startSession('claude');
+  }, /Unsupported terminal mode/i);
+});

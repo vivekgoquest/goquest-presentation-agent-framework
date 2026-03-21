@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, utilityProcess } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { resolveProjectFrameworkAssetForElectron } from './project-framework-resolver.mjs';
+import { renderElectronPreviewHtml } from './preview-document-shell.mjs';
 
 const ELECTRON_ROOT = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(ELECTRON_ROOT, '..');
@@ -156,7 +158,7 @@ app.whenReady().then(async () => {
             headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
           });
         }
-        return new Response(response.data.html, {
+        return new Response(renderElectronPreviewHtml(response.data.html, response.data.kind), {
           headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
         });
       } catch {
@@ -180,9 +182,16 @@ app.whenReady().then(async () => {
 
     // presentation://project-framework/{path} — framework assets
     if (url.host === 'project-framework') {
-      const filePath = resolve(REPO_ROOT, 'framework', url.pathname.slice(1));
-      if (!filePath.startsWith(resolve(REPO_ROOT, 'framework'))) return new Response('Forbidden', { status: 403 });
-      return net.fetch(`file://${filePath}`);
+      try {
+        const metaResponse = await invokeWorker('project:getMeta');
+        const projectRoot = metaResponse?.data?.projectRoot;
+        if (!projectRoot) return new Response('No project', { status: 404 });
+        const relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+        const filePath = resolveProjectFrameworkAssetForElectron(projectRoot, relativePath);
+        return net.fetch(`file://${filePath}`);
+      } catch {
+        return new Response('Not found', { status: 404 });
+      }
     }
 
     return new Response('Not found', { status: 404 });

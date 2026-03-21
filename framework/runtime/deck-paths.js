@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { basename, isAbsolute, relative, resolve, sep } from 'path';
 
 export const REPO_ROOT = resolve(import.meta.dirname, '../..');
@@ -12,8 +12,6 @@ export const PROJECT_FRAMEWORK_BASE_DIRNAME = 'base';
 export const PROJECT_FRAMEWORK_OVERRIDES_DIRNAME = 'overrides';
 export const PROJECT_PREVIEW_PATH = '/preview/';
 
-const WORKSPACE_NAME_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
-const VALID_OWNER_TYPES = new Set(['deck', 'example']);
 const VALID_FRAMEWORK_MODES = new Set(['linked', 'copied']);
 const PACKAGE_JSON = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf-8'));
 export const FRAMEWORK_VERSION = PACKAGE_JSON.version || '0.0.0';
@@ -54,26 +52,8 @@ function normalizeFsPath(input, baseDir = process.cwd()) {
     : resolve(baseDir, value);
 }
 
-function assertWorkspaceName(name, label = 'Workspace name') {
-  if (typeof name !== 'string' || !WORKSPACE_NAME_RE.test(name)) {
-    throw new Error(
-      `${label} must use lowercase letters, numbers, and hyphens only (example: q4-investor-update).`
-    );
-  }
-
-  return name;
-}
-
 function normalizeSlashPath(value) {
   return value.split(sep).join('/');
-}
-
-export function assertDeckSlug(slug) {
-  return assertWorkspaceName(slug, 'Deck slug');
-}
-
-export function assertExampleName(name) {
-  return assertWorkspaceName(name, 'Example name');
 }
 
 export function slugifyProjectName(name) {
@@ -85,6 +65,14 @@ export function slugifyProjectName(name) {
     .replace(/-{2,}/g, '-');
 
   return slug || 'presentation-project';
+}
+
+export function slugToTitle(slug) {
+  return slugifyProjectName(slug)
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export function toRepoRelative(absPath) {
@@ -116,20 +104,6 @@ export function resolveRepoPath(input) {
   return { absPath, relPath };
 }
 
-export function createWorkspaceRef(ownerType, ownerName) {
-  if (!VALID_OWNER_TYPES.has(ownerType)) {
-    throw new Error('Workspace owner type must be "deck" or "example".');
-  }
-
-  return {
-    kind: 'workspace',
-    ownerType,
-    ownerName: ownerType === 'deck'
-      ? assertDeckSlug(ownerName)
-      : assertExampleName(ownerName),
-  };
-}
-
 export function createProjectRef(projectRootInput, baseDir = process.cwd()) {
   return {
     kind: 'project',
@@ -146,87 +120,7 @@ export function createPresentationTarget(input) {
     return createProjectRef(input.projectRootAbs || input.projectRoot);
   }
 
-  if (input.kind === 'workspace' || input.ownerType) {
-    return createWorkspaceRef(input.ownerType, input.ownerName);
-  }
-
-  throw new Error('Presentation target must be a workspace or project reference.');
-}
-
-export function getWorkspaceId(ref) {
-  const normalized = createWorkspaceRef(ref.ownerType, ref.ownerName);
-  return normalized.ownerType === 'deck'
-    ? `decks/${normalized.ownerName}`
-    : `examples/${normalized.ownerName}`;
-}
-
-export function getWorkspacePreviewPath(ref) {
-  const normalized = createWorkspaceRef(ref.ownerType, ref.ownerName);
-  return normalized.ownerType === 'deck'
-    ? `/decks/${normalized.ownerName}/`
-    : `/examples/${normalized.ownerName}/`;
-}
-
-function getWorkspacePaths(rootDir, name, ownerType) {
-  const ref = createWorkspaceRef(ownerType, name);
-  const sourceDirRel = ref.ownerType === 'deck'
-    ? `decks/${ref.ownerName}`
-    : `examples/${ref.ownerName}`;
-  const sourceDirAbs = resolve(REPO_ROOT, sourceDirRel);
-
-  return {
-    kind: 'workspace',
-    ownerType: ref.ownerType,
-    ownerName: ref.ownerName,
-    slug: ref.ownerName,
-    title: slugToTitle(ref.ownerName),
-    sourceDirRel,
-    sourceDirAbs,
-    sourceDirDisplay: sourceDirRel,
-    previewPath: getWorkspacePreviewPath(ref),
-    themeCssRel: `${sourceDirRel}/theme.css`,
-    themeCssAbs: resolve(sourceDirAbs, 'theme.css'),
-    briefRel: `${sourceDirRel}/brief.md`,
-    briefAbs: resolve(sourceDirAbs, 'brief.md'),
-    outlineRel: `${sourceDirRel}/outline.md`,
-    outlineAbs: resolve(sourceDirAbs, 'outline.md'),
-    revisionsRel: `${sourceDirRel}/revisions.md`,
-    revisionsAbs: resolve(sourceDirAbs, 'revisions.md'),
-    assetsDirRel: `${sourceDirRel}/assets`,
-    assetsDirAbs: resolve(sourceDirAbs, 'assets'),
-    slidesDirRel: `${sourceDirRel}/slides`,
-    slidesDirAbs: resolve(sourceDirAbs, 'slides'),
-    outputsDirRel: ref.ownerType === 'deck' ? `outputs/${ref.ownerName}` : '',
-    outputsDirAbs: ref.ownerType === 'deck' ? resolve(REPO_ROOT, 'outputs', ref.ownerName) : '',
-    buildDisplayPath(absPath) {
-      return toRepoRelative(absPath);
-    },
-    buildProjectFilePreviewPath(absPath) {
-      return `/${toRepoRelative(absPath)}`;
-    },
-    buildFrameworkPreviewPath(relativePath) {
-      return `/framework/${normalizeRepoRelativePath(relativePath)}`;
-    },
-  };
-}
-
-export function getDeckWorkspacePaths(slug) {
-  return getWorkspacePaths('decks', slug, 'deck');
-}
-
-export function getExampleWorkspacePaths(name) {
-  return getWorkspacePaths('examples', name, 'example');
-}
-
-export function getOwnedWorkspacePaths(ownerType, name) {
-  return ownerType === 'deck'
-    ? getDeckWorkspacePaths(name)
-    : getExampleWorkspacePaths(name);
-}
-
-export function getWorkspacePathsFromRef(ref) {
-  const normalized = createWorkspaceRef(ref.ownerType, ref.ownerName);
-  return getOwnedWorkspacePaths(normalized.ownerType, normalized.ownerName);
+  throw new Error('Presentation target must be a project reference.');
 }
 
 export function getProjectSystemPaths(projectRootInput) {
@@ -333,8 +227,6 @@ export function getProjectPaths(projectRootInput) {
     briefAbs: resolve(ref.projectRootAbs, 'brief.md'),
     outlineRel: 'outline.md',
     outlineAbs: resolve(ref.projectRootAbs, 'outline.md'),
-    revisionsRel: 'revisions.md',
-    revisionsAbs: resolve(ref.projectRootAbs, 'revisions.md'),
     assetsDirRel: 'assets',
     assetsDirAbs: resolve(ref.projectRootAbs, 'assets'),
     slidesDirRel: 'slides',
@@ -368,52 +260,19 @@ export function getProjectPaths(projectRootInput) {
   };
 }
 
-export function parseWorkspaceRefPath(input) {
-  const normalized = normalizeRepoRelativePath(input);
-  let match = normalized.match(/^decks\/([^/]+)$/);
-  if (match) {
-    return createWorkspaceRef('deck', match[1]);
-  }
-
-  match = normalized.match(/^examples\/([^/]+)$/);
-  if (match) {
-    return createWorkspaceRef('example', match[1]);
-  }
-
-  return null;
-}
-
 export function parsePresentationTargetCliArgs(argv, options = {}) {
   const {
-    allowWorkspace = true,
     allowProject = true,
     requireTarget = true,
   } = options;
 
-  let deck = '';
-  let example = '';
   let project = '';
   const rest = [];
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--deck') {
-      const value = argv[i + 1] || '';
-      if (!value || value.startsWith('--')) {
-        throw new Error('Missing value for --deck <slug>.');
-      }
-      deck = value;
-      i += 1;
-      continue;
-    }
-    if (arg === '--example') {
-      const value = argv[i + 1] || '';
-      if (!value || value.startsWith('--')) {
-        throw new Error('Missing value for --example <name>.');
-      }
-      example = value;
-      i += 1;
-      continue;
+    if (arg === '--deck' || arg === '--example') {
+      throw new Error(`Legacy workspace target "${arg}" was removed. Use --project /abs/path.`);
     }
     if (arg === '--project') {
       const value = argv[i + 1] || '';
@@ -430,11 +289,6 @@ export function parsePresentationTargetCliArgs(argv, options = {}) {
     rest.push(arg);
   }
 
-  const targets = [deck, example, project].filter(Boolean);
-  if (targets.length > 1) {
-    throw new Error('Pass only one of --project /abs/path, --deck <slug>, or --example <name>.');
-  }
-
   if (project) {
     if (!allowProject) {
       throw new Error('This command does not support --project /abs/path.');
@@ -446,70 +300,13 @@ export function parsePresentationTargetCliArgs(argv, options = {}) {
     };
   }
 
-  if (deck) {
-    if (!allowWorkspace) {
-      throw new Error('This command does not support --deck <slug>.');
-    }
-
-    return {
-      target: createWorkspaceRef('deck', deck),
-      rest,
-    };
-  }
-
-  if (example) {
-    if (!allowWorkspace) {
-      throw new Error('This command does not support --example <name>.');
-    }
-
-    return {
-      target: createWorkspaceRef('example', example),
-      rest,
-    };
-  }
-
   if (requireTarget) {
-    throw new Error('Usage: pass --project /abs/path, --deck <slug>, or --example <name>.');
+    throw new Error('Usage: pass --project /abs/path.');
   }
 
   return {
     target: null,
     rest,
-  };
-}
-
-export function parseWorkspaceCliArgs(argv) {
-  const parsed = parsePresentationTargetCliArgs(argv, {
-    allowWorkspace: true,
-    allowProject: false,
-    requireTarget: true,
-  });
-
-  return {
-    workspaceRef: parsed.target,
-    rest: parsed.rest,
-  };
-}
-
-export function getDeckOutputPaths(slug) {
-  const safeSlug = assertDeckSlug(slug);
-  const outputDirRel = `outputs/${safeSlug}`;
-  const outputDirAbs = resolve(REPO_ROOT, outputDirRel);
-
-  return {
-    slug: safeSlug,
-    outputDirRel,
-    outputDirAbs,
-    pdfRel: `${outputDirRel}/deck.pdf`,
-    pdfAbs: resolve(outputDirAbs, 'deck.pdf'),
-    reportRel: `${outputDirRel}/report.json`,
-    reportAbs: resolve(outputDirAbs, 'report.json'),
-    fullPageRel: `${outputDirRel}/full-page.png`,
-    fullPageAbs: resolve(outputDirAbs, 'full-page.png'),
-    slidesDirRel: `${outputDirRel}/slides`,
-    slidesDirAbs: resolve(outputDirAbs, 'slides'),
-    summaryRel: `${outputDirRel}/summary.md`,
-    summaryAbs: resolve(outputDirAbs, 'summary.md'),
   };
 }
 
@@ -532,61 +329,29 @@ export function getProjectOutputPaths(projectRootInput) {
   };
 }
 
-export function slugToTitle(slug) {
-  return slugifyProjectName(slug)
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
 export function getSuggestedPdfName(target) {
   const normalized = createPresentationTarget(target);
-  if (normalized.kind === 'project') {
-    return `${getProjectPaths(normalized.projectRootAbs).slug}.pdf`;
-  }
-
-  return `${normalized.ownerName}.pdf`;
+  return `${getProjectPaths(normalized.projectRootAbs).slug}.pdf`;
 }
 
 export function getPresentationId(target) {
   const normalized = createPresentationTarget(target);
-  if (normalized.kind === 'project') {
-    return `project:${normalized.projectRootAbs}`;
-  }
-
-  return getWorkspaceId(normalized);
+  return `project:${normalized.projectRootAbs}`;
 }
 
 export function getPresentationPreviewPath(target) {
-  const normalized = createPresentationTarget(target);
-  if (normalized.kind === 'project') {
-    return PROJECT_PREVIEW_PATH;
-  }
-
-  return getWorkspacePreviewPath(normalized);
+  createPresentationTarget(target);
+  return PROJECT_PREVIEW_PATH;
 }
 
 export function getPresentationPaths(target) {
   const normalized = createPresentationTarget(target);
-  if (normalized.kind === 'project') {
-    return getProjectPaths(normalized.projectRootAbs);
-  }
-
-  return getWorkspacePathsFromRef(normalized);
+  return getProjectPaths(normalized.projectRootAbs);
 }
 
 export function getPresentationOutputPaths(target) {
   const normalized = createPresentationTarget(target);
-  if (normalized.kind === 'project') {
-    return getProjectOutputPaths(normalized.projectRootAbs);
-  }
-
-  if (normalized.ownerType !== 'deck') {
-    throw new Error('Only deck workspaces and project folders have canonical output paths.');
-  }
-
-  return getDeckOutputPaths(normalized.ownerName);
+  return getProjectOutputPaths(normalized.projectRootAbs);
 }
 
 function resolveSharedFrameworkAssetAbs(relativePath) {
@@ -596,12 +361,8 @@ function resolveSharedFrameworkAssetAbs(relativePath) {
     throw new Error(`Unsupported shared framework path: ${relativePath}`);
   }
 
-  if (bucket === 'canvas' || bucket === 'client' || bucket === 'runtime') {
+  if (bucket === 'canvas' || bucket === 'client' || bucket === 'runtime' || bucket === 'templates') {
     return resolve(REPO_ROOT, 'framework', bucket, ...rest);
-  }
-
-  if (bucket === 'templates' || bucket === 'prompts' || bucket === 'specs') {
-    return resolve(REPO_ROOT, bucket, ...rest);
   }
 
   throw new Error(`Unsupported shared framework bucket "${bucket}" in ${relativePath}.`);
@@ -624,46 +385,4 @@ export function resolveProjectFrameworkAssetAbs(projectPathsInput, relativePath)
   }
 
   return resolveSharedFrameworkAssetAbs(normalized);
-}
-
-function listWorkspaceIndex(rootDir, ownerType) {
-  const absRoot = resolve(REPO_ROOT, rootDir);
-  if (!existsSync(absRoot)) {
-    return [];
-  }
-
-  return readdirSync(absRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      let ref;
-      try {
-        ref = createWorkspaceRef(ownerType, entry.name);
-      } catch (err) {
-        console.warn(`[index] Skipping invalid ${ownerType} workspace "${rootDir}/${entry.name}": ${err.message}`);
-        return null;
-      }
-
-      const paths = getWorkspacePathsFromRef(ref);
-      if (!existsSync(paths.slidesDirAbs)) {
-        return null;
-      }
-
-      return {
-        ownerType: ref.ownerType,
-        slug: ref.ownerName,
-        label: slugToTitle(ref.ownerName),
-        workspaceId: getWorkspaceId(ref),
-        previewHref: getWorkspacePreviewPath(ref),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-export function listExampleDecks() {
-  return listWorkspaceIndex('examples', 'example');
-}
-
-export function listWorkspaceDecks() {
-  return listWorkspaceIndex('decks', 'deck');
 }
