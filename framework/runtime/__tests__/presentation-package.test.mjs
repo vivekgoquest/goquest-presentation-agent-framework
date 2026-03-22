@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-package-'));
@@ -26,4 +26,41 @@ test('getProjectPaths exposes canonical presentation package files', async (t) =
   assert.equal(paths.renderStateRel, '.presentation/runtime/render-state.json');
   assert.equal(paths.artifactsRel, '.presentation/runtime/artifacts.json');
   assert.equal(paths.lastGoodRel, '.presentation/runtime/last-good.json');
+});
+
+test('generatePresentationPackageManifest derives presentation structure from source files', async (t) => {
+  const [{ createProjectScaffold }, { generatePresentationPackageManifest }] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../presentation-package.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  writeFileSync(resolve(projectRoot, 'brief.md'), '# Brief\n\nFilled in');
+
+  const manifest = generatePresentationPackageManifest(projectRoot);
+  assert.deepEqual(manifest.slides.map((slide) => slide.id), ['intro', 'close']);
+  assert.equal(manifest.brief.path, 'brief.md');
+  assert.equal(manifest.theme.path, 'theme.css');
+});
+
+test('scaffold writes initial intent and generated package files', async (t) => {
+  const { createProjectScaffold } = await import('../../application/project-scaffold-service.mjs');
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+
+  const intentPath = resolve(projectRoot, '.presentation', 'intent.json');
+  const manifestPath = resolve(projectRoot, '.presentation', 'package.generated.json');
+  assert.ok(existsSync(intentPath));
+  assert.ok(existsSync(manifestPath));
+
+  const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  assert.equal(intent.schemaVersion, 1);
+  assert.equal(manifest.schemaVersion, 1);
 });

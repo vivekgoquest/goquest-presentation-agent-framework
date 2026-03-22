@@ -19,6 +19,10 @@ import {
   slugifyProjectName,
   slugToTitle,
 } from '../deck-paths.js';
+import {
+  writeInitialPresentationIntent,
+  writePresentationPackageManifest,
+} from '../presentation-package.js';
 
 export function parseNewDeckCliArgs(argv) {
   let slideCount = 3;
@@ -186,6 +190,12 @@ function createPendingProjectPaths(projectRootInput) {
     slidesDirAbs: resolve(ref.projectRootAbs, 'slides'),
     outputsDirRel: 'outputs',
     outputsDirAbs: resolve(ref.projectRootAbs, 'outputs'),
+    intentRel: `${PROJECT_SYSTEM_DIRNAME}/intent.json`,
+    intentAbs: resolve(systemPaths.systemDirAbs, 'intent.json'),
+    packageManifestRel: `${PROJECT_SYSTEM_DIRNAME}/package.generated.json`,
+    packageManifestAbs: resolve(systemPaths.systemDirAbs, 'package.generated.json'),
+    runtimeDirRel: `${PROJECT_SYSTEM_DIRNAME}/runtime`,
+    runtimeDirAbs: resolve(systemPaths.systemDirAbs, 'runtime'),
     metadataRel: `${PROJECT_SYSTEM_DIRNAME}/project.json`,
     metadataAbs: systemPaths.metadataAbs,
     frameworkDirAbs: systemPaths.frameworkDirAbs,
@@ -252,6 +262,7 @@ function scaffoldIntoPaths(paths, options = {}) {
 
   const systemPaths = getProjectSystemPaths(paths.sourceDirAbs);
   mkdirSync(systemPaths.systemDirAbs, { recursive: true });
+  mkdirSync(resolve(systemPaths.systemDirAbs, 'runtime'), { recursive: true });
   mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
   mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
   mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
@@ -263,6 +274,8 @@ function scaffoldIntoPaths(paths, options = {}) {
     },
   });
   writeFileSync(systemPaths.metadataAbs, `${JSON.stringify(metadata, null, 2)}\n`);
+  writeInitialPresentationIntent(paths.sourceDirAbs);
+  writePresentationPackageManifest(paths.sourceDirAbs);
   if (copyFramework) {
     copyFrameworkSnapshot(paths);
   }
@@ -275,6 +288,9 @@ function scaffoldIntoPaths(paths, options = {}) {
   ];
 
   createdFiles.push(paths.metadataRel);
+  createdFiles.push(paths.intentRel);
+  createdFiles.push(paths.packageManifestRel);
+  createdFiles.push(paths.runtimeDirRel);
   createdFiles.push(PROJECT_LOCAL_FRAMEWORK_CLI_REL);
   if (copyFramework) {
     createdFiles.push(paths.frameworkBaseRel);
