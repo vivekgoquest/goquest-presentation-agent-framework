@@ -42,6 +42,20 @@ function fillBrief(projectRoot) {
   );
 }
 
+function createQualityWarningSlideHtml(title) {
+  return [
+    '<div class="slide">',
+    '  <div class="eyebrow">Quality Warning Deck</div>',
+    `  <h2 class="sect-title">${title}</h2>`,
+    '  <div class="g2">',
+    '    <div class="icard"><p class="body-text">Point one</p></div>',
+    '    <div class="icard"><p class="body-text">Point two</p></div>',
+    '  </div>',
+    '</div>',
+    '',
+  ].join('\n');
+}
+
 function readJson(absPath) {
   return JSON.parse(readFileSync(absPath, 'utf8'));
 }
@@ -64,16 +78,26 @@ test('application scaffold creates a linked project scaffold with the required a
 
   assert.equal(result.status, 'created');
   assert.equal(result.frameworkMode, 'linked');
+  assert.ok(existsSync(resolve(projectRoot, 'AGENTS.md')));
   assert.ok(existsSync(resolve(projectRoot, 'theme.css')));
   assert.equal(existsSync(resolve(projectRoot, 'revisions.md')), false);
   assert.ok(existsSync(resolve(projectRoot, 'slides', '010-intro', 'slide.html')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'project.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'presentation-hook-runner.mjs')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'git-checkpoint.mjs')), false);
 
   const scaffoldPackage = getProjectAgentScaffoldPackage({ frameworkRoot: process.cwd() });
   for (const requiredPath of scaffoldPackage.requiredPaths) {
     assert.ok(existsSync(resolve(projectRoot, requiredPath)), `missing required scaffold path: ${requiredPath}`);
   }
+
+  const agentsContract = readFileSync(resolve(projectRoot, 'AGENTS.md'), 'utf8');
+  assert.match(agentsContract, /\.presentation\/package\.generated\.json/);
+  assert.match(agentsContract, /\.presentation\/runtime\/render-state\.json/);
 
   const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
   assert.equal(metadata.frameworkMode, 'linked');
@@ -124,10 +148,8 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const capture = await capturePresentation({ projectRoot }, captureDir);
   assert.ok(capture.slideCount >= 1);
   assert.ok(existsSync(resolve(captureDir, 'report.json')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
-  const captureArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
-  assert.ok(Array.isArray(captureArtifacts.slides));
-  assert.ok(captureArtifacts.slides.length >= 1);
+  const initialArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.deepEqual(initialArtifacts.slides, []);
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check');
   const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
@@ -136,6 +158,8 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
   assert.equal(renderState.status, 'pass');
   assert.deepEqual(renderState.slideIds.sort(), ['close', 'intro']);
+  const artifactsAfterCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.deepEqual(artifactsAfterCheck, initialArtifacts);
 
   const exportPath = resolve(projectRoot, 'outputs', 'service-export.pdf');
   const exported = await exportDeckPdf({ projectRoot }, exportPath);
@@ -218,6 +242,44 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.equal(existsSync(resolve(pngOutputDir, 'report.json')), false);
   const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.deepEqual(runtimeArtifacts.slides.map((slide) => slide.id), ['intro']);
+});
+
+test('runDeckCheck marks warning-only decks as needs-review and keeps canonical artifacts unchanged', async (t) => {
+  const [
+    { createProjectScaffold },
+    { runDeckCheck },
+    { finalizePresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../check-service.mjs'),
+    import('../finalize-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 5, copyFramework: false });
+  fillBrief(projectRoot);
+
+  for (const slideDir of ['010-intro', '020-slide-02', '030-slide-03', '040-slide-04', '050-close']) {
+    writeFileSync(
+      resolve(projectRoot, 'slides', slideDir, 'slide.html'),
+      createQualityWarningSlideHtml(`Repeated layout ${slideDir}`)
+    );
+  }
+
+  await finalizePresentation({ projectRoot });
+  const artifactsBeforeCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  const checkDir = resolve(projectRoot, '.artifacts', 'warning-check');
+  const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
+
+  assert.equal(check.status, 'needs-review');
+  assert.ok(check.qualityWarnings.length > 0);
+  const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
+  assert.equal(renderState.status, 'needs-review');
+  const artifactsAfterCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.deepEqual(artifactsAfterCheck, artifactsBeforeCheck);
 });
 
 test('runtime commands regenerate missing package files for legacy projects', async (t) => {

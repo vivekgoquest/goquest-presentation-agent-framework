@@ -41,6 +41,9 @@ function createCapabilityPrompt(capability, context, options = {}) {
     ? resolveContractPaths({ capability, projectRoot, frameworkRoot })
     : null;
 
+  let agentsPath = resolvedPaths?.agentsPath || (capability.requiresProject
+    ? resolve(projectRoot, 'AGENTS.md')
+    : null);
   const contractPath = resolvedPaths?.contractPath || (capability.requiresProject
     ? resolve(projectRoot, '.claude', 'CLAUDE.md')
     : resolve(frameworkRoot, 'project-agent', 'project-claude-md.md'));
@@ -48,12 +51,21 @@ function createCapabilityPrompt(capability, context, options = {}) {
     ? resolve(projectRoot, '.claude', 'skills', capability.skillName, 'SKILL.md')
     : resolve(frameworkRoot, 'project-agent', 'project-dot-claude', 'skills', capability.skillName, 'SKILL.md'));
 
+  if (agentsPath && !existsSync(agentsPath)) {
+    // Legacy scaffolded projects may only have the vendor adapter contract.
+    // Fall back to that path so older decks can still launch project-mode agents.
+    agentsPath = null;
+  }
   if (!existsSync(contractPath)) {
     throw new Error(`Agent contract file is missing: ${contractPath}`);
   }
   if (!existsSync(skillPath)) {
     throw new Error(`Agent skill file is missing: ${skillPath}`);
   }
+
+  const workflowPrompt = typeof context.workflow?.prompt === 'string'
+    ? context.workflow.prompt.trim()
+    : '';
 
   return [
     `You are executing the "${capability.id}" capability for the presentation framework.`,
@@ -62,10 +74,15 @@ function createCapabilityPrompt(capability, context, options = {}) {
     capability.requiresProject ? `Project root: ${projectRoot}` : '',
     '',
     'Read and follow these files first:',
+    agentsPath ? `- ${agentsPath}` : '',
     `- ${contractPath}`,
     `- ${skillPath}`,
     '',
-    'Treat those files as the source of truth for the workflow.',
+    workflowPrompt
+      ? 'Treat the application-prepared workflow context below as the canonical workflow definition. Use the contract files and skill file as supporting guidance.'
+      : 'Treat those files as the source of truth for the workflow.',
+    workflowPrompt ? '' : '',
+    workflowPrompt ? workflowPrompt : '',
     'Do not ask follow-up questions unless you are blocked by a missing file or an unrecoverable error.',
     capability.requiresProject
       ? `When a command needs a project path, use: ${projectRoot}`

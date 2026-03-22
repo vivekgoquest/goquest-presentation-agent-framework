@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -72,6 +72,14 @@ function runStopHook(projectRoot) {
   });
 }
 
+function runStopHookDetailed(projectRoot) {
+  return spawnSync('node', ['.claude/hooks/check-presentation-package.mjs'], {
+    cwd: projectRoot,
+    input: JSON.stringify({ cwd: projectRoot }),
+    encoding: 'utf8',
+  });
+}
+
 test('presentation stop hook regenerates package state and checkpoints a clean project', async (t) => {
   const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
   const projectRoot = createTempProjectRoot();
@@ -131,7 +139,7 @@ test('presentation stop hook blocks invalid intent references and skips git chec
   );
 
   const commitsBefore = gitRevCount(projectRoot);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')), true);
 
   assert.throws(
     () => runStopHook(projectRoot),
@@ -140,5 +148,41 @@ test('presentation stop hook blocks invalid intent references and skips git chec
 
   const commitsAfter = gitRevCount(projectRoot);
   assert.equal(commitsAfter, commitsBefore);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')), false);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')), true);
+});
+
+test('presentation stop hook preserves canonical artifacts after a clean run', async (t) => {
+  const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  execFileSync('node', ['.presentation/framework-cli.mjs', 'finalize'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+
+  const artifactsBefore = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  runStopHook(projectRoot);
+  const artifactsAfter = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.deepEqual(artifactsAfter, artifactsBefore);
+  assert.equal(existsSync(resolve(projectRoot, artifactsAfter.fullPage.path)), true);
+  assert.equal(existsSync(resolve(projectRoot, artifactsAfter.report.path)), true);
+});
+
+test('presentation stop hook returns structured failure output for deck policy errors', async (t) => {
+  const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+
+  const hookResult = runStopHookDetailed(projectRoot);
+
+  assert.equal(hookResult.status, 2);
+  assert.match(hookResult.stderr, /Deck policy violation|brief\.md|TODO/i);
+  assert.doesNotMatch(hookResult.stderr, /at runPresentationStopHook|node:internal|file:\/\//i);
 });

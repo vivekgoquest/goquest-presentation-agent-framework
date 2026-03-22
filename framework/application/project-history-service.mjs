@@ -16,7 +16,7 @@ function buildCommitSummary(projectRoot) {
   return `${changed.slice(0, 3).join(', ')} +${changed.length - 3} more`;
 }
 
-export function checkpointGit(projectRoot) {
+export function checkpointProjectGit(projectRoot) {
   try {
     execFileSync('git', ['add', '-A'], {
       cwd: projectRoot,

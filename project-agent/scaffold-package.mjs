@@ -25,6 +25,10 @@ export function getProjectAgentScaffoldPackage(options = {}) {
 
   const entries = [
     {
+      sourceAbs: resolve(projectAgentRoot, 'project-agents-md.md'),
+      targetRel: 'AGENTS.md',
+    },
+    {
       sourceAbs: resolve(claudeRoot, 'settings.json'),
       targetRel: '.claude/settings.json',
     },

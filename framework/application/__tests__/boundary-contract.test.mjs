@@ -60,6 +60,34 @@ test('runtime does not import project-agent modules directly', () => {
   assert.deepEqual(violations, []);
 });
 
+test('project-local hook wrappers do not import runtime modules directly', () => {
+  const hookFiles = listSourceFiles(resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks'));
+  const violations = getImportViolations(hookFiles, /from\s+['"][^'"]*framework\/runtime\//);
+  assert.deepEqual(violations, []);
+});
+
+test('project-local hook wrappers do not own git checkpoint execution', () => {
+  const hookFiles = [
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-presentation-package.mjs'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'),
+  ];
+
+  for (const hookFile of hookFiles) {
+    const content = readFileSync(hookFile, 'utf8');
+    assert.doesNotMatch(content, /checkpointGit|git\s*\[/);
+    assert.doesNotMatch(content, /diff\s+--cached|rev-parse|git add|git commit/i);
+  }
+});
+
+test('agent launcher does not hardcode agentic workflow semantics', () => {
+  const content = readFileSync(resolve(REPO_ROOT, 'project-agent', 'agent-launcher.mjs'), 'utf8');
+  assert.doesNotMatch(content, /Current quality warnings:/);
+  assert.doesNotMatch(content, /package\.generated\.json/);
+  assert.doesNotMatch(content, /render-state\.json/);
+  assert.doesNotMatch(content, /artifacts\.json/);
+  assert.doesNotMatch(content, /last-good\.json/);
+});
+
 test('terminal core remains vendor-neutral shell transport', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'framework', 'runtime', 'terminal-core.mjs'), 'utf8');
   assert.doesNotMatch(content, /\bacceptEdits\b/);
@@ -76,6 +104,21 @@ test('renderer no longer consumes the generic public actions bridge', () => {
 test('renderer no longer consumes the generic public watch bridge', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'electron', 'renderer', 'app.js'), 'utf8');
   assert.doesNotMatch(content, /window\.electron\.watch/);
+});
+
+test('electron worker host does not hardcode product action ids or action availability synthesis', () => {
+  const content = readFileSync(resolve(REPO_ROOT, 'electron', 'worker', 'host.mjs'), 'utf8');
+  assert.doesNotMatch(content, /review_presentation|revise_presentation|fix_warnings/);
+  assert.doesNotMatch(content, /build_presentation|check_presentation|capture_screenshots|export_presentation/);
+  assert.doesNotMatch(content, /buildReviewAvailability/);
+});
+
+test('electron preload does not own action-id to operation maps', () => {
+  const content = readFileSync(resolve(REPO_ROOT, 'electron', 'preload.cjs'), 'utf8');
+  assert.doesNotMatch(content, /BUILD_OPERATION_BY_ACTION_ID/);
+  assert.doesNotMatch(content, /REVIEW_OPERATION_BY_ACTION_ID/);
+  assert.doesNotMatch(content, /build_presentation|check_presentation|capture_screenshots/);
+  assert.doesNotMatch(content, /review_presentation|revise_presentation|fix_warnings/);
 });
 
 test('project authoring rules describe deterministic package ownership', () => {

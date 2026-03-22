@@ -455,6 +455,7 @@ Implemented now:
 - `.presentation/runtime/last-good.json`
 - deterministic regeneration during preview/check/finalize flows
 - package-oriented stop hook through `.claude/hooks/check-presentation-package.mjs`
+  delegating to application-owned workflow services
 
 Still evolving:
 

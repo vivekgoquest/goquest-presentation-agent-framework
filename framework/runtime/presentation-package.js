@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { LONG_DECK_OUTLINE_THRESHOLD, getProjectPaths } from './deck-paths.js';
 import { listSlideSourceEntries } from './deck-source.js';
 import { writeInitialPresentationIntent } from './presentation-intent.js';
+import { ensurePresentationRuntimeStateFiles } from './presentation-runtime-state.js';
 
 const TODO_MARKER_RE = /\[\[TODO_[A-Z0-9_]+\]\]/;
 
@@ -91,6 +92,7 @@ export function ensurePresentationPackageFiles(projectRootInput) {
   }
 
   const manifest = writePresentationPackageManifest(paths.projectRootAbs);
+  ensurePresentationRuntimeStateFiles(paths.projectRootAbs);
   return {
     paths,
     manifest,

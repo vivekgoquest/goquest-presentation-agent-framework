@@ -1,8 +1,13 @@
 # Framework Spec
 
+Read the project-root `AGENTS.md` first.
+
+This file is a Claude-specific helper layer. The presentation package itself is
+the source of truth.
+
 ## Purpose
 
-This repo is a constrained HTML presentation framework for building decks that:
+This project uses a constrained HTML presentation framework for building decks that:
 
 - preview in the Electron desktop app
 - export to PDF deterministically
@@ -11,12 +16,12 @@ This repo is a constrained HTML presentation framework for building decks that:
 
 ## Ownership Model
 
-The repo is organized around ownership:
+The overall repo is organized around ownership:
 
 - `framework/canvas/` owns structural CSS
 - `framework/client/` owns browser behavior
 - `framework/runtime/` owns preview assembly, validation, capture, export, setup, and finalize
-- one project folder (created via `npm run new -- --project /abs/path`) owns deck source and outputs
+- one project folder (created via `npm run new -- --project /abs/path`) owns deck source, package state, and outputs
 
 ## Layer Contract
 
@@ -30,40 +35,17 @@ Interpretation:
 - `theme` defines the reusable visual system for one deck and must not change canvas behavior
 - `content` comes from slide fragments and optional slide-local CSS, and must stay local to that slide
 
-## Deck Anatomy
+## Presentation Package
 
-A project workspace should usually live at:
+Use `AGENTS.md` plus `.presentation/*` for presentation package truth:
 
-- `<project>/theme.css`
-- `<project>/brief.md`
-- `<project>/outline.md` for decks with more than 10 slides
-- `<project>/assets/`
-- `<project>/slides/<NNN-slide-id>/slide.html`
-- optional `<project>/slides/<NNN-slide-id>/slide.css`
-- optional `<project>/slides/<NNN-slide-id>/assets/`
-- preview target `/preview/`, assembled on demand from theme + slide sources
-
-Generated review artifacts should usually live at:
-
-- `<project>/outputs/deck.pdf`
-- `<project>/outputs/report.json`
-- `<project>/outputs/full-page.png`
-- `<project>/outputs/slides/`
-- `<project>/outputs/summary.md`
-
-Presentation package files live under `.presentation/`:
-
+- `AGENTS.md` defines universal startup order, edit lanes, and required commands
 - `.presentation/project.json` is stable system identity
 - `.presentation/intent.json` is editable authoring intent
 - `.presentation/package.generated.json` is deterministic structure generated from source
 - `.presentation/runtime/` contains deterministic runtime evidence
 
-Folder naming is source input, not package truth:
-
-- folder pattern: `NNN-slide-id`
-- order comes from the numeric prefix
-- the stable slide id comes from the slug after the prefix
-- prefer sparse numbering such as `010`, `020`, `030`
+Folder naming is source input, not package truth. Prefer sparse numbering such as `010`, `020`, `030`.
 
 In slide-folder mode:
 
@@ -107,6 +89,7 @@ Deck work should usually:
 - keep local layout or one-off styling in optional `slides/<NNN-slide-id>/slide.css`
 - edit `.presentation/intent.json` when audience, purpose, or per-slide intent needs to change
 - consume existing canvas utilities instead of redefining them
+- treat `AGENTS.md` as the first project contract before using Claude-specific helpers
 
 Deck work should not:
 - bypass `/preview/` and edit hand-crafted HTML outside the slide folders

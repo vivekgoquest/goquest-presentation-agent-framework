@@ -14,6 +14,48 @@ function readJson(absPath) {
   return JSON.parse(readFileSync(absPath, 'utf8'));
 }
 
+export function createInitialRenderState() {
+  return {
+    schemaVersion: 1,
+    status: 'pending',
+    slideIds: [],
+    previewKind: 'slides',
+    canvasContract: null,
+    consoleErrorCount: 0,
+    overflowSlides: [],
+    qualityWarnings: [],
+    failures: [],
+    issues: [],
+    lastCheckedAt: null,
+  };
+}
+
+export function createInitialArtifacts() {
+  return {
+    schemaVersion: 1,
+    outputDir: 'outputs',
+    pdf: null,
+    fullPage: null,
+    report: null,
+    summary: null,
+    slides: [],
+  };
+}
+
+export function createInitialLastGood() {
+  return {
+    schemaVersion: 1,
+    status: 'pending',
+    approvedAt: null,
+    slideIds: [],
+    artifacts: {
+      pdf: null,
+      slides: [],
+    },
+    gitCommit: '',
+  };
+}
+
 export function writeRenderState(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
   const renderState = {
@@ -52,6 +94,25 @@ export function writeLastGood(projectRootInput, payload = {}) {
   };
   writeJson(paths.lastGoodAbs, lastGood);
   return lastGood;
+}
+
+export function ensurePresentationRuntimeStateFiles(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  if (!existsSync(paths.renderStateAbs)) {
+    writeJson(paths.renderStateAbs, createInitialRenderState());
+  }
+  if (!existsSync(paths.artifactsAbs)) {
+    writeJson(paths.artifactsAbs, createInitialArtifacts());
+  }
+  if (!existsSync(paths.lastGoodAbs)) {
+    writeJson(paths.lastGoodAbs, createInitialLastGood());
+  }
+
+  return {
+    renderState: readJson(paths.renderStateAbs),
+    artifacts: readJson(paths.artifactsAbs),
+    lastGood: readJson(paths.lastGoodAbs),
+  };
 }
 
 export function readRenderState(projectRootInput) {

@@ -4,11 +4,13 @@ description: Inspect an existing presentation and prepare a revision plan. Use w
 user-invocable: true
 ---
 
-Read CLAUDE.md for the deck contract.
+Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+If the launcher prompt includes application-prepared workflow context, treat it
+as the canonical review workflow and use this skill only as execution guidance.
 Run npm run setup only if dependencies are not installed yet.
 Review the presentation project at /abs/path-to-project.
 
-- follow CLAUDE.md as the detailed source of truth for the deck contract
+- follow AGENTS.md as the project contract and CLAUDE.md as the Claude adapter
 - inspect the current theme, slide folders, brief, and latest outputs
 - if the deck has more than 10 slides, inspect outline.md first and verify the slide sequence still matches it
 - inspect the preview, screenshots, and downloaded PDF yourself and decide whether the deck already reads like a presentation or still needs CSS revision

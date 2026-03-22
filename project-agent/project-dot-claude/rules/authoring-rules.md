@@ -1,5 +1,10 @@
 # Authoring Rules
 
+Read the project-root `AGENTS.md` first.
+
+Use this file for Claude-specific authoring reminders after the project contract
+and `.presentation/*` state have been read.
+
 ## Allowed
 
 - edit slide source HTML in `slides/<NNN-slide-id>/slide.html`

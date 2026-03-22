@@ -34,7 +34,12 @@ export async function runDeckCheck(targetInput, options = {}) {
   const slideEntries = listSlideSourceEntries(targetPaths).filter((entry) => entry.isValidName);
   const qualityWarnings = checkDeckQuality(slideEntries).warnings;
   const strictFailure = strict && qualityWarnings.length > 0;
-  const status = failures.length === 0 && !strictFailure ? 'pass' : 'fail';
+  let status = 'pass';
+  if (failures.length > 0 || strictFailure) {
+    status = 'fail';
+  } else if (qualityWarnings.length > 0) {
+    status = 'needs-review';
+  }
 
   writeRenderState(targetPaths.projectRootAbs, {
     status,

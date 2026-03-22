@@ -23,6 +23,7 @@ import {
   writePresentationPackageManifest,
 } from '../presentation-package.js';
 import { writeInitialPresentationIntent } from '../presentation-intent.js';
+import { ensurePresentationRuntimeStateFiles } from '../presentation-runtime-state.js';
 
 export function parseNewDeckCliArgs(argv) {
   let slideCount = 3;
@@ -196,6 +197,12 @@ function createPendingProjectPaths(projectRootInput) {
     packageManifestAbs: resolve(systemPaths.systemDirAbs, 'package.generated.json'),
     runtimeDirRel: `${PROJECT_SYSTEM_DIRNAME}/runtime`,
     runtimeDirAbs: resolve(systemPaths.systemDirAbs, 'runtime'),
+    renderStateRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/render-state.json`,
+    renderStateAbs: systemPaths.renderStateAbs,
+    artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/artifacts.json`,
+    artifactsAbs: systemPaths.artifactsAbs,
+    lastGoodRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/last-good.json`,
+    lastGoodAbs: systemPaths.lastGoodAbs,
     metadataRel: `${PROJECT_SYSTEM_DIRNAME}/project.json`,
     metadataAbs: systemPaths.metadataAbs,
     frameworkDirAbs: systemPaths.frameworkDirAbs,
@@ -276,6 +283,7 @@ function scaffoldIntoPaths(paths, options = {}) {
   writeFileSync(systemPaths.metadataAbs, `${JSON.stringify(metadata, null, 2)}\n`);
   writeInitialPresentationIntent(paths.sourceDirAbs);
   writePresentationPackageManifest(paths.sourceDirAbs);
+  ensurePresentationRuntimeStateFiles(paths.sourceDirAbs);
   if (copyFramework) {
     copyFrameworkSnapshot(paths);
   }
@@ -291,6 +299,9 @@ function scaffoldIntoPaths(paths, options = {}) {
   createdFiles.push(paths.intentRel);
   createdFiles.push(paths.packageManifestRel);
   createdFiles.push(paths.runtimeDirRel);
+  createdFiles.push(paths.renderStateRel);
+  createdFiles.push(paths.artifactsRel);
+  createdFiles.push(paths.lastGoodRel);
   createdFiles.push(PROJECT_LOCAL_FRAMEWORK_CLI_REL);
   if (copyFramework) {
     createdFiles.push(paths.frameworkBaseRel);

@@ -4,7 +4,7 @@ description: Create a new presentation from a plain-English request. Use when th
 user-invocable: true
 ---
 
-Read CLAUDE.md for the deck contract.
+After scaffolding the project, read /abs/path-to-project/AGENTS.md first, then /abs/path-to-project/.claude/CLAUDE.md for Claude-specific workflow help.
 Run npm run setup if dependencies are not installed yet.
 Create a new presentation project for this request.
 Choose a good absolute folder path and run:
@@ -15,7 +15,7 @@ If the project needs a vendored framework snapshot, add:
 --copy-framework
 
 Then:
-- follow CLAUDE.md as the detailed source of truth for the deck contract
+- follow /abs/path-to-project/AGENTS.md as the project contract and /abs/path-to-project/.claude/CLAUDE.md as the Claude adapter
 - convert my request into /abs/path-to-project/brief.md
 - for decks with more than 10 slides, replace every TODO marker in /abs/path-to-project/outline.md before building slides
 - design the theme first: finalize /abs/path-to-project/theme.css with the full visual system (palette, typography, components) before writing any slide HTML

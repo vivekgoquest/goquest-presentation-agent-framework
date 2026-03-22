@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getActionDefinition, listActionDefinitions } from './action-catalog.mjs';
+import { createActionWorkflowService } from './action-workflow-service.mjs';
 import {
   ACTION_LIFECYCLE_STATUSES,
   createActionLifecycleEvent,
@@ -96,6 +97,7 @@ function createActionContext({ action, args, projectService, frameworkRoot, term
       : null,
     frameworkRoot,
     terminalService,
+    trigger: args.trigger || 'electron',
   };
 }
 
@@ -119,6 +121,10 @@ export function createActionService(options = {}) {
   const emitEvent = typeof options.emitEvent === 'function'
     ? options.emitEvent
     : () => {};
+  const workflowService = options.workflowService || createActionWorkflowService({
+    presentationAdapter,
+    agentAdapter,
+  });
 
   async function emitLifecycle(event) {
     emitEvent(createActionLifecycleEvent(event));
@@ -173,19 +179,7 @@ export function createActionService(options = {}) {
       });
 
       try {
-        let result;
-
-        if (action.kind === 'presentation') {
-          result = await presentationAdapter.invoke(actionId, context);
-        } else {
-          const terminalMeta = typeof terminalService?.getMeta === 'function'
-            ? terminalService.getMeta()
-            : { alive: false };
-          if (!terminalMeta?.alive || terminalMeta.mode !== 'shell') {
-            terminalService?.start?.('shell');
-          }
-          result = await agentAdapter.invoke(actionId, context);
-        }
+        const result = await workflowService.invokeAction(actionId, context);
 
         const normalized = normalizeActionResult(action, result, runId);
         await emitLifecycle({

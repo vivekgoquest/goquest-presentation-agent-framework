@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'url';
 import { createActionService } from '../../framework/application/action-service.mjs';
 import { createAgentActionAdapter } from '../../framework/application/agent-action-adapter.mjs';
+import { createElectronRequestService } from '../../framework/application/electron-request-service.mjs';
 import { createPresentationActionAdapter } from '../../framework/application/presentation-action-adapter.mjs';
 import { createProjectQueryService } from '../../framework/application/project-query-service.mjs';
 import {
@@ -13,30 +14,6 @@ import {
 } from './ipc-contract.mjs';
 import { createTerminalService } from './terminal-service.mjs';
 import { createWatchService } from './watch-service.mjs';
-
-const REVIEW_ACTION_IDS = Object.freeze({
-  run: 'review_presentation',
-  revise: 'revise_presentation',
-  fixWarnings: 'fix_warnings',
-});
-
-function buildReviewAvailability(actions = []) {
-  const actionMap = new Map(actions.map((action) => [action.id, action]));
-  const reviewAction = actionMap.get(REVIEW_ACTION_IDS.run);
-  const reviseAction = actionMap.get(REVIEW_ACTION_IDS.revise);
-  const fixWarningsAction = actionMap.get(REVIEW_ACTION_IDS.fixWarnings);
-
-  return {
-    run: Boolean(reviewAction?.enabled),
-    revise: Boolean(reviseAction?.enabled),
-    fixWarnings: Boolean(fixWarningsAction?.enabled),
-    reasonUnavailable:
-      reviewAction?.reasonDisabled
-      || reviseAction?.reasonDisabled
-      || fixWarningsAction?.reasonDisabled
-      || '',
-  };
-}
 
 export function createElectronWorkerHost(options = {}) {
   const frameworkRoot = options.frameworkRoot || process.cwd();
@@ -100,70 +77,16 @@ export function createElectronWorkerHost(options = {}) {
       emit(createWorkerEvent(event.channel, event));
     },
   });
-
-  async function listActionDescriptors() {
-    return actionService.listActions();
-  }
-
-  async function getReviewAvailability() {
-    return buildReviewAvailability(await listActionDescriptors());
-  }
+  const requestService = createElectronRequestService({
+    projectService,
+    actionService,
+    onPreviewRefresh() {
+      emitPreviewChanged({ source: 'refresh' });
+    },
+  });
 
   async function dispatch(channel, payload = {}) {
     switch (channel) {
-      case WORKER_REQUEST_CHANNELS.PROJECT_CREATE:
-        return projectService.createProject(payload);
-      case WORKER_REQUEST_CHANNELS.PROJECT_OPEN:
-        return projectService.openProject(payload);
-      case WORKER_REQUEST_CHANNELS.PROJECT_GET_META:
-        return projectService.getMeta();
-      case WORKER_REQUEST_CHANNELS.PROJECT_GET_STATE:
-        return projectService.getState();
-      case WORKER_REQUEST_CHANNELS.PROJECT_GET_FILES:
-        return projectService.getFiles();
-      case WORKER_REQUEST_CHANNELS.PROJECT_GET_SLIDES:
-        return {
-          slides: projectService.getSlides(),
-        };
-      case WORKER_REQUEST_CHANNELS.PREVIEW_GET_DOCUMENT:
-        return projectService.getPreviewDocument();
-      case WORKER_REQUEST_CHANNELS.PREVIEW_GET_META:
-        return projectService.getPreviewMeta();
-      case WORKER_REQUEST_CHANNELS.PREVIEW_REFRESH: {
-        const meta = projectService.refreshPreview();
-        emitPreviewChanged({ source: 'refresh' });
-        return meta;
-      }
-      case WORKER_REQUEST_CHANNELS.BUILD_CHECK:
-        return actionService.invokeAction('check_presentation', {
-          outputDir: payload.outputDir,
-          options: payload,
-        });
-      case WORKER_REQUEST_CHANNELS.BUILD_FINALIZE:
-        return actionService.invokeAction('build_presentation', {
-          options: payload,
-        });
-      case WORKER_REQUEST_CHANNELS.BUILD_CAPTURE_SCREENSHOTS:
-        return actionService.invokeAction('capture_screenshots', {
-          outputDir: payload.outputDir,
-          options: payload,
-        });
-      case WORKER_REQUEST_CHANNELS.EXPORT_START:
-        return actionService.invokeAction('export_presentation', payload);
-      case WORKER_REQUEST_CHANNELS.REVIEW_RUN:
-        return actionService.invokeAction(REVIEW_ACTION_IDS.run, payload);
-      case WORKER_REQUEST_CHANNELS.REVIEW_REVISE:
-        return actionService.invokeAction(REVIEW_ACTION_IDS.revise, payload);
-      case WORKER_REQUEST_CHANNELS.REVIEW_FIX_WARNINGS:
-        return actionService.invokeAction(REVIEW_ACTION_IDS.fixWarnings, payload);
-      case WORKER_REQUEST_CHANNELS.REVIEW_GET_AVAILABILITY:
-        return getReviewAvailability();
-      case WORKER_REQUEST_CHANNELS.ACTION_LIST:
-        return {
-          actions: await listActionDescriptors(),
-        };
-      case WORKER_REQUEST_CHANNELS.ACTION_INVOKE:
-        return actionService.invokeAction(payload.actionId, payload.args || {});
       case WORKER_REQUEST_CHANNELS.TERMINAL_GET_META:
         return terminalService.getMeta();
       case WORKER_REQUEST_CHANNELS.TERMINAL_START:
@@ -179,7 +102,7 @@ export function createElectronWorkerHost(options = {}) {
       case WORKER_REQUEST_CHANNELS.TERMINAL_REVEAL:
         return terminalService.revealPath(payload.targetPath || payload.relativePath || '.');
       default:
-        throw new Error(`Unsupported worker request channel: ${channel}`);
+        return requestService.handleRequest(channel, payload);
     }
   }
 

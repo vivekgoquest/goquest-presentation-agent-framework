@@ -4,7 +4,9 @@ description: Fix quality warnings in a presentation project. Use when npm run ch
 user-invocable: true
 ---
 
-Read CLAUDE.md for the edit contract.
+Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+If the launcher prompt includes application-prepared workflow context, treat it
+as the canonical fix-warnings workflow and use this skill only as execution guidance.
 
 Run node .presentation/framework-cli.mjs check
 

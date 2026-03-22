@@ -7,7 +7,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { checkpointGit } from './lib/git-checkpoint.mjs';
 
 function loadProjectMetadata(projectRoot) {
   const metadataPath = resolve(projectRoot, '.presentation', 'project.json');
@@ -22,29 +21,11 @@ function loadProjectMetadata(projectRoot) {
   }
 }
 
-async function loadQualityCheck(frameworkRoot) {
-  const moduleUrl = pathToFileURL(resolve(frameworkRoot, 'framework', 'runtime', 'project-quality-check.mjs')).href;
+async function loadProjectHookService(frameworkRoot) {
+  const moduleUrl = pathToFileURL(
+    resolve(frameworkRoot, 'framework', 'application', 'project-hook-service.mjs')
+  ).href;
   return import(moduleUrl);
-}
-
-export async function runSlideQualityHook(projectRoot) {
-  const metadata = loadProjectMetadata(projectRoot);
-  if (!metadata?.frameworkSource) {
-    return { status: 'skip', warnings: [] };
-  }
-
-  const { runProjectQualityCheck } = await loadQualityCheck(metadata.frameworkSource);
-  const result = runProjectQualityCheck(projectRoot);
-  if (result.skipped) {
-    return { status: 'skip', warnings: [] };
-  }
-
-  if (result.warnings.length === 0) {
-    const checkpoint = checkpointGit(projectRoot);
-    return { status: 'pass', warnings: [], checkpoint };
-  }
-
-  return { status: 'fail', warnings: result.warnings };
 }
 
 let input = '';
@@ -57,7 +38,20 @@ try {
   process.exit(0);
 }
 
-const result = await runSlideQualityHook(parsed?.cwd || process.cwd());
+const projectRoot = parsed?.cwd || process.cwd();
+const metadata = loadProjectMetadata(projectRoot);
+if (!metadata?.frameworkSource) {
+  process.exit(0);
+}
+
+let result;
+try {
+  const service = await loadProjectHookService(metadata.frameworkSource);
+  result = await service.runProjectQualityHookWorkflow(projectRoot);
+} catch (err) {
+  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(2);
+}
 if (result.status === 'skip' || result.status === 'pass') {
   process.exit(0);
 }

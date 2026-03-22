@@ -4,12 +4,14 @@ description: Revise an existing presentation project based on user feedback. Use
 user-invocable: true
 ---
 
-Read CLAUDE.md for the deck contract.
+Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+If the launcher prompt includes application-prepared workflow context, treat it
+as the canonical revise workflow and use this skill only as execution guidance.
 Run npm run setup only if dependencies are not installed yet.
 Update the existing presentation project at /abs/path-to-project.
 
 Then:
-- follow CLAUDE.md as the detailed source of truth for the deck contract
+- follow AGENTS.md as the project contract and CLAUDE.md as the Claude adapter
 - if the deck has more than 10 slides, refresh /abs/path-to-project/outline.md first so the story still matches the slide sequence
 - if the revision affects more than 5 slides, re-evaluate the per-slide design plan in the outline — check that slide patterns still vary and the variety rules from the slide-patterns spec are met
 - revise /abs/path-to-project/theme.css plus the source slide folders under /abs/path-to-project/slides/

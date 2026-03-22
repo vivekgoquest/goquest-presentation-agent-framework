@@ -15,12 +15,17 @@ npm run start
 2. Type `claude` in the integrated terminal.
 3. Describe the deck you want.
 
+Scaffolded projects now include a root `AGENTS.md` contract plus structured
+state in `.presentation/`. Agents should start from `AGENTS.md`, not from the
+vendor adapter layer.
+
 ## Project contract
 
 Each presentation is an independent project folder:
 
 ```text
 my-deck/
+├── AGENTS.md
 ├── brief.md
 ├── theme.css
 ├── outline.md
@@ -57,6 +62,13 @@ The presentation package model is:
 - runtime evidence is deterministic
 - git is the history lane
 
+The `.claude/` folder is a vendor-specific adapter package. Its hooks are local
+entrypoints only; the actual workflow orchestration lives in the framework
+application layer. The project itself is self-describing through `AGENTS.md`
+plus `.presentation/*`. Named product actions now follow one canonical
+application-owned workflow per action, regardless of whether the trigger is the
+Electron UI, a hook, or an agent adapter.
+
 ## Commands (project-only)
 
 ```bash
@@ -78,7 +90,7 @@ npm test
 electron/          # Desktop app host
 framework/         # Canvas/client/runtime core
 framework/templates/ # Source of scaffolded deck content files
-project-agent/     # Source of scaffolded project .claude assets
+project-agent/     # Source of scaffolded project AGENTS.md and .claude assets
 .claude/           # Repo maintainer agent context
 docs/
 ```

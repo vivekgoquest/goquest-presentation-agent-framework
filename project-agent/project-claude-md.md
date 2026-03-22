@@ -1,81 +1,27 @@
-# Presentation Project Agent Contract
+# Claude Adapter
 
-This project is a presentation built with the Presentation Framework. Follow these rules when editing deck content.
+In a scaffolded project, read `../AGENTS.md` first.
 
-## Default Workflow
+This `.claude/` directory contains Claude-specific workflow helpers:
 
-1. Read the rules in `.claude/rules/` for framework architecture and authoring constraints.
-2. Prefer `npm run new -- --project /abs/path` if the project does not exist. Use `--copy-framework` only when the project needs a vendored framework snapshot.
-3. Normalize the user's request into `brief.md`.
-4. If the deck needs more than 10 slides, scaffold with `npm run new -- --project /abs/path --slides <count>` and lock the story in `outline.md` before slide buildout.
-5. **Design the theme first.** Finalize `theme.css` with the full visual system — palette, typography, component styles — before writing any slide HTML.
-6. **Design each slide.** For every slide in the outline, decide how it will look — which structural primitives to use, how it differs from its neighbors, and whether images are needed. Do not start building slide HTML until every slide has a design decision.
-7. Build or revise source slides in `slides/<NNN-id>/slide.html`.
-8. Keep reusable deck styling in `theme.css`.
-9. Keep slide-specific CSS in optional `slides/<NNN-id>/slide.css`.
-10. Keep authoring intent in `.presentation/intent.json` when audience, objective, or per-slide purpose needs to change.
-11. Keep assets deck-shared in `assets/` or slide-local in `slides/<NNN-id>/assets/`.
-12. For decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch.
-13. Inspect the preview yourself. If it does not read like a presentation yet, revise `theme.css` and optional slide-local `slide.css` before finalizing.
-14. Run `node .presentation/framework-cli.mjs finalize`
-15. Report the exact output paths in `outputs/`.
+- `settings.json` for hook wiring
+- `hooks/` for local wrapper entrypoints into application-owned hook workflows
+- `skills/` for guided workflows such as new, revise, review, and fix-warnings
 
-## Core Rule
+Presentation truth lives in:
 
-The cascade is enforced as: `content < theme < canvas`
-
-- `framework/canvas/` is structural and highest-priority
-- deck-local `theme.css` inherits canvas and defines the visual system
-- slide content plus optional slide-local `slide.css` add only local composition
-
-Do not use patterns that bypass this contract.
-
-## Default Edit Lane
-
-Edit these first:
-- `theme.css`
-- `outline.md` for decks with more than 10 slides
-- `slides/<NNN-id>/slide.html`
-- optional `slides/<NNN-id>/slide.css`
-- `brief.md`
+- `.presentation/project.json`
+- `.presentation/package.generated.json`
 - `.presentation/intent.json`
-- shared assets inside `assets/`
-- slide-local assets inside `slides/<NNN-id>/assets/`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
+- `.presentation/runtime/last-good.json`
 
-Use sparse numbering such as `010`, `020`, `030` so a later insertion can become `025-case-study` without renumbering.
-Folder naming remains source input, but `.presentation/package.generated.json` is deterministic framework-owned package truth.
+Do not treat `.claude/` as the source of presentation structure or state.
 
-## Banned Authoring Patterns
+Use `.claude/skills/*` only when a Claude-specific workflow has been invoked.
 
-- no inline `style=""` attributes
-- no raw `<style>` blocks inside slide fragments
-- no changing `@layer content, theme, canvas`
-- no `!important` in deck `theme.css` or slide-local `slide.css`
-- no theme overrides of protected canvas selectors
-- no slide CSS selectors that are not scoped to the generated `#<slide-id>`
-- no slide CSS that styles another slide's root or escapes its own slide scope
-- no slide CSS that restyles theme primitives with colors, typography, borders, or shadows
-- no hand-editing `.presentation/package.generated.json`
-- no hand-editing `.presentation/runtime/*.json`
-- no full-document wrappers, `<section data-slide>`, or outer `<body>` tags inside `slide.html`
-- no root-relative or cross-workspace asset paths
-
-## Required Commands
-
-- `node .presentation/framework-cli.mjs check`
-- `node .presentation/framework-cli.mjs finalize`
-- `node .presentation/framework-cli.mjs capture /tmp/<capture-dir>`
-- `node .presentation/framework-cli.mjs export /tmp/<deck-name>.pdf`
-
-## What The Agent Must Hand Back
-
-1. the project folder path
-2. the PDF path
-3. the screenshot directory
-4. the summary path
-5. what changed
-6. any issues that still need the user's decision
-
-## Available Skills
-
-Type `/new-deck`, `/revise-deck`, `/review-deck`, `/review-deck-swarm`, or `/fix-warnings` for guided workflows.
+If the launcher includes application-prepared workflow context in the prompt,
+follow that workflow context as the canonical action definition. Treat the skill
+file as execution guidance beneath that workflow, not as a competing source of
+truth.

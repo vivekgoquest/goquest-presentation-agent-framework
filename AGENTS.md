@@ -51,6 +51,7 @@ Keep the repo split into four domains:
 2. Application layer (`framework/application/`)
 - owns deterministic product action definitions, routing, and lifecycle events
 - owns Electron-facing project queries and project creation
+- owns project-local hook workflows and checkpoint policy used by agent adapters
 - is the only Electron-facing execution layer for presentation and agent actions
 
 3. Presentation runtime (`framework/runtime/`, `framework/client/`, `framework/templates/`)
@@ -59,6 +60,7 @@ Keep the repo split into four domains:
 
 4. Agent layer (`project-agent/`)
 - owns skills, rules, dependencies, and agent-specific execution details
+- owns thin project-local wrapper scripts for vendor hook entrypoints
 - must not depend on Electron UI structure
 
 Allowed dependency direction:

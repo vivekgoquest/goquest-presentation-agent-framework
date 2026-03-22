@@ -1,5 +1,10 @@
 # File Boundaries
 
+Read the project-root `AGENTS.md` first.
+
+This file is a Claude-specific restatement of the editable and read-only lanes
+defined by the project contract.
+
 ## Default Editable Files
 
 Agents should assume these are safe to edit for deck work:
