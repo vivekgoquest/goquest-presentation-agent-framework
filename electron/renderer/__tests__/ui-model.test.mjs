@@ -77,14 +77,33 @@ test('normalizeRuntimeActionResult treats needs-review as warning and fail as er
 });
 
 test('deriveActionUiModel keeps toolbar actions separate from menu actions', () => {
-  const model = deriveActionUiModel([
-    { id: 'build_presentation', surface: 'primary' },
-    { id: 'export_pdf', surface: 'secondary' },
-    { id: 'review_presentation', surface: 'menu' },
-    { id: 'revise_presentation', surface: 'menu' },
-  ]);
+  const model = deriveActionUiModel({
+    meta: { active: true },
+    projectState: { status: 'ready_to_finalize' },
+    reviewAvailability: {
+      run: true,
+      revise: true,
+      fixWarnings: false,
+      reasonUnavailable: 'Review actions are unavailable right now.',
+    },
+  });
 
-  assert.equal(model.primary?.id, 'build_presentation');
-  assert.equal(model.secondary?.id, 'export_pdf');
-  assert.deepEqual(model.menu.map((action) => action.id), ['review_presentation', 'revise_presentation']);
+  assert.equal(model.primary?.id, 'build.finalize');
+  assert.equal(model.secondary?.id, 'export.start');
+  assert.deepEqual(
+    model.menu.map((action) => action.id),
+    ['build.check', 'build.captureScreenshots', 'review.run', 'review.revise', 'review.fixWarnings']
+  );
+  assert.equal(model.menu.find((action) => action.id === 'review.fixWarnings')?.enabled, false);
+});
+
+test('normalizeRuntimeActionResult preserves explicit detail on successful export actions', () => {
+  const result = normalizeRuntimeActionResult('Export', {
+    status: 'pass',
+    detail: 'Saved 2 PNG files to /tmp/exports',
+  });
+
+  assert.equal(result.tone, 'success');
+  assert.match(result.message, /completed/i);
+  assert.match(result.detail, /Saved 2 PNG files/i);
 });

@@ -51,6 +51,7 @@ test('action service lists stable product actions with enablement derived from p
 
   const actions = await actionService.listActions();
   const build = actions.find((action) => action.id === 'build_presentation');
+  const exportAction = actions.find((action) => action.id === 'export_presentation');
   const review = actions.find((action) => action.id === 'review_presentation');
 
   assert(build);
@@ -58,12 +59,16 @@ test('action service lists stable product actions with enablement derived from p
   assert.equal(build.enabled, false);
   assert.match(build.reasonDisabled || '', /presentation is still in progress/i);
 
+  assert(exportAction);
+  assert.equal(exportAction.kind, 'presentation');
+  assert.equal(exportAction.enabled, false);
+
   assert(review);
   assert.equal(review.kind, 'agent');
   assert.equal(review.enabled, true);
 });
 
-test('action service routes presentation and agent actions to separate adapters and writes a visible trace for agent actions', async () => {
+test('action service routes presentation and agent actions to separate adapters while agent launcher owns terminal trace output', async () => {
   const calls = [];
   const terminalMessages = [];
   const events = [];
@@ -90,6 +95,7 @@ test('action service routes presentation and agent actions to separate adapters 
     },
     agentAdapter: {
       async invoke(actionId, context) {
+        context.terminalService?.writeSystemOutput('Running review for this presentation...\r\n');
         calls.push(['agent', actionId, context.target.projectRootAbs]);
         return { status: 'pass', message: 'Reviewed.' };
       },

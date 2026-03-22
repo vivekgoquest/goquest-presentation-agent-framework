@@ -21,7 +21,7 @@ Let the user describe the audience in their own words. This shapes every agent's
 Run the capture script to get screenshots and structured data from the rendered preview:
 
 ```
-npm run capture -- --project "<PROJECT_PATH>" /tmp/deck-review-$(date +%s)
+node .presentation/framework-cli.mjs capture /tmp/deck-review-$(date +%s)
 ```
 
 Read the output directory path. Confirm `report.json` and `slide-*.png` files exist.

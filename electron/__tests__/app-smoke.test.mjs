@@ -4,6 +4,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
+test('preview document shell passes through non-slides content unchanged', async () => {
+  const { renderElectronPreviewHtml } = await import('../preview-document-shell.mjs');
+  const raw = '<html><body>raw</body></html>';
+  assert.equal(renderElectronPreviewHtml(raw, 'document'), raw, 'non-slides kind should pass through');
+  assert.equal(renderElectronPreviewHtml('', 'slides'), '', 'empty string should pass through');
+});
+
 function fillBrief(projectRoot, title = 'Electron Preview Brief') {
   writeFileSync(
     resolve(projectRoot, 'brief.md'),
@@ -72,6 +79,35 @@ test('electron shell boots and can create a project through the preload bridge',
   const page = await app.firstWindow();
   await page.waitForSelector('#app-shell');
 
+  const electronSurfaceKeys = await page.evaluate(() => Object.keys(window.electron || {}).sort());
+  assert.deepEqual(
+    electronSurfaceKeys,
+    ['actions', 'build', 'events', 'export', 'preview', 'project', 'review', 'system', 'terminal', 'watch']
+  );
+
+  const electronMethodShape = await page.evaluate(() => ({
+    projectCreate: typeof window.electron.project.create,
+    projectChanged: typeof window.electron.project.onChanged,
+    previewMeta: typeof window.electron.preview.getMeta,
+    previewChanged: typeof window.electron.preview.onChanged,
+    buildFinalize: typeof window.electron.build.finalize,
+    exportStart: typeof window.electron.export.start,
+    reviewRun: typeof window.electron.review.run,
+    terminalStart: typeof window.electron.terminal.start,
+    revealInFinder: typeof window.electron.system.revealInFinder,
+  }));
+  assert.deepEqual(electronMethodShape, {
+    projectCreate: 'function',
+    projectChanged: 'function',
+    previewMeta: 'function',
+    previewChanged: 'function',
+    buildFinalize: 'function',
+    exportStart: 'function',
+    reviewRun: 'function',
+    terminalStart: 'function',
+    revealInFinder: 'function',
+  });
+
   // Verify the app shell loaded and shows the welcome state
   const welcomeText = await page.locator('#welcome-panel h2').textContent();
   assert.match(welcomeText || '', /Presentation Desktop/i);
@@ -85,7 +121,7 @@ test('electron shell boots and can create a project through the preload bridge',
     // Directly call the IPC to create, bypassing the folder picker
     return window.electron.project.create({
       projectRoot: document.getElementById('project-path').value,
-      slides: 3,
+      slideCount: 3,
     });
   });
 
@@ -120,13 +156,12 @@ test('electron shell boots and can create a project through the preload bridge',
   assert.equal(visibleActions.primaryHidden, false);
   assert.match(visibleActions.primaryText, /build presentation/i);
   assert.equal(visibleActions.secondaryHidden, false);
-  assert.match(visibleActions.secondaryText, /export pdf/i);
+  assert.match(visibleActions.secondaryText, /export/i);
 
-  const actionIds = await page.evaluate(async () => {
-    const result = await window.electron.actions.list();
-    return result.actions.map((action) => action.id);
+  const reviewAvailability = await page.evaluate(async () => {
+    return window.electron.review.getAvailability();
   });
-  assert(actionIds.includes('review_presentation'));
+  assert.equal(reviewAvailability.run, true);
 
   const filmstripCount = await page.locator('#filmstrip').count();
   assert.equal(filmstripCount, 0);
@@ -140,9 +175,9 @@ test('electron shell boots and can create a project through the preload bridge',
 });
 
 test('electron preview applies a generic viewport shell for ready slide decks', async (t) => {
-  const [{ _electron: electron }, { createPresentationScaffold }] = await Promise.all([
+  const [{ _electron: electron }, { createProjectScaffold }] = await Promise.all([
     import('playwright'),
-    import('../../framework/runtime/services/scaffold-service.mjs'),
+    import('../../framework/application/project-scaffold-service.mjs'),
   ]);
   const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-ready-preview-'));
 
@@ -150,7 +185,7 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot, 'Electron Ready Preview Brief');
 
   const app = await electron.launch({
@@ -166,6 +201,8 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   await page.waitForSelector('#app-shell');
 
   await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
+  const previewMeta = await page.evaluate(() => window.electron.preview.getMeta());
+  assert.equal(previewMeta.kind, 'slides');
   const previewFrame = await waitForPreviewFrame(page);
   await previewFrame.waitForSelector('#electron-preview-stage');
 
@@ -174,13 +211,35 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   await stageFrame.waitForSelector('section[data-slide]');
 
   const hostDetails = await previewFrame.evaluate(() => {
+    const shell = document.getElementById('electron-preview-shell');
     const stage = document.getElementById('electron-preview-stage');
+    const shellStyle = shell ? getComputedStyle(shell) : null;
+    const stageStyle = stage ? getComputedStyle(stage) : null;
+    const paddingLeft = shellStyle ? parseFloat(shellStyle.paddingLeft) : 0;
+    const paddingRight = shellStyle ? parseFloat(shellStyle.paddingRight) : 0;
+    const paddingTop = shellStyle ? parseFloat(shellStyle.paddingTop) : 0;
+    const paddingBottom = shellStyle ? parseFloat(shellStyle.paddingBottom) : 0;
+    const zoom = stageStyle ? Number(stageStyle.zoom || '1') : 1;
+    const stageClientWidth = stage?.clientWidth || 0;
+    const stageClientHeight = stage?.clientHeight || 0;
+    const zoomedWidth = stageClientWidth * zoom;
+    const zoomedHeight = stageClientHeight * zoom;
 
     return {
       host: document.documentElement.dataset.electronPreviewHost || '',
-      stageWidth: stage?.clientWidth || 0,
-      stageHeight: stage?.clientHeight || 0,
-      stageZoom: stage ? getComputedStyle(stage).zoom : '',
+      shellClientWidth: shell?.clientWidth || 0,
+      shellClientHeight: shell?.clientHeight || 0,
+      paddingLeft,
+      paddingRight,
+      paddingTop,
+      paddingBottom,
+      stageWidth: stageClientWidth,
+      stageHeight: stageClientHeight,
+      stageZoom: stageStyle?.zoom || '',
+      zoomedWidth,
+      zoomedHeight,
+      overflowX: zoomedWidth + paddingLeft + paddingRight - (shell?.clientWidth || 0),
+      overflowY: zoomedHeight + paddingTop + paddingBottom - (shell?.clientHeight || 0),
     };
   });
 
@@ -193,7 +252,7 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       slideCount: document.querySelectorAll('section[data-slide]').length,
-      hasExportBar: Boolean(document.querySelector('.export-bar')),
+      hasExportBar: Boolean(document.querySelector('.runtime-export-bar')),
       bodyGap: bodyStyle.gap,
       slideAspectRatio: slide ? getComputedStyle(slide).aspectRatio : '',
       firstSectionWidth: firstSection?.clientWidth || 0,
@@ -204,12 +263,64 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   assert.equal(hostDetails.stageWidth, 1280);
   assert.equal(hostDetails.stageHeight, 720);
   assert.notEqual(hostDetails.stageZoom, '1');
+  assert.ok(
+    hostDetails.overflowX <= 1,
+    `expected stage to fit horizontally within shell, saw overflow ${hostDetails.overflowX}`
+  );
+  assert.ok(
+    hostDetails.overflowY <= 1,
+    `expected stage to fit vertically within shell, saw overflow ${hostDetails.overflowY}`
+  );
 
   assert.equal(stageDetails.innerWidth, 1280);
   assert.equal(stageDetails.innerHeight, 720);
   assert.equal(stageDetails.slideCount, 2);
-  assert.equal(stageDetails.hasExportBar, true);
+  assert.equal(stageDetails.hasExportBar, false);
   assert.match(stageDetails.bodyGap, /px/);
   assert.equal(stageDetails.slideAspectRatio, '16 / 9');
   assert.ok(stageDetails.firstSectionWidth >= 1200);
+});
+
+test('electron export action opens a simple export modal with slide selection', async (t) => {
+  const [{ _electron: electron }, { createProjectScaffold }] = await Promise.all([
+    import('playwright'),
+    import('../../framework/application/project-scaffold-service.mjs'),
+  ]);
+  const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-export-modal-'));
+
+  t.after(() => {
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot, 'Electron Export Modal Brief');
+
+  const app = await electron.launch({
+    args: [resolve(process.cwd(), 'electron/main.mjs')],
+    cwd: process.cwd(),
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const page = await app.firstWindow();
+  await page.waitForSelector('#app-shell');
+  await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
+  await page.waitForFunction(() => document.getElementById('secondary-action')?.textContent?.match(/export/i));
+
+  await page.locator('#secondary-action').click();
+  await page.waitForSelector('#export-modal[data-open="true"]');
+
+  const modalState = await page.evaluate(() => ({
+    title: document.getElementById('export-modal-title')?.textContent || '',
+    selectedCount: document.querySelectorAll('#export-slide-list input[type=\"checkbox\"]:checked').length,
+    slideCount: document.querySelectorAll('#export-slide-list input[type=\"checkbox\"]').length,
+    confirmDisabled: document.getElementById('export-confirm')?.disabled,
+  }));
+
+  assert.match(modalState.title, /export/i);
+  assert.equal(modalState.slideCount, 2);
+  assert.equal(modalState.selectedCount, 2);
+  assert.equal(modalState.confirmDisabled, true);
 });

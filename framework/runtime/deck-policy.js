@@ -1,5 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { LONG_DECK_OUTLINE_THRESHOLD } from './deck-paths.js';
+import {
+  CANVAS_LAYER_ORDER,
+  CANVAS_STAGE,
+  CANVAS_STRUCTURAL_TOKENS,
+  CANVAS_THEME_VARIABLE_ALLOWLIST,
+  PROTECTED_CANVAS_SELECTORS,
+} from '../canvas/canvas-contract.mjs';
+import { LONG_DECK_OUTLINE_THRESHOLD, resolveProjectFrameworkAssetAbs } from './deck-paths.js';
 import {
   findCssUrlReferences,
   getSlideAssetRoots,
@@ -7,8 +14,8 @@ import {
   listSlideSourceEntries,
   resolveAuthoredAssetReference,
 } from './deck-source.js';
+import { RUNTIME_CHROME_SELECTORS } from './runtime-chrome-contract.mjs';
 
-const EXPECTED_LAYER_ORDER = '@layer content, theme, canvas;';
 const INLINE_STYLE_RE = /\sstyle\s*=/i;
 const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
 const IMPORTANT_RE = /!important\b/i;
@@ -23,55 +30,24 @@ const DECK_TITLE_TOKEN_RE = /\{\{DECK_TITLE\}\}/;
 const ALLOWED_SLIDE_ENTRY_NAMES = new Set(['slide.html', 'slide.css', 'assets']);
 const IGNORED_SLIDE_ENTRY_NAMES = new Set(['.DS_Store', 'Thumbs.db']);
 
-const PROTECTED_CANVAS_PREFIXES = [
-  'html',
-  'body',
-  'img',
-  'section[data-slide]',
-  '.slide',
-  '.slide-wide',
-  '.slide-hero',
-  '.g2',
-  '.g3',
-  '.g4',
-  '.flex',
-  '.flex-col',
-  '.flex-wrap',
-  '.flex-1',
-  '.flex-center',
-  '.items-center',
-  '.justify-center',
-  '.flex-between',
-  '.text-center',
-  '.w-full',
-  '.gap-xs',
-  '.gap-sm',
-  '.gap-base',
-  '.gap-md',
-  '.gap-lg',
-  '.gap-xl',
-  '.mt-2xs',
-  '.mt-xs',
-  '.mt-sm',
-  '.mt-md',
-  '.mt-lg',
-  '.mt-xl',
-  '.mb-xs',
-  '.mb-sm',
-  '.mt-auto',
-  '.max-w-550',
-  '.max-w-600',
-  '.max-w-650',
-  '.rv',
-  '.rv-l',
-  '.rv-r',
-  '.rv-s',
-  '.dot-nav',
-  '.export-bar',
-];
-
 const THEME_PRIMITIVE_RE = /(^|[\s>+~])(\.hero-title|\.sect-title|\.eyebrow|\.body-lg|\.body-text|\.body-strong|\.body-emphasis|\.hero-title-compact|\.small-text|\.body-text-dim|\.text-accent-light|\.text-on-dark-soft|\.text-accent|\.text-green|\.text-muted|\.bg-accent|\.icard|\.stat-card|\.stat-value|\.stat-label|\.stat-value-compact|\.badge(?:-[a-z0-9-]+)?|\.tkwy|\.img-round|\.img-circle|\.divider|table|th|td)(?=[\s.:#[>+~]|$)/i;
 const RESTRICTED_THEME_DECLARATION_RE = /(^|;)\s*(color|background(?:-color|-image)?|font(?:-size|-family|-weight)?|line-height|letter-spacing|text-transform|border(?:-color|-radius)?|box-shadow)\s*:/i;
+const VOID_HTML_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
 
 function normalizeSelector(selector) {
   return selector.trim().replace(/\s+/g, ' ');
@@ -147,9 +123,21 @@ function selectorStartsWithPrefix(selector, prefix) {
     || selector.startsWith(`${prefix}~`);
 }
 
+function selectorContainsPrefix(selector, prefix) {
+  const normalized = normalizeSelector(selector);
+  const escaped = escapeRegExp(prefix);
+  const matcher = new RegExp(`(^|[\\s>+~,(])${escaped}(?=[\\s.:#[>+~,(]|$)`);
+  return matcher.test(normalized);
+}
+
 function isProtectedCanvasSelector(selector) {
   const normalized = normalizeSelector(selector);
-  return PROTECTED_CANVAS_PREFIXES.some((prefix) => selectorStartsWithPrefix(normalized, prefix));
+  return PROTECTED_CANVAS_SELECTORS.some((prefix) => selectorContainsPrefix(normalized, prefix));
+}
+
+function isRuntimeChromeSelector(selector) {
+  const normalized = normalizeSelector(selector);
+  return RUNTIME_CHROME_SELECTORS.some((prefix) => selectorContainsPrefix(normalized, prefix));
 }
 
 function selectorTouchesThemePrimitive(selector) {
@@ -182,6 +170,16 @@ function stripHtmlComments(html) {
 function hasSlideRootClass(className) {
   const classes = className.split(/\s+/).filter(Boolean);
   return classes.includes('slide') || classes.includes('slide-wide') || classes.includes('slide-hero');
+}
+
+function getSlideRootClassList(html) {
+  const normalized = stripHtmlComments(html);
+  const rootMatch = [...normalized.matchAll(SLIDE_ROOT_RE)]
+    .filter((match) => hasSlideRootClass(match[3]))[0];
+  if (!rootMatch) {
+    return [];
+  }
+  return rootMatch[3].split(/\s+/).filter(Boolean);
 }
 
 function validateHtmlAssetReferences(html, options) {
@@ -218,6 +216,181 @@ function validateCssAssetReferences(css, options) {
   }
 
   return failures;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasSingleTopLevelElement(html) {
+  const source = stripHtmlComments(html);
+  let index = 0;
+  let depth = 0;
+  let topLevelElements = 0;
+
+  function advanceTagEnd(startIndex) {
+    let cursor = startIndex;
+    let quote = null;
+    while (cursor < source.length) {
+      const char = source[cursor];
+      if (quote) {
+        if (char === quote) {
+          quote = null;
+        }
+      } else if (char === '"' || char === "'") {
+        quote = char;
+      } else if (char === '>') {
+        return cursor;
+      }
+      cursor += 1;
+    }
+    return -1;
+  }
+
+  while (index < source.length) {
+    if (/\s/.test(source[index])) {
+      index += 1;
+      continue;
+    }
+
+    if (source[index] !== '<') {
+      const nextTag = source.indexOf('<', index);
+      const text = (nextTag === -1 ? source.slice(index) : source.slice(index, nextTag)).trim();
+      if (text && depth === 0) {
+        return false;
+      }
+      index = nextTag === -1 ? source.length : nextTag;
+      continue;
+    }
+
+    if (source.startsWith('<!--', index)) {
+      const commentEnd = source.indexOf('-->', index + 4);
+      if (commentEnd === -1) {
+        return false;
+      }
+      index = commentEnd + 3;
+      continue;
+    }
+
+    if (source.startsWith('</', index)) {
+      const tagEnd = advanceTagEnd(index + 2);
+      if (tagEnd === -1 || depth === 0) {
+        return false;
+      }
+      depth -= 1;
+      index = tagEnd + 1;
+      continue;
+    }
+
+    if (source[index + 1] === '!' || source[index + 1] === '?') {
+      return false;
+    }
+
+    const tagEnd = advanceTagEnd(index + 1);
+    if (tagEnd === -1) {
+      return false;
+    }
+
+    const rawTag = source.slice(index + 1, tagEnd).trim();
+    const nameMatch = rawTag.match(/^([a-z][a-z0-9-]*)/i);
+    if (!nameMatch) {
+      return false;
+    }
+
+    const tagName = nameMatch[1].toLowerCase();
+    const selfClosing = /\/\s*$/.test(rawTag) || VOID_HTML_TAGS.has(tagName);
+
+    if (depth === 0) {
+      topLevelElements += 1;
+      if (topLevelElements > 1) {
+        return false;
+      }
+    }
+
+    if (!selfClosing) {
+      depth += 1;
+    }
+
+    index = tagEnd + 1;
+  }
+
+  return topLevelElements === 1 && depth === 0;
+}
+
+function findStructuralTokenOverrides(css) {
+  const overrides = [];
+  for (const token of CANVAS_STRUCTURAL_TOKENS) {
+    const matcher = new RegExp(`(^|[;{\\s])${escapeRegExp(token)}\\s*:`, 'm');
+    if (matcher.test(css)) {
+      overrides.push(token);
+    }
+  }
+  return overrides;
+}
+
+function findUnknownCanvasThemeVariables(css) {
+  const matches = css.match(/--canvas-[a-z0-9-]+\s*:/gi) || [];
+  return matches
+    .map((match) => match.replace(':', '').trim())
+    .filter((variableName) => !CANVAS_THEME_VARIABLE_ALLOWLIST.includes(variableName));
+}
+
+function hasDeclarationValue(declarations, propertyName, expectedValue) {
+  const matcher = new RegExp(`(^|;)\\s*${escapeRegExp(propertyName)}\\s*:\\s*${escapeRegExp(expectedValue)}\\s*(;|$)`, 'm');
+  return matcher.test(declarations);
+}
+
+function findRuleByExactSelector(rules, selector) {
+  return rules.find((rule) =>
+    rule.selectorGroup
+      .split(',')
+      .map((entry) => normalizeSelector(entry))
+      .includes(selector)
+  );
+}
+
+function validateEffectiveCanvasSource(paths, sourceName = 'framework/canvas/canvas.css') {
+  const failures = [];
+  const canvasCssAbs = resolveProjectFrameworkAssetAbs(paths, 'canvas/canvas.css');
+  const css = readFileSync(canvasCssAbs, 'utf-8');
+  const rules = extractCssRules(css);
+
+  const requiredTokenValues = new Map([
+    ['--slide-max-w', `${CANVAS_STAGE.slideMaxWidth}px`],
+    ['--slide-wide-max-w', `${CANVAS_STAGE.slideWideMaxWidth}px`],
+    ['--slide-ratio', CANVAS_STAGE.slideRatio],
+  ]);
+
+  for (const [token, expectedValue] of requiredTokenValues) {
+    const matcher = new RegExp(`(^|[;{\\s])${escapeRegExp(token)}\\s*:\\s*${escapeRegExp(expectedValue)}\\s*;`, 'm');
+    if (!matcher.test(css)) {
+      failures.push(`Keep structural canvas token "${token}" fixed at "${expectedValue}" in the effective framework canvas.`);
+    }
+  }
+
+  const slideRule = findRuleByExactSelector(rules, '.slide');
+  if (!slideRule || !hasDeclarationValue(slideRule.declarations, 'max-width', 'var(--slide-max-w)')) {
+    failures.push('Keep the .slide stage max-width bound to var(--slide-max-w) in the effective framework canvas.');
+  }
+  if (!slideRule || !hasDeclarationValue(slideRule.declarations, 'aspect-ratio', 'var(--slide-ratio)')) {
+    failures.push('Keep the .slide stage aspect-ratio bound to var(--slide-ratio) in the effective framework canvas.');
+  }
+
+  const slideWideRule = findRuleByExactSelector(rules, '.slide-wide');
+  if (!slideWideRule || !hasDeclarationValue(slideWideRule.declarations, 'max-width', 'var(--slide-wide-max-w)')) {
+    failures.push('Keep the .slide-wide stage max-width bound to var(--slide-wide-max-w) in the effective framework canvas.');
+  }
+
+  for (const selector of ['.dot-nav', '.export-bar', ...RUNTIME_CHROME_SELECTORS]) {
+    const matcher = new RegExp(`${escapeRegExp(selector)}(?=[\\s.:#[>+~,(]|\\s*\\{|$)`);
+    if (matcher.test(css)) {
+      failures.push(`Remove runtime chrome selector "${selector}" from the effective framework canvas.`);
+    }
+  }
+
+  if (failures.length > 0) {
+    formatFailures(sourceName, failures);
+  }
 }
 
 function validateSlideFolderEntries(slideEntry) {
@@ -295,6 +468,14 @@ function validateThemeSource(css, paths, sourceName = 'theme.css') {
     failures.push('Remove !important from theme.css. The theme should work through variables and semantic primitives, not force the cascade.');
   }
 
+  for (const token of findStructuralTokenOverrides(css)) {
+    failures.push(`Do not override structural canvas token "${token}" from theme.css. Structural stage tokens must stay in framework/canvas/canvas.css.`);
+  }
+
+  for (const variableName of findUnknownCanvasThemeVariables(css)) {
+    failures.push(`Theme may not introduce unknown canvas variable "${variableName}". Use the approved canvas theme variables only.`);
+  }
+
   for (const rule of extractCssRules(css)) {
     const selectors = rule.selectorGroup.split(',').map((selector) => normalizeSelector(selector)).filter(Boolean);
     for (const selector of selectors) {
@@ -320,9 +501,9 @@ function validateThemeSource(css, paths, sourceName = 'theme.css') {
 export function validateDeckSource(html, sourceName = 'virtual deck') {
   const failures = [];
 
-  if (!html.includes(EXPECTED_LAYER_ORDER)) {
+  if (!html.includes(CANVAS_LAYER_ORDER)) {
     failures.push(
-      `Add the exact layer declaration "${EXPECTED_LAYER_ORDER}" near the top of the document so canvas stays above theme and content.`
+      `Add the exact layer declaration "${CANVAS_LAYER_ORDER}" near the top of the document so canvas stays above theme and content.`
     );
   }
 
@@ -377,6 +558,8 @@ export function validateSlideHtmlSource(html, slideEntry, paths, sourceName = 's
     failures.push('Each slide.html must contain exactly one slide root with class ".slide", ".slide-wide", or ".slide-hero".');
   } else if (!normalized.startsWith(rootMatches[0][0])) {
     failures.push('slide.html must begin with the slide root element directly. Remove wrapper nodes around the slide root.');
+  } else if (!hasSingleTopLevelElement(normalized)) {
+    failures.push('slide.html must contain exactly one top-level slide root. Remove extra siblings or text outside the slide root.');
   }
 
   failures.push(...validateHtmlAssetReferences(html, {
@@ -395,6 +578,9 @@ export function validateSlideHtmlSource(html, slideEntry, paths, sourceName = 's
 export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'slide.css') {
   const failures = [];
   const scopePrefix = `#${slideEntry.slideId}`;
+  const customRootClassSelectors = getSlideRootClassList(readFileSync(slideEntry.slideHtmlAbs, 'utf-8'))
+    .filter((className) => !['slide', 'slide-wide', 'slide-hero'].includes(className))
+    .map((className) => `.${className}`);
 
   if (!CONTENT_LAYER_RE.test(css)) {
     failures.push('Wrap all slide.css rules in @layer content so slide-local tweaks stay below theme and canvas.');
@@ -402,6 +588,10 @@ export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'sli
 
   if (IMPORTANT_RE.test(css)) {
     failures.push('Remove !important from slide.css. Slide-local CSS must cooperate with the framework instead of forcing overrides.');
+  }
+
+  for (const token of findStructuralTokenOverrides(css)) {
+    failures.push(`Do not override structural canvas token "${token}" from slide.css. Structural stage tokens must stay in framework/canvas/canvas.css.`);
   }
 
   for (const rule of extractCssRules(css)) {
@@ -413,8 +603,22 @@ export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'sli
       }
 
       const localSelector = selector.slice(scopePrefix.length).trim();
+      if (!selector.startsWith(`${scopePrefix} `)) {
+        failures.push(`Do not target the generated slide wrapper "${scopePrefix}" directly. Scope slide.css to descendants inside the slide root.`);
+        continue;
+      }
       if (localSelector && isProtectedCanvasSelector(localSelector)) {
         failures.push(`Keep canvas-owned selectors out of "${selector}". Use local wrapper classes instead of restyling canvas primitives.`);
+      }
+
+      if (localSelector && isRuntimeChromeSelector(localSelector)) {
+        failures.push(`Keep runtime chrome selectors out of "${selector}". Slide CSS may not restyle preview/export controls.`);
+      }
+
+      for (const rootClassSelector of customRootClassSelectors) {
+        if (localSelector && selectorContainsPrefix(localSelector, rootClassSelector)) {
+          failures.push(`Do not target the slide root through custom root class "${rootClassSelector}" in "${selector}". Keep root-level stage styling inside the sacred canvas only.`);
+        }
       }
 
       if (selectorTouchesThemePrimitive(selector) && RESTRICTED_THEME_DECLARATION_RE.test(rule.declarations)) {
@@ -480,6 +684,7 @@ export function validateSlideDeckWorkspace(paths) {
   }
 
   validateThemeSource(readFileSync(paths.themeCssAbs, 'utf-8'), paths, paths.buildDisplayPath(paths.themeCssAbs));
+  validateEffectiveCanvasSource(paths, 'framework/canvas/canvas.css');
   validateBriefSource(readFileSync(paths.briefAbs, 'utf-8'), paths.buildDisplayPath(paths.briefAbs));
 
   if (entries.length > LONG_DECK_OUTLINE_THRESHOLD) {

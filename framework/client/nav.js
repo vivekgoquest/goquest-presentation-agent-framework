@@ -10,7 +10,7 @@
 
   // Build nav container
   const nav = document.createElement('nav');
-  nav.className = 'dot-nav';
+  nav.className = 'runtime-dot-nav';
   nav.setAttribute('aria-label', 'Slide navigation');
 
   const dots = [];

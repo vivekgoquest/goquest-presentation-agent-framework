@@ -1,4 +1,4 @@
-import { DEFAULT_VIEWPORT } from '../framework/runtime/deck-runtime.js';
+const FALLBACK_VIEWPORT = { width: 1280, height: 720 };
 
 function escapeHtmlAttribute(value) {
   return String(value)
@@ -7,7 +7,7 @@ function escapeHtmlAttribute(value) {
     .replaceAll('<', '&lt;');
 }
 
-function renderSlidesHostHtml(html, viewport = DEFAULT_VIEWPORT) {
+function renderSlidesHostHtml(html, viewport = FALLBACK_VIEWPORT) {
   const { width, height } = viewport;
 
   return `<!DOCTYPE html>
@@ -55,6 +55,7 @@ function renderSlidesHostHtml(html, viewport = DEFAULT_VIEWPORT) {
       border: 0;
       background: transparent;
       zoom: var(--electron-preview-scale);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
     }
   </style>
 </head>
@@ -91,9 +92,17 @@ function renderSlidesHostHtml(html, viewport = DEFAULT_VIEWPORT) {
           return;
         }
 
+        const shellStyle = window.getComputedStyle(shell);
+        const horizontalInsets =
+          parseFloat(shellStyle.paddingLeft || '0') + parseFloat(shellStyle.paddingRight || '0');
+        const verticalInsets =
+          parseFloat(shellStyle.paddingTop || '0') + parseFloat(shellStyle.paddingBottom || '0');
+        const availableWidth = Math.max(shell.clientWidth - horizontalInsets, 1);
+        const availableHeight = Math.max(shell.clientHeight - verticalInsets, 1);
+
         const scale = Math.min(
-          shell.clientWidth / viewportWidth,
-          shell.clientHeight / viewportHeight
+          availableWidth / viewportWidth,
+          availableHeight / viewportHeight
         );
 
         document.documentElement.style.setProperty(
@@ -116,7 +125,12 @@ function renderSlidesHostHtml(html, viewport = DEFAULT_VIEWPORT) {
 </html>`;
 }
 
-export function renderElectronPreviewHtml(html, kind = 'slides') {
+export function renderElectronPreviewHtml(html, options = {}) {
+  const kind = typeof options === 'string' ? options : (options.kind || 'slides');
+  const viewport = typeof options === 'object' && options
+    ? (options.viewport || FALLBACK_VIEWPORT)
+    : FALLBACK_VIEWPORT;
+
   if (typeof html !== 'string' || html.length === 0) {
     return html;
   }
@@ -125,5 +139,5 @@ export function renderElectronPreviewHtml(html, kind = 'slides') {
     return html;
   }
 
-  return renderSlidesHostHtml(html);
+  return renderSlidesHostHtml(html, viewport);
 }

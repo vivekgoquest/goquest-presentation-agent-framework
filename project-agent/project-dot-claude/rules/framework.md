@@ -76,8 +76,10 @@ These classes are framework primitives and should be treated as protected:
 - `.g3`
 - `.g4`
 - `.rv`, `.rv-l`, `.rv-r`, `.rv-s`
-- `.dot-nav`
-- `.export-bar`
+
+Runtime chrome is separate from the sacred canvas:
+
+- `.runtime-dot-nav`
 
 ## Runtime Contract
 
@@ -103,4 +105,5 @@ Deck work should not:
 - change slide dimensions
 - change grid semantics
 - redefine protected canvas selectors from theme or slide-local CSS
+- restyle runtime chrome selectors from slide-local CSS
 - create standalone root-level HTML decks when a project workspace is the intended flow

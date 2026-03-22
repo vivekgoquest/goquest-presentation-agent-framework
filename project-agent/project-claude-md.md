@@ -14,9 +14,9 @@ This project is a presentation built with the Presentation Framework. Follow the
 8. Keep reusable deck styling in `theme.css`.
 9. Keep slide-specific CSS in optional `slides/<NNN-id>/slide.css`.
 10. Keep assets deck-shared in `assets/` or slide-local in `slides/<NNN-id>/assets/`.
-11. For decks with more than 10 slides, build in batches of 5 and run `npm run check -- --project .` after each batch.
+11. For decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch.
 12. Inspect the preview yourself. If it does not read like a presentation yet, revise `theme.css` and optional slide-local `slide.css` before finalizing.
-13. Run `npm run finalize -- --project .`
+13. Run `node .presentation/framework-cli.mjs finalize`
 14. Report the exact output paths in `outputs/`.
 
 ## Core Rule
@@ -57,10 +57,10 @@ Use sparse numbering such as `010`, `020`, `030` so a later insertion can become
 
 ## Required Commands
 
-- `npm run check -- --project .`
-- `npm run finalize -- --project .`
-- `npm run capture -- --project . /tmp/<capture-dir>`
-- `npm run export -- --project . /tmp/<deck-name>.pdf`
+- `node .presentation/framework-cli.mjs check`
+- `node .presentation/framework-cli.mjs finalize`
+- `node .presentation/framework-cli.mjs capture /tmp/<capture-dir>`
+- `node .presentation/framework-cli.mjs export /tmp/<deck-name>.pdf`
 
 ## What The Agent Must Hand Back
 

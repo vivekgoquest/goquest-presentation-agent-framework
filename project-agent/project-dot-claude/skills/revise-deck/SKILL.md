@@ -14,11 +14,11 @@ Then:
 - if the revision affects more than 5 slides, re-evaluate the per-slide design plan in the outline — check that slide patterns still vary and the variety rules from the slide-patterns spec are met
 - revise /abs/path-to-project/theme.css plus the source slide folders under /abs/path-to-project/slides/
 - add or rename slide folders with sparse numbering if a new slide belongs between two existing slides
-- for decks with more than 10 slides, revise in batches of 5 and run npm run check -- --project /abs/path-to-project between batches
+- for decks with more than 10 slides, revise in batches of 5 and run node .presentation/framework-cli.mjs check between batches
 - use optional slide-local slide.css files only for local styling
 - keep assets either deck-shared in /abs/path-to-project/assets/ or slide-local in each slide folder
 - inspect the regenerated preview, screenshots, and downloaded PDF yourself; if it still does not look presentation-ready, revise theme.css or slide-local slide.css before finalizing
-- run npm run finalize -- --project /abs/path-to-project
+- run node .presentation/framework-cli.mjs finalize
 
 At the end, tell me:
 1. the project folder path

@@ -15,6 +15,7 @@ import {
   DEFAULT_VIEWPORT,
   discoverDeckSlides,
   prepareDeckPage,
+  selectDeckSlides,
 } from './deck-runtime.js';
 
 const PAGE_W = 960;
@@ -26,6 +27,7 @@ async function generatePDFFromPreviewUrl(previewUrl, opts = {}) {
     viewportHeight = DEFAULT_VIEWPORT.height,
     deviceScaleFactor = 3,
     fontWaitMs = DEFAULT_FONT_WAIT_MS,
+    slideIds = [],
   } = opts;
 
   const browser = await chromium.launch();
@@ -38,7 +40,7 @@ async function generatePDFFromPreviewUrl(previewUrl, opts = {}) {
 
     await page.goto(previewUrl, { waitUntil: 'load' });
     await prepareDeckPage(page, { fontWaitMs });
-    const slides = await discoverDeckSlides(page);
+    const slides = selectDeckSlides(await discoverDeckSlides(page), slideIds);
 
     const screenshots = [];
     for (const slide of slides) {

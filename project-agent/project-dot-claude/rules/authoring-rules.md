@@ -27,13 +27,13 @@
 
 After meaningful deck changes, prefer:
 
-1. `npm run finalize -- --project /abs/path`
+1. `node .presentation/framework-cli.mjs finalize`
 
 Optional lower-level commands:
 
-- `npm run check -- --project /abs/path`
-- `npm run capture -- --project /abs/path /tmp/<capture-dir>`
-- `npm run export -- --project /abs/path /tmp/<deck-name>.pdf`
+- `node .presentation/framework-cli.mjs check`
+- `node .presentation/framework-cli.mjs capture /tmp/<capture-dir>`
+- `node .presentation/framework-cli.mjs export /tmp/<deck-name>.pdf`
 
 ## What `check` Enforces
 
@@ -49,7 +49,7 @@ The repo check currently fails on:
 
 - prefer deck-local theme variables over one-off visual hacks
 - for decks with more than 10 slides, lock the story in `outline.md` before slide-by-slide buildout
-- for decks with more than 10 slides, build in batches of 5 and run `npm run check -- --project /abs/path` after each batch
+- for decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch
 - prefer optional `slide.css` only when markup plus theme primitives are not enough
 - keep slide-local selectors scoped to the generated slide id
 - prefer semantic copy structure over visual hacks

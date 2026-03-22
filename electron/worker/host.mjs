@@ -2,16 +2,41 @@ import { pathToFileURL } from 'url';
 import { createActionService } from '../../framework/application/action-service.mjs';
 import { createAgentActionAdapter } from '../../framework/application/agent-action-adapter.mjs';
 import { createPresentationActionAdapter } from '../../framework/application/presentation-action-adapter.mjs';
+import { createProjectQueryService } from '../../framework/application/project-query-service.mjs';
 import {
   createErrorResponse,
   createSuccessResponse,
   createWorkerEvent,
   normalizeWorkerRequest,
+  WORKER_EVENT_CHANNELS,
   WORKER_REQUEST_CHANNELS,
 } from './ipc-contract.mjs';
-import { createProjectService } from './project-service.mjs';
 import { createTerminalService } from './terminal-service.mjs';
 import { createWatchService } from './watch-service.mjs';
+
+const REVIEW_ACTION_IDS = Object.freeze({
+  run: 'review_presentation',
+  revise: 'revise_presentation',
+  fixWarnings: 'fix_warnings',
+});
+
+function buildReviewAvailability(actions = []) {
+  const actionMap = new Map(actions.map((action) => [action.id, action]));
+  const reviewAction = actionMap.get(REVIEW_ACTION_IDS.run);
+  const reviseAction = actionMap.get(REVIEW_ACTION_IDS.revise);
+  const fixWarningsAction = actionMap.get(REVIEW_ACTION_IDS.fixWarnings);
+
+  return {
+    run: Boolean(reviewAction?.enabled),
+    revise: Boolean(reviseAction?.enabled),
+    fixWarnings: Boolean(fixWarningsAction?.enabled),
+    reasonUnavailable:
+      reviewAction?.reasonDisabled
+      || reviseAction?.reasonDisabled
+      || fixWarningsAction?.reasonDisabled
+      || '',
+  };
+}
 
 export function createElectronWorkerHost(options = {}) {
   const frameworkRoot = options.frameworkRoot || process.cwd();
@@ -26,20 +51,45 @@ export function createElectronWorkerHost(options = {}) {
   const terminalService = createTerminalService({ frameworkRoot });
   const watchService = createWatchService({ frameworkRoot });
   const presentationAdapter = createPresentationActionAdapter();
-  const projectService = createProjectService({
+
+  function emitProjectChanged(extra = {}) {
+    emit(createWorkerEvent(WORKER_EVENT_CHANNELS.PROJECT_CHANGED, {
+      meta: projectService.getMeta(),
+      state: projectService.getState(),
+      ...extra,
+    }));
+  }
+
+  function emitPreviewChanged(extra = {}) {
+    if (!projectService.getMeta().active) {
+      return;
+    }
+
+    emit(createWorkerEvent(WORKER_EVENT_CHANNELS.PREVIEW_CHANGED, {
+      meta: projectService.getPreviewMeta(),
+      ...extra,
+    }));
+  }
+
+  const projectService = createProjectQueryService({
+    frameworkRoot,
     onProjectChanged({ paths }) {
       terminalService.stop({ announce: false, signal: 'project-switch' });
       terminalService.setProjectContext(paths?.projectRootAbs || null);
       watchService.setProjectRoot(paths?.projectRootAbs || null);
-      emit(createWorkerEvent('project/changed', {
-        meta: projectService.getMeta(),
-        state: projectService.getState(),
-      }));
+      emitProjectChanged({ source: 'project' });
+      emitPreviewChanged({ source: 'project' });
     },
   });
 
   const stopTerminalEvents = terminalService.onEvent((event) => emit(event));
-  const stopWatchEvents = watchService.onEvent((event) => emit(event));
+  const stopWatchEvents = watchService.onEvent((event) => {
+    emit(event);
+    if (projectService.getMeta().active) {
+      emitProjectChanged({ file: event.file, source: 'watch' });
+      emitPreviewChanged({ file: event.file, source: 'watch' });
+    }
+  });
   const actionService = createActionService({
     frameworkRoot,
     projectService,
@@ -51,18 +101,12 @@ export function createElectronWorkerHost(options = {}) {
     },
   });
 
-  function requireActiveTarget() {
-    return projectService.requireActiveProjectTarget();
+  async function listActionDescriptors() {
+    return actionService.listActions();
   }
 
-  function createPresentationRequestContext(payload = {}) {
-    return {
-      args: payload,
-      meta: projectService.getMeta(),
-      outputPaths: projectService.getOutputPaths(),
-      projectState: projectService.getState(),
-      target: requireActiveTarget(),
-    };
+  async function getReviewAvailability() {
+    return buildReviewAvailability(await listActionDescriptors());
   }
 
   async function dispatch(channel, payload = {}) {
@@ -77,22 +121,49 @@ export function createElectronWorkerHost(options = {}) {
         return projectService.getState();
       case WORKER_REQUEST_CHANNELS.PROJECT_GET_FILES:
         return projectService.getFiles();
-      case WORKER_REQUEST_CHANNELS.PROJECT_GET_PREVIEW_HTML:
-        return projectService.getPreviewHtml();
+      case WORKER_REQUEST_CHANNELS.PROJECT_GET_SLIDES:
+        return {
+          slides: projectService.getSlides(),
+        };
+      case WORKER_REQUEST_CHANNELS.PREVIEW_GET_DOCUMENT:
+        return projectService.getPreviewDocument();
+      case WORKER_REQUEST_CHANNELS.PREVIEW_GET_META:
+        return projectService.getPreviewMeta();
+      case WORKER_REQUEST_CHANNELS.PREVIEW_REFRESH: {
+        const meta = projectService.refreshPreview();
+        emitPreviewChanged({ source: 'refresh' });
+        return meta;
+      }
+      case WORKER_REQUEST_CHANNELS.BUILD_CHECK:
+        return actionService.invokeAction('check_presentation', {
+          outputDir: payload.outputDir,
+          options: payload,
+        });
+      case WORKER_REQUEST_CHANNELS.BUILD_FINALIZE:
+        return actionService.invokeAction('build_presentation', {
+          options: payload,
+        });
+      case WORKER_REQUEST_CHANNELS.BUILD_CAPTURE_SCREENSHOTS:
+        return actionService.invokeAction('capture_screenshots', {
+          outputDir: payload.outputDir,
+          options: payload,
+        });
+      case WORKER_REQUEST_CHANNELS.EXPORT_START:
+        return actionService.invokeAction('export_presentation', payload);
+      case WORKER_REQUEST_CHANNELS.REVIEW_RUN:
+        return actionService.invokeAction(REVIEW_ACTION_IDS.run, payload);
+      case WORKER_REQUEST_CHANNELS.REVIEW_REVISE:
+        return actionService.invokeAction(REVIEW_ACTION_IDS.revise, payload);
+      case WORKER_REQUEST_CHANNELS.REVIEW_FIX_WARNINGS:
+        return actionService.invokeAction(REVIEW_ACTION_IDS.fixWarnings, payload);
+      case WORKER_REQUEST_CHANNELS.REVIEW_GET_AVAILABILITY:
+        return getReviewAvailability();
       case WORKER_REQUEST_CHANNELS.ACTION_LIST:
         return {
-          actions: await actionService.listActions(),
+          actions: await listActionDescriptors(),
         };
       case WORKER_REQUEST_CHANNELS.ACTION_INVOKE:
         return actionService.invokeAction(payload.actionId, payload.args || {});
-      case WORKER_REQUEST_CHANNELS.RUNTIME_CAPTURE:
-        return presentationAdapter.invoke('capture_screenshots', createPresentationRequestContext(payload));
-      case WORKER_REQUEST_CHANNELS.RUNTIME_CHECK:
-        return presentationAdapter.invoke('check_presentation', createPresentationRequestContext(payload));
-      case WORKER_REQUEST_CHANNELS.RUNTIME_EXPORT:
-        return presentationAdapter.invoke('export_pdf', createPresentationRequestContext(payload));
-      case WORKER_REQUEST_CHANNELS.RUNTIME_FINALIZE:
-        return presentationAdapter.invoke('build_presentation', createPresentationRequestContext(payload));
       case WORKER_REQUEST_CHANNELS.TERMINAL_GET_META:
         return terminalService.getMeta();
       case WORKER_REQUEST_CHANNELS.TERMINAL_START:

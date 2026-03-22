@@ -86,6 +86,62 @@
       </div>
     </main>
 
+    <div id="export-modal" class="shell-modal" data-open="false" style="display:none">
+      <div class="shell-modal-backdrop"></div>
+      <div class="shell-modal-panel" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+        <div class="shell-modal-header">
+          <div>
+            <div id="export-modal-title" class="shell-modal-title">Export presentation</div>
+            <div class="shell-modal-subtitle">Choose a format, pick the slides, then select a destination folder.</div>
+          </div>
+          <button id="export-close" type="button" class="tb tb-icon" aria-label="Close export dialog">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="shell-modal-body">
+          <section class="export-section">
+            <div class="export-section-label">Format</div>
+            <div class="export-format-options">
+              <label class="export-radio">
+                <input id="export-format-pdf" type="radio" name="export-format" value="pdf" checked>
+                <span>PDF</span>
+              </label>
+              <label class="export-radio">
+                <input id="export-format-png" type="radio" name="export-format" value="png">
+                <span>PNG</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="export-section">
+            <div class="export-section-row">
+              <div class="export-section-label">Slides</div>
+              <div class="export-inline-actions">
+                <button id="export-select-all" type="button" class="tb tb-dim">Select all</button>
+                <button id="export-clear" type="button" class="tb tb-dim">Clear</button>
+              </div>
+            </div>
+            <div id="export-slide-summary" class="export-slide-summary"></div>
+            <div id="export-slide-list" class="export-slide-list"></div>
+          </section>
+
+          <section class="export-section">
+            <div class="export-section-label">Destination</div>
+            <div class="export-destination-row">
+              <button id="export-choose-folder" type="button" class="tb">Choose folder</button>
+              <span id="export-folder-path" class="export-folder-path">No folder selected</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="shell-modal-footer">
+          <button id="export-cancel" type="button" class="tb tb-dim">Cancel</button>
+          <button id="export-confirm" type="button" class="tb tb-primary" disabled>Export PDF</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-container" class="toast-container"></div>
 
     <div id="diagnostics-drawer" class="diag-drawer" style="display:none">

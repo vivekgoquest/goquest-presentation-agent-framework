@@ -1,6 +1,10 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
-import { execFileSync } from 'child_process';
 import { dirname, resolve } from 'path';
+import {
+  PROJECT_LOCAL_FRAMEWORK_CLI_REL,
+  formatProjectFrameworkCliCommand,
+  renderProjectFrameworkCliSource,
+} from '../project-cli-shim.mjs';
 import {
   FRAMEWORK_ROOT,
   LONG_DECK_BATCH_SIZE,
@@ -225,35 +229,6 @@ function scaffoldIntoPaths(paths, options = {}) {
   mkdirSync(paths.slidesDirAbs, { recursive: true });
   mkdirSync(paths.outputsDirAbs, { recursive: true });
 
-  const claudeDir = resolve(paths.sourceDirAbs, '.claude');
-  const claudeHooksDir = resolve(claudeDir, 'hooks');
-  const claudeRulesDir = resolve(claudeDir, 'rules');
-  const claudeSkillsDir = resolve(claudeDir, 'skills');
-  mkdirSync(claudeHooksDir, { recursive: true });
-  mkdirSync(claudeRulesDir, { recursive: true });
-  mkdirSync(claudeSkillsDir, { recursive: true });
-
-  // Settings and hooks
-  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'settings.json'), resolve(claudeDir, 'settings.json'));
-  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'), resolve(claudeHooksDir, 'check-slide-quality.mjs'));
-
-  // CLAUDE.md — per-project agent contract
-  cpSync(resolve(FRAMEWORK_ROOT, 'project-agent', 'project-claude-md.md'), resolve(claudeDir, 'CLAUDE.md'));
-
-  // Rules — framework specs for auto-discovery
-  const rulesSourceDir = resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'rules');
-  for (const entry of readdirSync(rulesSourceDir)) {
-    cpSync(resolve(rulesSourceDir, entry), resolve(claudeRulesDir, entry));
-  }
-
-  // Skills — invocable workflows (/new-deck, /revise-deck, etc.)
-  const skillsSourceDir = resolve(FRAMEWORK_ROOT, 'project-agent', 'project-dot-claude', 'skills');
-  for (const entry of readdirSync(skillsSourceDir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      cpSync(resolve(skillsSourceDir, entry.name), resolve(claudeSkillsDir, entry.name), { recursive: true });
-    }
-  }
-
   writeFileSync(paths.themeCssAbs, renderTemplate('theme.css'));
   writeFileSync(paths.briefAbs, renderTemplate('brief.md'));
   writeFileSync(resolve(paths.assetsDirAbs, '.gitkeep'), '');
@@ -280,6 +255,7 @@ function scaffoldIntoPaths(paths, options = {}) {
   mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
   mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
   mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
+  writeFileSync(resolve(paths.sourceDirAbs, PROJECT_LOCAL_FRAMEWORK_CLI_REL), renderProjectFrameworkCliSource());
   const metadata = createProjectMetadata(paths.sourceDirAbs, {
     frameworkMode: copyFramework ? 'copied' : 'linked',
     overrides: {
@@ -296,14 +272,10 @@ function scaffoldIntoPaths(paths, options = {}) {
     paths.briefRel,
     `${paths.assetsDirRel}/`,
     `${paths.outputsDirRel}/`,
-    '.claude/settings.json',
-    '.claude/hooks/check-slide-quality.mjs',
-    '.claude/CLAUDE.md',
-    '.claude/rules/',
-    '.claude/skills/',
   ];
 
   createdFiles.push(paths.metadataRel);
+  createdFiles.push(PROJECT_LOCAL_FRAMEWORK_CLI_REL);
   if (copyFramework) {
     createdFiles.push(paths.frameworkBaseRel);
     createdFiles.push(paths.frameworkOverridesRel);
@@ -326,10 +298,10 @@ function scaffoldIntoPaths(paths, options = {}) {
 
   if (outlineRequired) {
     nextSteps.splice(1, 0, `Open ${paths.outlineRel}, replace every [[TODO_...]] marker, and lock the full story before slide buildout.`);
-    nextSteps.splice(2, 0, `Build ${slideCount} slides in batches of ${LONG_DECK_BATCH_SIZE} and run npm run check -- --project ${paths.sourceDirAbs} after each batch.`);
+    nextSteps.splice(2, 0, `Build ${slideCount} slides in batches of ${LONG_DECK_BATCH_SIZE} and run ${formatProjectFrameworkCliCommand('check')} after each batch.`);
   }
 
-  nextSteps.push(`Run npm run finalize -- --project ${paths.sourceDirAbs}`);
+  nextSteps.push(`Run ${formatProjectFrameworkCliCommand('finalize')}`);
 
   const gitignoreContent = [
     'outputs/',
@@ -340,15 +312,6 @@ function scaffoldIntoPaths(paths, options = {}) {
   ].join('\n');
   writeFileSync(resolve(paths.sourceDirAbs, '.gitignore'), gitignoreContent);
   createdFiles.push('.gitignore');
-
-  try {
-    const gitOpts = { cwd: paths.sourceDirAbs, stdio: 'ignore' };
-    execFileSync('git', ['init'], gitOpts);
-    execFileSync('git', ['add', '-A'], gitOpts);
-    execFileSync('git', ['commit', '-m', `Scaffold: ${deckTitle}`], gitOpts);
-  } catch {
-    // git not available - edit history is optional
-  }
 
   return {
     status: 'created',

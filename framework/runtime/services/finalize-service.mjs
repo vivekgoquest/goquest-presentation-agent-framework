@@ -24,6 +24,9 @@ function summarizeIssues(report) {
   if (report.consistency.slidesWithOverflow.length > 0) {
     issues.push(`These slides overflowed their canvas: ${report.consistency.slidesWithOverflow.join(', ')}.`);
   }
+  if (report.consistency.canvasContract?.violations?.length > 0) {
+    issues.push(...report.consistency.canvasContract.violations.map((violation) => `Canvas contract violation: ${violation}`));
+  }
 
   return issues;
 }
@@ -32,7 +35,7 @@ function buildSummary({ target, sourcePaths, outputPaths, status, issues, report
   const unresolved = issues.length > 0
     ? issues.map((issue) => `- ${issue}`).join('\n')
     : '- None';
-  const finalizeCommand = `npm run finalize -- --project ${sourcePaths.sourceDirAbs}`;
+  const finalizeCommand = 'node .presentation/framework-cli.mjs finalize';
 
   let template = readFileSync(resolve(REPO_ROOT, 'framework', 'templates', 'summary.md'), 'utf-8');
   const replacements = new Map([

@@ -223,15 +223,189 @@ button, input { font: inherit; color: inherit; }
 
 .preview-pane {
   flex: 1.12;
-  background: #efefef;
+  background: var(--surface);
 }
 
 .preview-header {
-  background: rgba(255,255,255,0.92);
+  background: rgba(0, 0, 0, 0.1);
 }
 
-.preview-canvas { flex: 1; position: relative; display: flex; flex-direction: column; }
-.preview-frame { width: 100%; flex: 1; border: none; }
+.preview-canvas { flex: 1; position: relative; display: flex; flex-direction: column; background: var(--surface); }
+.preview-frame { width: 100%; flex: 1; border: none; background: var(--surface); }
+
+/* ── Shell modal ── */
+.shell-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.shell-modal-panel {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.shell-modal-header,
+.shell-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shell-modal-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border-subtle);
+  justify-content: flex-end;
+}
+
+.shell-modal-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.shell-modal-subtitle {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.shell-modal-body {
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.export-section-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.export-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-format-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.export-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.export-radio input {
+  accent-color: var(--accent);
+}
+
+.export-slide-summary,
+.export-folder-path {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.export-slide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.export-slide-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+}
+
+.export-slide-option input {
+  accent-color: var(--accent);
+}
+
+.export-slide-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.export-slide-order {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.export-slide-name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 560;
+  word-break: break-word;
+}
+
+.export-destination-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.export-folder-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Toasts ── */
 .toast-container {
@@ -316,5 +490,15 @@ button, input { font: inherit; color: inherit; }
   .pane-actions .tb {
     min-height: 32px;
     padding-inline: 10px;
+  }
+
+  .shell-modal-panel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .export-destination-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

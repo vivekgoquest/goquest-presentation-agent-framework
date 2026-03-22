@@ -45,6 +45,7 @@ Keep the repo split into four domains:
 
 2. Application layer (`framework/application/`)
 - owns deterministic product action definitions, routing, and lifecycle events
+- owns Electron-facing project queries and project creation
 - is the only Electron-facing execution layer for presentation and agent actions
 
 3. Presentation runtime (`framework/runtime/`, `framework/client/`, `framework/templates/`)
@@ -58,7 +59,7 @@ Keep the repo split into four domains:
 Allowed dependency direction:
 - `electron -> framework/application`
 - `framework/application -> framework/runtime`
-- `framework/application -> project-agent` (through the agent adapter/capability manifest only)
+- `framework/application -> project-agent` (through agent launcher, capability manifest, and scaffold package exports only)
 - `electron/worker/terminal-service -> framework/runtime/terminal-core`
 
 Forbidden dependency direction:
@@ -102,5 +103,5 @@ Only change with explicit intent:
 - `project-agent/project-dot-claude/rules/file-boundaries.md`
 - `project-agent/project-dot-claude/rules/slide-patterns.md`
 - `project-agent/project-dot-claude/rules/tokens.md`
-- `docs/electron-packaging-plan.md` (historical context)
-- `docs/electron-native-host-plan.md` (historical context)
+- `docs/base-canvas-contract.md`
+- `docs/prd-human-agent.md`

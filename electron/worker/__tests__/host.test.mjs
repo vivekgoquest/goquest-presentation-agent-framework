@@ -26,7 +26,7 @@ function waitFor(predicate, timeoutMs = 15000, intervalMs = 50) {
   });
 }
 
-test('electron worker host creates a project and runs runtime actions without server mode', async (t) => {
+test('electron worker host creates a project and runs actions without runtime bypass channels', async (t) => {
   const { createElectronWorkerHost } = await import('../host.mjs');
   const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-electron-host-'));
   const host = createElectronWorkerHost({
@@ -73,7 +73,7 @@ test('electron worker host creates a project and runs runtime actions without se
       '## Must Include',
       '',
       '- Project create and open behavior.',
-      '- Runtime actions through the native worker host.',
+      '- Product actions through the native worker host.',
       '',
       '## Constraints',
       '',
@@ -101,12 +101,36 @@ test('electron worker host creates a project and runs runtime actions without se
   assert.equal(filesResponse.data.root, projectRoot);
   assert.equal(filesResponse.data.tree.kind, 'root');
 
-  const checkResponse = await host.handleRequest({
+  const slidesResponse = await host.handleRequest({
+    channel: 'project:getSlides',
+    payload: {},
+  });
+  assert.equal(slidesResponse.ok, true);
+  assert.deepEqual(
+    slidesResponse.data.slides.map((slide) => slide.id),
+    ['intro', 'close']
+  );
+
+  const runtimeBypassResponse = await host.handleRequest({
     channel: 'runtime:check',
     payload: {},
   });
-  assert.equal(checkResponse.ok, true);
-  assert.equal(checkResponse.data.status, 'pass');
+  assert.equal(runtimeBypassResponse.ok, false);
+  assert.match(runtimeBypassResponse.error?.message || '', /unsupported worker request channel/i);
+
+  const previewMetaResponse = await host.handleRequest({
+    channel: 'preview:getMeta',
+    payload: {},
+  });
+  assert.equal(previewMetaResponse.ok, true);
+  assert.equal(previewMetaResponse.data.kind, 'slides');
+
+  const previewDocumentResponse = await host.handleRequest({
+    channel: 'preview:getDocument',
+    payload: {},
+  });
+  assert.equal(previewDocumentResponse.ok, true);
+  assert.match(previewDocumentResponse.data.html, /<section id=/i);
 
   const actionListResponse = await host.handleRequest({
     channel: 'action:list',
@@ -114,15 +138,21 @@ test('electron worker host creates a project and runs runtime actions without se
   });
   assert.equal(actionListResponse.ok, true);
   assert(actionListResponse.data.actions.some((action) => action.id === 'build_presentation'));
+  assert(actionListResponse.data.actions.some((action) => action.id === 'export_presentation'));
 
-  const actionInvokeResponse = await host.handleRequest({
-    channel: 'action:invoke',
-    payload: {
-      actionId: 'check_presentation',
-    },
+  const buildCheckResponse = await host.handleRequest({
+    channel: 'build:check',
+    payload: {},
   });
-  assert.equal(actionInvokeResponse.ok, true);
-  assert.equal(actionInvokeResponse.data.status, 'pass');
+  assert.equal(buildCheckResponse.ok, true);
+  assert.equal(buildCheckResponse.data.status, 'pass');
+
+  const reviewAvailabilityResponse = await host.handleRequest({
+    channel: 'review:getAvailability',
+    payload: {},
+  });
+  assert.equal(reviewAvailabilityResponse.ok, true);
+  assert.equal(typeof reviewAvailabilityResponse.data.run, 'boolean');
 });
 
 test('electron worker host relays terminal events from the shared core', async (t) => {
@@ -197,7 +227,7 @@ test('electron worker host returns onboarding preview HTML instead of raw slide 
   assert.equal(createResponse.ok, true);
 
   const previewResponse = await host.handleRequest({
-    channel: 'project:getPreviewHtml',
+    channel: 'preview:getDocument',
     payload: {},
   });
 
@@ -262,13 +292,14 @@ test('electron worker host returns the assembled deck HTML without preview-speci
   );
 
   const previewResponse = await host.handleRequest({
-    channel: 'project:getPreviewHtml',
+    channel: 'preview:getDocument',
     payload: {},
   });
 
   assert.equal(previewResponse.ok, true);
   assert.equal(previewResponse.data.kind, 'slides');
   assert.match(previewResponse.data.html, /presentation:\/\/project-framework\/canvas\/canvas\.css/i);
+  assert.match(previewResponse.data.html, /presentation:\/\/project-framework\/runtime\/runtime-chrome\.css/i);
   assert.match(previewResponse.data.html, /presentation:\/\/project-framework\/client\/nav\.js/i);
   assert.doesNotMatch(previewResponse.data.html, /scroll-snap-type:\s*y\s+mandatory/i);
   assert.doesNotMatch(previewResponse.data.html, /min-height:\s*100vh;\s*display:\s*flex;\s*align-items:\s*center;\s*justify-content:\s*center/i);

@@ -1,5 +1,6 @@
-import { existsSync, statSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { CANVAS_STAGE } from '../canvas/canvas-contract.mjs';
 import {
   PROJECT_METADATA_FILENAME,
   PROJECT_PREVIEW_PATH,
@@ -7,12 +8,13 @@ import {
   createPresentationTarget,
   getPresentationOutputPaths,
   getProjectPaths,
-} from '../../framework/runtime/deck-paths.js';
-import { buildProjectTreeNode } from '../../framework/runtime/project-tree.js';
-import { getProjectState } from '../../framework/runtime/project-state.js';
-import { renderPresentationHtml } from '../../framework/runtime/deck-assemble.js';
-import { renderPresentationFailureHtml } from '../../framework/runtime/preview-state-page.js';
-import { createPresentationScaffold } from '../../framework/runtime/services/scaffold-service.mjs';
+} from '../runtime/deck-paths.js';
+import { buildProjectTreeNode } from '../runtime/project-tree.js';
+import { getProjectState } from '../runtime/project-state.js';
+import { listSlideSourceEntries } from '../runtime/deck-source.js';
+import { renderPresentationHtml } from '../runtime/deck-assemble.js';
+import { renderPresentationFailureHtml } from '../runtime/preview-state-page.js';
+import { createProjectScaffold } from './project-scaffold-service.mjs';
 
 function assertProjectDirectory(projectRootAbs) {
   if (!projectRootAbs || projectRootAbs === resolve('/')) {
@@ -24,16 +26,24 @@ function assertProjectDirectory(projectRootAbs) {
   }
 }
 
+function requireProjectRootInput(value, message) {
+  const projectRoot = String(value || '').trim();
+  if (!projectRoot) {
+    throw new Error(message);
+  }
+  return projectRoot;
+}
+
 function assertSlideCount(value) {
   const slideCount = Number.parseInt(String(value ?? '3'), 10);
   if (!Number.isFinite(slideCount) || slideCount < 1 || slideCount > 99) {
     throw new Error('Slides must be a whole number between 1 and 99.');
   }
-
   return slideCount;
 }
 
-export function createProjectService(options = {}) {
+export function createProjectQueryService(options = {}) {
+  const frameworkRoot = options.frameworkRoot || process.cwd();
   const onProjectChanged = typeof options.onProjectChanged === 'function'
     ? options.onProjectChanged
     : () => {};
@@ -55,7 +65,6 @@ export function createProjectService(options = {}) {
     if (!activeProjectPaths) {
       throw new Error('Open a presentation project first.');
     }
-
     return activeProjectPaths;
   }
 
@@ -63,7 +72,6 @@ export function createProjectService(options = {}) {
     if (!activeProjectTarget) {
       throw new Error('Open a presentation project first.');
     }
-
     return activeProjectTarget;
   }
 
@@ -112,19 +120,77 @@ export function createProjectService(options = {}) {
     };
   }
 
-  async function createProject(payload = {}) {
-    const projectRootAbs = resolve(String(payload.projectRoot || ''));
+  function getSlides() {
+    const projectPaths = requireActiveProjectPaths();
+    return listSlideSourceEntries(projectPaths)
+      .filter((entry) => entry.isValidName)
+      .map((entry) => ({
+        id: entry.slideId,
+        dirName: entry.dirName,
+        orderLabel: entry.orderLabel,
+        orderValue: entry.orderValue,
+      }));
+  }
+
+  function getOutputPaths() {
+    return getPresentationOutputPaths(requireActiveProjectTarget());
+  }
+
+  function buildPreviewDocument() {
+    const target = requireActiveProjectTarget();
+    const paths = requireActiveProjectPaths();
+
+    let html;
+    let slideIds;
+    let title;
+    let previewKind = 'slides';
+    let viewport = null;
+
+    try {
+      const assembled = renderPresentationHtml(target);
+      html = assembled.html;
+      slideIds = assembled.slideIds;
+      title = assembled.title;
+      viewport = { ...CANVAS_STAGE.viewport };
+    } catch (error) {
+      const fallback = renderPresentationFailureHtml(target, error);
+      html = fallback.html;
+      slideIds = [];
+      title = paths.title || 'Preview';
+      previewKind = fallback.kind;
+    }
+
+    html = html.replaceAll('/project-files/', 'presentation://project-files/');
+    html = html.replaceAll('/project-framework/', 'presentation://project-framework/');
+
+    return { html, slideIds, title, kind: previewKind, viewport };
+  }
+
+  function getPreviewDocument() {
+    return buildPreviewDocument();
+  }
+
+  function getPreviewMeta() {
+    const { slideIds, title, kind, viewport } = buildPreviewDocument();
+    return { slideIds, title, kind, viewport };
+  }
+
+  function refreshPreview() {
+    return getPreviewMeta();
+  }
+
+  function createProject(payload = {}) {
+    const projectRootAbs = resolve(
+      requireProjectRootInput(payload.projectRoot, 'Choose a target folder for the presentation project.')
+    );
     const slideCount = assertSlideCount(payload.slides);
     const copyFramework = Boolean(payload.copyFramework);
 
-    if (!projectRootAbs || projectRootAbs === resolve('/')) {
-      throw new Error('Choose a target folder for the presentation project.');
-    }
-
-    const result = createPresentationScaffold({ projectRoot: projectRootAbs }, {
-      slideCount,
-      copyFramework,
-    });
+    const result = createProjectScaffold(
+      { projectRoot: projectRootAbs },
+      { slideCount, copyFramework },
+      { frameworkRoot }
+    );
 
     setActiveProject(projectRootAbs);
 
@@ -132,12 +198,15 @@ export function createProjectService(options = {}) {
       result,
       meta: getMeta(),
       state: getState(),
+      slides: getSlides(),
       files: getFiles(),
     };
   }
 
   function openProject(payload = {}) {
-    const projectRootAbs = resolve(String(payload.projectRoot || ''));
+    const projectRootAbs = resolve(
+      requireProjectRootInput(payload.projectRoot, 'Choose a presentation project folder.')
+    );
     assertProjectDirectory(projectRootAbs);
 
     const metadataAbs = resolve(projectRootAbs, PROJECT_SYSTEM_DIRNAME, PROJECT_METADATA_FILENAME);
@@ -153,41 +222,9 @@ export function createProjectService(options = {}) {
     return {
       meta: getMeta(),
       state: getState(),
+      slides: getSlides(),
       files: getFiles(),
     };
-  }
-
-  function getOutputPaths() {
-    return getPresentationOutputPaths(requireActiveProjectTarget());
-  }
-
-  function getPreviewHtml() {
-    const target = requireActiveProjectTarget();
-    const paths = requireActiveProjectPaths();
-
-    let html;
-    let slideIds;
-    let title;
-    let previewKind = 'slides';
-
-    try {
-      const assembled = renderPresentationHtml(target);
-      html = assembled.html;
-      slideIds = assembled.slideIds;
-      title = assembled.title;
-    } catch (error) {
-      const fallback = renderPresentationFailureHtml(target, error);
-      html = fallback.html;
-      slideIds = [];
-      title = paths.title || 'Preview';
-      previewKind = fallback.kind;
-    }
-
-    // Rewrite asset URLs for the presentation:// protocol
-    html = html.replaceAll('/project-files/', 'presentation://project-files/');
-    html = html.replaceAll('/project-framework/', 'presentation://project-framework/');
-
-    return { html, slideIds, title, kind: previewKind };
   }
 
   return {
@@ -195,10 +232,13 @@ export function createProjectService(options = {}) {
     getFiles,
     getMeta,
     getOutputPaths,
-    getPreviewHtml,
+    getPreviewDocument,
+    getPreviewMeta,
+    getSlides,
     getState,
     getTarget: requireActiveProjectTarget,
     openProject,
+    refreshPreview,
     requireActiveProjectPaths,
     requireActiveProjectTarget,
     setActiveProject,

@@ -12,7 +12,7 @@ Review the presentation project at /abs/path-to-project.
 - inspect the current theme, slide folders, brief, and latest outputs
 - if the deck has more than 10 slides, inspect outline.md first and verify the slide sequence still matches it
 - inspect the preview, screenshots, and downloaded PDF yourself and decide whether the deck already reads like a presentation or still needs CSS revision
-- run npm run finalize -- --project /abs/path-to-project if fresh outputs are needed
+- run node .presentation/framework-cli.mjs finalize if fresh outputs are needed
 - summarize the deck quality, weak points, and revision opportunities
 - if I asked for changes, provide the revision plan directly in your response
 

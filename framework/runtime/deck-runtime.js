@@ -1,4 +1,6 @@
-export const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
+import { CANVAS_STAGE } from '../canvas/canvas-contract.mjs';
+
+export const DEFAULT_VIEWPORT = { ...CANVAS_STAGE.viewport };
 export const DEFAULT_FONT_WAIT_MS = 300;
 
 const DECK_PREPARE_STYLES = `
@@ -6,8 +8,7 @@ const DECK_PREPARE_STYLES = `
     opacity: 1 !important;
     transform: none !important;
   }
-  .dot-nav { display: none !important; }
-  .export-bar { display: none !important; }
+  .runtime-dot-nav { display: none !important; }
 `;
 
 export async function prepareDeckPage(page, opts = {}) {
@@ -67,4 +68,23 @@ export async function discoverDeckSlides(page) {
       };
     }).filter(Boolean);
   });
+}
+
+export function selectDeckSlides(slides, requestedSlideIds = []) {
+  const discovered = Array.isArray(slides) ? slides : [];
+  const requested = Array.isArray(requestedSlideIds)
+    ? requestedSlideIds.map((slideId) => String(slideId || '').trim()).filter(Boolean)
+    : [];
+
+  if (requested.length === 0) {
+    return discovered;
+  }
+
+  const selected = discovered.filter((slide) => requested.includes(slide.id));
+  const missing = requested.filter((slideId) => !selected.some((slide) => slide.id === slideId));
+  if (missing.length > 0) {
+    throw new Error(`Unknown slide selections: ${missing.join(', ')}`);
+  }
+
+  return selected;
 }

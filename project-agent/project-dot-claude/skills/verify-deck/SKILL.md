@@ -36,10 +36,9 @@ Launch ALL 6 agents IN PARALLEL in a single message. Each agent runs independent
 
 Every agent prompt MUST include:
 - The absolute path to the project folder being verified
-- The absolute path to the framework directory (for running the capture script)
 - The target audience description from Step 1
 - Path to any reference documents found in Step 2 (or "none")
-- The command to run: `cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-<agent-name>-$(date +%s)"`
+- The command to run: `cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-<agent-name>-$(date +%s)"`
 - Instructions to READ the resulting `report.json` after capture completes
 - Instructions to READ the screenshot PNGs (Claude can read images) for visual analysis
 - The specific checklist for that agent (copy the full checklist from the agent definition below)
@@ -60,7 +59,7 @@ Every agent prompt MUST include:
 You are a visual consistency auditor for a presentation deck. Your job is to verify that every slide looks polished, professional, and visually consistent.
 
 1. Run the capture script to get screenshots and structured data:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-visual-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-visual-$(date +%s)"
 
 2. Read the report.json from the output directory.
 
@@ -113,7 +112,7 @@ Output findings as a structured list with slide IDs. End with a visual quality s
 You are a data accuracy auditor for a presentation deck. Your job is to verify every number, statistic, and data point for internal consistency.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-data-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-data-$(date +%s)"
 
 2. Read the report.json from the output directory.
 
@@ -161,7 +160,7 @@ Output findings as a structured list with slide IDs. End with a data integrity s
 You are a content quality auditor. Your job is to check the presentation for writing quality, completeness, and professionalism.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-content-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-content-$(date +%s)"
 
 2. Read the report.json — focus on allText, headings, bodyTexts, and takeaways for each slide.
 
@@ -213,7 +212,7 @@ Output findings as a structured list with slide IDs. End with a content quality 
 You are an audience calibration specialist. Your job is to verify that this presentation is properly tailored for its target audience.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-audience-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-audience-$(date +%s)"
 
 2. Read the report.json.
 
@@ -268,7 +267,7 @@ Output findings as a structured list. End with an audience-fit score (1-10) and 
 You are a typography and readability auditor. Your job is to ensure every slide is legible and well-typeset, especially when exported to PDF.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-typo-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-typo-$(date +%s)"
 
 2. Read the report.json — focus on typography, overflowDetected, and styles fields.
 
@@ -324,7 +323,7 @@ Output findings as a structured list with slide IDs. End with a readability scor
 You are a structural integrity auditor. Your job is to verify layout symmetry, grid alignment, and overall presentation structure.
 
 1. Run the capture script:
-   cd "<FRAMEWORK_DIR>" && npm run capture -- --project "<PROJECT_DIR>" "/tmp/deck-verify-structure-$(date +%s)"
+   cd "<PROJECT_DIR>" && node .presentation/framework-cli.mjs capture "/tmp/deck-verify-structure-$(date +%s)"
 
 2. Read the report.json — focus on grids, dimensions, innerCards, and the consistency section.
 

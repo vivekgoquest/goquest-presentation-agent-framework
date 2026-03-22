@@ -12,25 +12,34 @@ import {
   DEFAULT_VIEWPORT,
   discoverDeckSlides,
   prepareDeckPage,
+  selectDeckSlides,
 } from '../deck-runtime.js';
+import { validateRenderedCanvasContract } from '../rendered-canvas-contract.mjs';
 
 function buildReportSummary(slides, consoleErrors) {
   const slideIds = slides.map((slide) => slide.id);
   const overflowSlides = slides.filter((slide) => slide.overflowDetected).map((slide) => slide.id);
+  const canvasContract = validateRenderedCanvasContract(slides);
 
   return {
     slideIds,
     consoleErrorCount: consoleErrors.length,
     overflowSlides,
     episodeCount: slides.flatMap((slide) => slide.episodeRefs).length,
-    status: slideIds.length === 0 || consoleErrors.length > 0 || overflowSlides.length > 0
+    canvasContract,
+    status: slideIds.length === 0 || consoleErrors.length > 0 || overflowSlides.length > 0 || !canvasContract.valid
       ? 'needs-review'
       : 'pass',
   };
 }
 
 async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options = {}) {
-  const { slidesDirName = '' } = options;
+  const {
+    slidesDirName = '',
+    slideIds = [],
+    writeReport = true,
+    captureFullPage = true,
+  } = options;
   const slidesOutputDir = slidesDirName
     ? resolve(outputDir, slidesDirName)
     : outputDir;
@@ -57,10 +66,13 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
 
   await page.goto(previewUrl, { waitUntil: 'load' });
   await prepareDeckPage(page);
-  await page.screenshot({ path: resolve(outputDir, 'full-page.png'), fullPage: true });
+  if (captureFullPage) {
+    await page.screenshot({ path: resolve(outputDir, 'full-page.png'), fullPage: true });
+  }
 
-  const slideTargets = await discoverDeckSlides(page);
+  const slideTargets = selectDeckSlides(await discoverDeckSlides(page), slideIds);
   const slideIndex = new Map(slideTargets.map((slide) => [slide.id, slide]));
+  const selectedSlideIds = new Set(slideTargets.map((slide) => slide.id));
 
   const slides = await page.evaluate(() => {
     const sections = document.querySelectorAll('[data-slide]');
@@ -144,6 +156,7 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
         boxShadow: computedStyle.boxShadow,
         overflow: computedStyle.overflow,
         aspectRatio: computedStyle.aspectRatio,
+        maxWidth: computedStyle.maxWidth,
       };
 
       const beforeStyle = window.getComputedStyle(slideEl, '::before');
@@ -228,8 +241,9 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
       };
     }).filter(Boolean);
   });
+  const selectedSlides = slides.filter((slide) => selectedSlideIds.has(slide.id));
 
-  for (const slide of slides) {
+  for (const slide of selectedSlides) {
     const slideTarget = slideIndex.get(slide.id);
     const el = slideTarget ? await page.$(slideTarget.selector) : await page.$(`#${slide.id}`);
     if (el) {
@@ -243,7 +257,7 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
 
   await browser.close();
 
-  const summary = buildReportSummary(slides, consoleErrors);
+  const summary = buildReportSummary(selectedSlides, consoleErrors);
   const report = {
     workspace: getPresentationId(target),
     presentation: getPresentationId(target),
@@ -251,7 +265,7 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
     timestamp: new Date().toISOString(),
     outputDir,
     slidesDir: slidesOutputDir,
-    slideCount: slides.length,
+    slideCount: selectedSlides.length,
     slideIds: summary.slideIds,
     consoleErrors,
     consoleErrorCount: summary.consoleErrorCount,
@@ -259,20 +273,23 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
     episodeCount: summary.episodeCount,
     status: summary.status,
     issues: [],
-    slides,
+    slides: selectedSlides,
     consistency: {
-      allSlidesHaveLogos: slides.filter((slide) => !slide.isHero).every((slide) => slide.logos.right.visible && slide.logos.left.visible),
-      slidesWithoutRightLogo: slides.filter((slide) => !slide.isHero && !slide.logos.right.visible).map((slide) => slide.id),
-      slidesWithoutLeftLogo: slides.filter((slide) => !slide.isHero && !slide.logos.left.visible).map((slide) => slide.id),
-      slidesWithOverflow: slides.filter((slide) => slide.overflowDetected).map((slide) => slide.id),
-      aspectRatios: [...new Set(slides.map((slide) => slide.dimensions.aspectRatio))],
-      allEpisodeRefs: slides.flatMap((slide) => slide.episodeRefs),
-      allStats: slides.flatMap((slide) => slide.stats),
-      allBadges: slides.flatMap((slide) => slide.badges.map((badge) => badge.text)),
+      allSlidesHaveLogos: selectedSlides.filter((slide) => !slide.isHero).every((slide) => slide.logos.right.visible && slide.logos.left.visible),
+      slidesWithoutRightLogo: selectedSlides.filter((slide) => !slide.isHero && !slide.logos.right.visible).map((slide) => slide.id),
+      slidesWithoutLeftLogo: selectedSlides.filter((slide) => !slide.isHero && !slide.logos.left.visible).map((slide) => slide.id),
+      slidesWithOverflow: selectedSlides.filter((slide) => slide.overflowDetected).map((slide) => slide.id),
+      aspectRatios: [...new Set(selectedSlides.map((slide) => slide.dimensions.aspectRatio))],
+      canvasContract: summary.canvasContract,
+      allEpisodeRefs: selectedSlides.flatMap((slide) => slide.episodeRefs),
+      allStats: selectedSlides.flatMap((slide) => slide.stats),
+      allBadges: selectedSlides.flatMap((slide) => slide.badges.map((badge) => badge.text)),
     },
   };
 
-  writeFileSync(resolve(outputDir, 'report.json'), JSON.stringify(report, null, 2));
+  if (writeReport) {
+    writeFileSync(resolve(outputDir, 'report.json'), JSON.stringify(report, null, 2));
+  }
   return report;
 }
 

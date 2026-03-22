@@ -51,7 +51,7 @@ async function resolveActionAvailability(action, {
       });
     }
 
-    if (action.id === 'build_presentation' || action.id === 'export_pdf') {
+    if (action.id === 'build_presentation' || action.id === 'export_presentation') {
       const reason = resolveReadinessDisableReason(projectState);
       return cloneActionDescriptor(action, {
         enabled: !reason,
@@ -72,7 +72,7 @@ async function resolveActionAvailability(action, {
   }
 
   const availability = typeof agentAdapter?.getAvailability === 'function'
-    ? await agentAdapter.getAvailability(action.capabilityId || action.id)
+    ? await agentAdapter.getAvailability(action.id)
     : { available: true };
 
   return cloneActionDescriptor(action, {
@@ -170,7 +170,6 @@ export function createActionService(options = {}) {
         actionId,
         status: ACTION_LIFECYCLE_STATUSES.RUNNING,
         message: `${action.label} running...`,
-        terminalVisibleTrace: action.terminalVisibleTrace || '',
       });
 
       try {
@@ -185,10 +184,7 @@ export function createActionService(options = {}) {
           if (!terminalMeta?.alive || terminalMeta.mode !== 'shell') {
             terminalService?.start?.('shell');
           }
-          if (action.terminalVisibleTrace) {
-            terminalService?.writeSystemOutput?.(action.terminalVisibleTrace);
-          }
-          result = await agentAdapter.invoke(action.capabilityId || actionId, context);
+          result = await agentAdapter.invoke(actionId, context);
         }
 
         const normalized = normalizeActionResult(action, result, runId);

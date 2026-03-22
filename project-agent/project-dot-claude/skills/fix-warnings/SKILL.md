@@ -6,14 +6,14 @@ user-invocable: true
 
 Read CLAUDE.md for the edit contract.
 
-Run npm run check -- --project /abs/path-to-project
+Run node .presentation/framework-cli.mjs check
 
 Read the QUALITY WARNINGS section of the output. For each warning:
 1. Read the fix instruction carefully.
 2. Edit the affected slide.html or theme.css following the fix instruction.
 3. Stay within the deck contract: no inline styles, no !important, content < theme < canvas.
 
-After fixing all warnings, run npm run check -- --project /abs/path-to-project again.
+After fixing all warnings, run node .presentation/framework-cli.mjs check again.
 
 If new warnings appear, fix those too. Repeat until the check reports 0 quality warnings.
 

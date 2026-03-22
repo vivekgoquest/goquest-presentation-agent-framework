@@ -7,6 +7,7 @@ export const AGENT_CAPABILITIES = Object.freeze([
     supportedVendors: ['claude'],
     dependencyRequirements: ['claude-cli'],
     launcherStrategy: 'claude_print',
+    visibleTrace: 'Starting a new presentation...\r\n',
   },
   {
     id: 'review_presentation',
@@ -16,6 +17,7 @@ export const AGENT_CAPABILITIES = Object.freeze([
     supportedVendors: ['claude'],
     dependencyRequirements: ['claude-cli'],
     launcherStrategy: 'claude_print',
+    visibleTrace: 'Running review for this presentation...\r\n',
   },
   {
     id: 'revise_presentation',
@@ -25,6 +27,7 @@ export const AGENT_CAPABILITIES = Object.freeze([
     supportedVendors: ['claude'],
     dependencyRequirements: ['claude-cli'],
     launcherStrategy: 'claude_print',
+    visibleTrace: 'Running revisions for this presentation...\r\n',
   },
   {
     id: 'fix_warnings',
@@ -34,6 +37,7 @@ export const AGENT_CAPABILITIES = Object.freeze([
     supportedVendors: ['claude'],
     dependencyRequirements: ['claude-cli'],
     launcherStrategy: 'claude_print',
+    visibleTrace: 'Fixing presentation warnings...\r\n',
   },
 ]);
 

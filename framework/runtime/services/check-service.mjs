@@ -15,6 +15,9 @@ function buildFailures(report) {
   if (report.consistency.slidesWithOverflow.length > 0) {
     failures.push(`Overflow detected on slides: ${report.consistency.slidesWithOverflow.join(', ')}`);
   }
+  if (report.consistency.canvasContract?.violations?.length > 0) {
+    failures.push(...report.consistency.canvasContract.violations);
+  }
 
   return failures;
 }

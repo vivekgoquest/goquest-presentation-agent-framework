@@ -17,8 +17,8 @@ const ACTION_CATALOG = Object.freeze([
     kind: ACTION_KINDS.PRESENTATION,
   },
   {
-    id: 'export_pdf',
-    label: 'Export PDF',
+    id: 'export_presentation',
+    label: 'Export',
     surface: ACTION_SURFACES.SECONDARY,
     kind: ACTION_KINDS.PRESENTATION,
   },
@@ -39,24 +39,18 @@ const ACTION_CATALOG = Object.freeze([
     label: 'Review presentation',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
-    capabilityId: 'review_presentation',
-    terminalVisibleTrace: 'Running review for this presentation...\r\n',
   },
   {
     id: 'revise_presentation',
     label: 'Revise presentation',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
-    capabilityId: 'revise_presentation',
-    terminalVisibleTrace: 'Running revisions for this presentation...\r\n',
   },
   {
     id: 'fix_warnings',
     label: 'Fix warnings',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
-    capabilityId: 'fix_warnings',
-    terminalVisibleTrace: 'Fixing presentation warnings...\r\n',
   },
 ]);
 

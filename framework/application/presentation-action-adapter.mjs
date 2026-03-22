@@ -1,6 +1,6 @@
 import { capturePresentation } from '../runtime/services/capture-service.mjs';
 import { runDeckCheck } from '../runtime/services/check-service.mjs';
-import { exportDeckPdf } from '../runtime/services/export-service.mjs';
+import { exportPresentation } from '../runtime/services/export-service.mjs';
 import { finalizePresentation } from '../runtime/services/finalize-service.mjs';
 
 function toActionMessage(actionId, result = {}) {
@@ -9,8 +9,10 @@ function toActionMessage(actionId, result = {}) {
       return result.status === 'needs-review'
         ? 'Build finished, but the outputs need review.'
         : 'Presentation build completed.';
-    case 'export_pdf':
-      return 'PDF export completed.';
+    case 'export_presentation':
+      return result.format === 'png'
+        ? 'PNG export completed.'
+        : 'PDF export completed.';
     case 'check_presentation':
       return result.status === 'fail'
         ? 'Presentation check found issues.'
@@ -40,14 +42,22 @@ export function createPresentationActionAdapter() {
             message: toActionMessage(actionId, result),
           };
         }
-        case 'export_pdf': {
-          const outputFile = args.outputFile || outputPaths.pdfAbs || null;
-          const result = await exportDeckPdf(target, outputFile, args.options || {});
+        case 'export_presentation': {
+          const result = await exportPresentation(target, {
+            format: args.format,
+            slideIds: args.slideIds,
+            outputDir: args.outputDir,
+            outputFile: args.outputFile,
+            pdfOptions: args.options?.pdfOptions || {},
+            captureOptions: args.options?.captureOptions || {},
+          }, args.options || {});
           return {
             ...result,
             status: 'pass',
             message: toActionMessage(actionId, result),
-            detail: result.outputPath || '',
+            detail: result.format === 'png'
+              ? `Saved ${result.outputPaths.length} PNG file${result.outputPaths.length === 1 ? '' : 's'} to ${result.outputDir}`
+              : (result.outputPath || ''),
           };
         }
         case 'check_presentation': {

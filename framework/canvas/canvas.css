@@ -26,13 +26,6 @@
     --canvas-hero-text: #ffffff;
     --canvas-hero-muted: rgba(255, 255, 255, 0.74);
     --canvas-hero-eyebrow: #f48b6a;
-    --canvas-export-bar-bg: rgba(24, 25, 31, 0.94);
-    --canvas-export-button-bg: #b71c1c;
-    --canvas-export-button-text: #ffffff;
-    --canvas-export-status-color: rgba(255, 255, 255, 0.72);
-    --canvas-dot-color: rgba(18, 20, 28, 0.18);
-    --canvas-dot-active: #b71c1c;
-    --canvas-dot-ring: rgba(183, 28, 28, 0.18);
   }
 
   *, *::before, *::after {
@@ -208,78 +201,6 @@
       transform 0.6s ease;
   }
 
-  .dot-nav {
-    position: fixed;
-    right: 1.2rem;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 1000;
-  }
-
-  .dot-nav button {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    background: var(--canvas-dot-color);
-    transition:
-      transform 0.25s,
-      opacity 0.25s,
-      box-shadow 0.25s,
-      background 0.25s;
-  }
-
-  .dot-nav button.active {
-    background: var(--canvas-dot-active);
-    transform: scale(1.45);
-    box-shadow: 0 0 0 3px var(--canvas-dot-ring);
-  }
-
-  .export-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 0.7rem 1.5rem;
-    gap: 1rem;
-    background: var(--canvas-export-bar-bg);
-  }
-
-  .export-bar button {
-    cursor: pointer;
-    border: none;
-    padding: 0.55rem 1.2rem;
-    border-radius: 999px;
-    font: inherit;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--canvas-export-button-text);
-    background: var(--canvas-export-button-bg);
-    transition:
-      opacity 0.2s,
-      transform 0.2s;
-  }
-
-  .export-bar button:hover {
-    opacity: 0.92;
-    transform: translateY(-1px);
-  }
-
-  .export-bar .status {
-    font-size: 0.8rem;
-    color: var(--canvas-export-status-color);
-  }
-
   @media (max-width: 900px) {
     body {
       padding-inline: 1rem;
@@ -295,14 +216,6 @@
     .g3,
     .g4 {
       grid-template-columns: 1fr;
-    }
-
-    .dot-nav {
-      display: none;
-    }
-
-    .export-bar {
-      position: sticky;
     }
   }
 }

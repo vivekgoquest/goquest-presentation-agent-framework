@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'fs';
 import {
   createPresentationTarget,
   getPresentationId,
-  getPresentationOutputPaths,
   getPresentationPaths,
   getPresentationPreviewPath,
 } from './deck-paths.js';
@@ -12,6 +11,9 @@ import {
   listSlideSourceEntries,
   resolveAuthoredAssetReference,
 } from './deck-source.js';
+import {
+  CANVAS_LAYER_ORDER,
+} from '../canvas/canvas-contract.mjs';
 import {
   validateDeckSource,
   validateSlideDeckWorkspace,
@@ -50,20 +52,10 @@ function rewriteHtmlAssetReferences(fragment, paths, slideEntry) {
   );
 }
 
-function getExportBar(target) {
-  void target;
-  return `
-  <div class="export-bar">
-    <span class="status" id="export-status"></span>
-    <button type="button" data-export-pdf>Export to PDF</button>
-  </div>`;
-}
-
-function buildHtmlDataAttributes(target, savePath, previewPath) {
+function buildHtmlDataAttributes(target, previewPath) {
   const attrs = [
     ['data-deck-source', 'slides'],
     ['data-target-kind', 'project'],
-    ['data-export-save-path', savePath],
     ['data-preview-path', previewPath],
     ['data-project-root', target.projectRootAbs],
   ];
@@ -76,12 +68,6 @@ function buildHtmlDataAttributes(target, savePath, previewPath) {
 
 function buildVirtualDeckHtml(target, paths, slideEntries) {
   const title = getPresentationTitle(paths);
-  let savePath = '';
-  try {
-    savePath = getPresentationOutputPaths(target).pdfRel;
-  } catch {
-    savePath = '';
-  }
   const previewPath = getPresentationPreviewPath(target);
 
   const slideStyleLinks = slideEntries
@@ -105,7 +91,7 @@ function buildVirtualDeckHtml(target, paths, slideEntries) {
   }).join('\n\n');
 
   const slideStylesBlock = slideStyleLinks ? `${slideStyleLinks}\n` : '';
-  const htmlDataAttrs = buildHtmlDataAttributes(target, savePath, previewPath);
+  const htmlDataAttrs = buildHtmlDataAttributes(target, previewPath);
 
   return `<!DOCTYPE html>
 <!-- VIRTUAL RUNTIME OUTPUT. Edit ${paths.themeCssRel} and ${paths.slidesDirRel}/* instead. -->
@@ -115,18 +101,16 @@ function buildVirtualDeckHtml(target, paths, slideEntries) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
 
-  <style>@layer content, theme, canvas;</style>
+  <style>${CANVAS_LAYER_ORDER}</style>
 
   <link rel="stylesheet" href="${escapeHtml(paths.buildFrameworkPreviewPath('canvas/canvas.css'))}">
+  <link rel="stylesheet" href="${escapeHtml(paths.buildFrameworkPreviewPath('runtime/runtime-chrome.css'))}">
   <link rel="stylesheet" href="${escapeHtml(paths.buildProjectFilePreviewPath(paths.themeCssAbs))}">
 ${slideStylesBlock}  <script defer src="${escapeHtml(paths.buildFrameworkPreviewPath('client/animations.js'))}"></script>
   <script defer src="${escapeHtml(paths.buildFrameworkPreviewPath('client/nav.js'))}"></script>
   <script defer src="${escapeHtml(paths.buildFrameworkPreviewPath('client/counter.js'))}"></script>
-  <script defer src="${escapeHtml(paths.buildFrameworkPreviewPath('client/export.js'))}"></script>
 </head>
 <body>
-${getExportBar(target)}
-
 ${sections}
 </body>
 </html>

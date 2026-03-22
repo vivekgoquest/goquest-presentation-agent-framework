@@ -37,25 +37,18 @@ try {
   frameworkRoot = metadata.frameworkSource || '';
 } catch { process.exit(0); }
 
-const qualityPath = resolve(frameworkRoot, 'framework', 'runtime', 'deck-quality.js');
-if (!frameworkRoot || !existsSync(qualityPath)) {
+const qualityCheckPath = resolve(frameworkRoot, 'framework', 'runtime', 'project-quality-check.mjs');
+if (!frameworkRoot || !existsSync(qualityCheckPath)) {
   process.exit(0);
 }
 
-// Import quality checker from the framework
-const qualityMod = await import(qualityPath);
-const sourceMod = await import(resolve(frameworkRoot, 'framework', 'runtime', 'deck-source.js'));
-const pathsMod = await import(resolve(frameworkRoot, 'framework', 'runtime', 'deck-paths.js'));
+// Import the supported quality-check entrypoint from the framework
+const qualityMod = await import(qualityCheckPath);
+const result = qualityMod.runProjectQualityCheck(projectRoot);
 
-const paths = pathsMod.getProjectPaths(projectRoot);
-const entries = sourceMod.listSlideSourceEntries(paths).filter((e) => e.isValidName);
-
-// Skip if no valid slides yet (still scaffolding)
-if (entries.length === 0) {
+if (result.skipped) {
   process.exit(0);
 }
-
-const result = qualityMod.checkDeckQuality(entries);
 
 if (result.warnings.length === 0) {
   // Clean pass — auto-commit for edit history

@@ -35,6 +35,18 @@ const el = {
   terminalContainer: $('terminal-container'),
   previewPane: $('preview-pane'),
   previewFrame: $('preview-frame'),
+  exportModal: $('export-modal'),
+  exportClose: $('export-close'),
+  exportFormatPdf: $('export-format-pdf'),
+  exportFormatPng: $('export-format-png'),
+  exportSlideSummary: $('export-slide-summary'),
+  exportSlideList: $('export-slide-list'),
+  exportSelectAll: $('export-select-all'),
+  exportClear: $('export-clear'),
+  exportChooseFolder: $('export-choose-folder'),
+  exportFolderPath: $('export-folder-path'),
+  exportCancel: $('export-cancel'),
+  exportConfirm: $('export-confirm'),
   toastContainer: $('toast-container'),
   diagnosticsDrawer: $('diagnostics-drawer'),
   closeDiagnostics: $('close-diagnostics'),
@@ -55,13 +67,30 @@ const state = {
   meta: null,
   projectState: null,
   files: null,
+  slides: [],
   terminalMeta: null,
   hasProject: false,
-  actions: [],
+  reviewAvailability: {
+    run: false,
+    revise: false,
+    fixWarnings: false,
+    reasonUnavailable: '',
+  },
+  actionModel: {
+    primary: null,
+    secondary: null,
+    menu: [],
+  },
   diagnosticsOpen: false,
   terminalAutoFollow: true,
   terminalStartError: '',
   actionStatusTimer: null,
+  exportDraft: {
+    open: false,
+    format: 'pdf',
+    slideIds: [],
+    outputDir: '',
+  },
 };
 
 // ── xterm ──
@@ -194,6 +223,89 @@ function bindToolbarAction(button, action) {
   button.title = action?.enabled ? '' : (action?.reasonDisabled || '');
 }
 
+function isExportAction(actionId) {
+  return actionId === 'export.start';
+}
+
+function humanizeSlideId(slideId = '') {
+  return String(slideId || '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getExportPrimaryLabel(format = 'pdf') {
+  return format === 'png' ? 'Export PNGs' : 'Export PDF';
+}
+
+function getExportSlideEntries() {
+  return Array.isArray(state.slides) ? state.slides : [];
+}
+
+function createDefaultExportDraft() {
+  return {
+    open: true,
+    format: 'pdf',
+    outputDir: '',
+    slideIds: getExportSlideEntries().map((slide) => slide.id),
+  };
+}
+
+function closeExportModal() {
+  state.exportDraft = {
+    open: false,
+    format: 'pdf',
+    outputDir: '',
+    slideIds: [],
+  };
+  renderExportModal();
+}
+
+function renderExportModal() {
+  const open = Boolean(state.exportDraft.open);
+  el.exportModal.dataset.open = open ? 'true' : 'false';
+  el.exportModal.style.display = open ? '' : 'none';
+  if (!open) {
+    return;
+  }
+
+  const slides = getExportSlideEntries();
+  const selected = new Set(state.exportDraft.slideIds);
+  el.exportFormatPdf.checked = state.exportDraft.format === 'pdf';
+  el.exportFormatPng.checked = state.exportDraft.format === 'png';
+  el.exportSlideSummary.textContent = `${selected.size} of ${slides.length} slide${slides.length === 1 ? '' : 's'} selected`;
+  el.exportFolderPath.textContent = state.exportDraft.outputDir || 'No folder selected';
+  el.exportConfirm.textContent = getExportPrimaryLabel(state.exportDraft.format);
+  el.exportConfirm.disabled = selected.size === 0 || !state.exportDraft.outputDir;
+
+  el.exportSlideList.innerHTML = '';
+  for (const slide of slides) {
+    const label = document.createElement('label');
+    label.className = 'export-slide-option';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = slide.id;
+    input.checked = selected.has(slide.id);
+
+    const textWrap = document.createElement('span');
+    textWrap.className = 'export-slide-text';
+
+    const order = document.createElement('span');
+    order.className = 'export-slide-order';
+    order.textContent = slide.orderLabel || slide.dirName || slide.id;
+
+    const name = document.createElement('span');
+    name.className = 'export-slide-name';
+    name.textContent = humanizeSlideId(slide.id);
+
+    textWrap.append(order, name);
+    label.append(input, textWrap);
+    el.exportSlideList.appendChild(label);
+  }
+}
+
 function renderMenuActions(menuActions = []) {
   el.moreMenuItems.innerHTML = '';
 
@@ -218,7 +330,12 @@ function renderMenuActions(menuActions = []) {
 }
 
 function renderActionControls() {
-  const model = deriveActionUiModel(state.actions);
+  const model = deriveActionUiModel({
+    meta: state.meta,
+    projectState: state.projectState,
+    reviewAvailability: state.reviewAvailability,
+  });
+  state.actionModel = model;
   bindToolbarAction(el.primaryAction, model.primary);
   bindToolbarAction(el.secondaryAction, model.secondary);
   renderMenuActions(model.menu);
@@ -251,6 +368,7 @@ function updateAppState() {
   el.appShell.dataset.state = has ? 'project-active' : 'no-project';
   if (!has) {
     setActionStatus('');
+    closeExportModal();
   }
   has ? showProjectLayout() : showWelcomeLayout();
   const model = deriveProjectUiModel({
@@ -314,16 +432,27 @@ function updateTerminalState(meta) {
 }
 
 async function refreshProjectPanels() {
-  const [meta, ps, files, tm, actionsResponse] = await Promise.all([
+  const [meta, ps, files, slidesResponse, tm, reviewAvailability] = await Promise.all([
     window.electron.project.getMeta(),
     window.electron.project.getState(),
     window.electron.project.getFiles().catch(() => ({ root: '', tree: {} })),
+    window.electron.project.getSlides().catch(() => ({ slides: [] })),
     window.electron.terminal.getMeta(),
-    window.electron.actions.list().catch(() => ({ actions: [] })),
+    window.electron.review.getAvailability().catch(() => ({
+      run: false,
+      revise: false,
+      fixWarnings: false,
+      reasonUnavailable: 'Review actions are unavailable right now.',
+    })),
   ]);
-  state.meta = meta; state.projectState = ps; state.files = files; state.actions = actionsResponse.actions || [];
+  state.meta = meta;
+  state.projectState = ps;
+  state.files = files;
+  state.slides = slidesResponse.slides || [];
+  state.reviewAvailability = reviewAvailability || state.reviewAvailability;
   updateAppState(); updateTerminalState(tm);
-  setJson(el.actionJson, actionsResponse || {});
+  setJson(el.actionJson, state.actionModel || {});
+  renderExportModal();
 }
 
 async function runAction(fn, btn = null) {
@@ -343,10 +472,36 @@ async function runAction(fn, btn = null) {
 }
 
 function getActionDescriptor(actionId) {
-  return state.actions.find((action) => action.id === actionId) || null;
+  const descriptors = [
+    state.actionModel.primary,
+    state.actionModel.secondary,
+    ...state.actionModel.menu,
+  ].filter(Boolean);
+  return descriptors.find((action) => action.id === actionId) || null;
 }
 
-async function runProductAction(actionId, btn = null) {
+function invokeProductAction(actionId, args = {}) {
+  switch (actionId) {
+    case 'build.finalize':
+      return window.electron.build.finalize(args);
+    case 'build.check':
+      return window.electron.build.check(args);
+    case 'build.captureScreenshots':
+      return window.electron.build.captureScreenshots(args);
+    case 'export.start':
+      return window.electron.export.start(args);
+    case 'review.run':
+      return window.electron.review.run();
+    case 'review.revise':
+      return window.electron.review.revise();
+    case 'review.fixWarnings':
+      return window.electron.review.fixWarnings();
+    default:
+      throw new Error(`Unknown action "${actionId}".`);
+  }
+}
+
+async function runProductAction(actionId, btn = null, args = {}) {
   const action = getActionDescriptor(actionId);
   if (!action) {
     throw new Error(`Unknown action "${actionId}".`);
@@ -354,7 +509,7 @@ async function runProductAction(actionId, btn = null) {
 
   el.moreMenu.style.display = 'none';
   setActionStatus(`${action.label} running...`, 'neutral');
-  const result = await runAction(() => window.electron.actions.invoke(actionId), btn);
+  const result = await runAction(() => invokeProductAction(actionId, args), btn);
   const feedback = normalizeRuntimeActionResult(action.label, result);
   setActionStatus(feedback.message, feedback.tone, 3600);
   showToast(
@@ -363,6 +518,36 @@ async function runProductAction(actionId, btn = null) {
     feedback.tone === 'error' ? 5000 : 3200
   );
   return result;
+}
+
+function openExportModal() {
+  if (!state.hasProject) {
+    return;
+  }
+  if (getExportSlideEntries().length === 0) {
+    showToast('No slides are available to export yet.', 'warning');
+    return;
+  }
+  state.exportDraft = createDefaultExportDraft();
+  renderExportModal();
+}
+
+async function chooseExportFolder() {
+  const result = await window.electron.system.chooseDirectory();
+  if (!result?.canceled && result?.path) {
+    state.exportDraft.outputDir = result.path;
+    renderExportModal();
+  }
+}
+
+async function submitExport() {
+  const args = {
+    format: state.exportDraft.format,
+    slideIds: [...state.exportDraft.slideIds],
+    outputDir: state.exportDraft.outputDir,
+  };
+  await runProductAction('export.start', el.exportConfirm, args);
+  closeExportModal();
 }
 
 async function startShellSession() {
@@ -375,7 +560,7 @@ async function startShellSession() {
   });
 
   try {
-    const meta = await window.electron.terminal.start('shell');
+    const meta = await window.electron.terminal.start();
     updateTerminalState(meta);
     return meta;
   } catch (e) {
@@ -416,7 +601,7 @@ async function createProject() {
   const chosen = await choosePath();
   if (!chosen) return;
   const n = parseInt(el.projectSlides.value || '3', 10);
-  await runAction(async () => window.electron.project.create({ projectRoot: chosen, slides: n }), el.createProject);
+  await runAction(async () => window.electron.project.create({ projectRoot: chosen, slideCount: n }), el.createProject);
   await startShellSession();
 }
 
@@ -461,18 +646,31 @@ el.moreActions.addEventListener('click', toggleMoreMenu);
 el.primaryAction.addEventListener('click', () => {
   const actionId = el.primaryAction.dataset.actionId;
   if (actionId) {
+    if (isExportAction(actionId)) {
+      openExportModal();
+      return;
+    }
     runProductAction(actionId, el.primaryAction).catch(() => {});
   }
 });
 el.secondaryAction.addEventListener('click', () => {
   const actionId = el.secondaryAction.dataset.actionId;
   if (actionId) {
+    if (isExportAction(actionId)) {
+      openExportModal();
+      return;
+    }
     runProductAction(actionId, el.secondaryAction).catch(() => {});
   }
 });
 el.moreMenuItems.addEventListener('click', (event) => {
   const button = event.target.closest('button[data-action-id]');
   if (!button || button.disabled) {
+    return;
+  }
+
+  if (isExportAction(button.dataset.actionId)) {
+    openExportModal();
     return;
   }
 
@@ -483,35 +681,96 @@ el.stopTerminal.addEventListener('click', () => runAction(() => window.electron.
 el.clearTerminal.addEventListener('click', () => runAction(async () => { term.clear(); return window.electron.terminal.clear(); }, el.clearTerminal));
 el.terminalRetry.addEventListener('click', () => startShellSession());
 
+el.exportModal.addEventListener('click', (event) => {
+  if (event.target === el.exportModal || event.target.classList.contains('shell-modal-backdrop')) {
+    closeExportModal();
+  }
+});
+el.exportClose.addEventListener('click', closeExportModal);
+el.exportCancel.addEventListener('click', closeExportModal);
+el.exportFormatPdf.addEventListener('change', () => {
+  state.exportDraft.format = 'pdf';
+  renderExportModal();
+});
+el.exportFormatPng.addEventListener('change', () => {
+  state.exportDraft.format = 'png';
+  renderExportModal();
+});
+el.exportSelectAll.addEventListener('click', () => {
+  state.exportDraft.slideIds = getExportSlideEntries().map((slide) => slide.id);
+  renderExportModal();
+});
+el.exportClear.addEventListener('click', () => {
+  state.exportDraft.slideIds = [];
+  renderExportModal();
+});
+el.exportSlideList.addEventListener('change', (event) => {
+  const input = event.target.closest('input[type="checkbox"]');
+  if (!input) {
+    return;
+  }
+
+  const selected = new Set(state.exportDraft.slideIds);
+  if (input.checked) {
+    selected.add(input.value);
+  } else {
+    selected.delete(input.value);
+  }
+  state.exportDraft.slideIds = getExportSlideEntries()
+    .map((slide) => slide.id)
+    .filter((slideId) => selected.has(slideId));
+  renderExportModal();
+});
+el.exportChooseFolder.addEventListener('click', () => {
+  chooseExportFolder().catch((error) => showToast(error.message, 'error'));
+});
+el.exportConfirm.addEventListener('click', () => {
+  submitExport().catch((error) => showToast(error.message, 'error'));
+});
+
 el.closeDiagnostics.addEventListener('click', toggleDiag);
 
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && state.exportDraft.open) {
+    event.preventDefault();
+    closeExportModal();
+    return;
+  }
   if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'd') {
     event.preventDefault();
     toggleDiag();
   }
 });
 
-window.electron.events.onEvent(async (event) => {
-  switch (event.channel) {
-    case 'action/queued':
-    case 'action/running':
+function handleActionEvent(event) {
+  switch (event.status) {
+    case 'queued':
+    case 'running':
       setActionStatus(event.message || 'Working...', 'neutral');
-      setJson(el.actionJson, event || {});
       break;
-    case 'action/needs_input':
+    case 'needs_input':
       setActionStatus(event.message || 'Action needs review.', 'warning', 5000);
-      setJson(el.actionJson, event || {});
       break;
-    case 'action/succeeded':
+    case 'succeeded':
       setActionStatus(event.message || 'Action completed.', 'success', 3600);
-      setJson(el.actionJson, event || {});
       break;
-    case 'action/failed':
+    case 'failed':
       setActionStatus(event.message || 'Action failed.', 'error', 5000);
-      setJson(el.actionJson, event || {});
       break;
-    case 'terminal/output': writeTerminalOutput(event.data || ''); break;
+    default:
+      break;
+  }
+  setJson(el.actionJson, event || {});
+}
+
+window.electron.build.onEvent(handleActionEvent);
+window.electron.export.onEvent(handleActionEvent);
+window.electron.review.onEvent(handleActionEvent);
+window.electron.terminal.onOutput((event) => {
+  writeTerminalOutput(event.data || '');
+});
+window.electron.terminal.onEvent(async (event) => {
+  switch (event.channel) {
     case 'terminal/clear':
       state.terminalAutoFollow = true;
       term.clear();
@@ -526,13 +785,18 @@ window.electron.events.onEvent(async (event) => {
       updateTerminalState(await window.electron.terminal.getMeta().catch(() => state.terminalMeta));
       showToast(state.terminalStartError, 'error');
       break;
-    case 'watch/change':
-      if (state.hasProject && event.file) {
-        refreshPreview().catch((error) => showToast(error.message, 'error'));
-      }
+    default:
       break;
-    case 'project/changed': await refreshProjectPanels(); break;
   }
+});
+window.electron.project.onChanged(() => {
+  refreshProjectPanels().catch((error) => showToast(error.message, 'error'));
+});
+window.electron.preview.onChanged(() => {
+  if (!state.hasProject) {
+    return;
+  }
+  refreshPreview().catch((error) => showToast(error.message, 'error'));
 });
 
 refreshProjectPanels().catch(e => showToast(e.message));

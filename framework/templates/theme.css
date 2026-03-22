@@ -33,13 +33,9 @@
     --canvas-hero-text: #ffffff;
     --canvas-hero-muted: rgba(255, 255, 255, 0.78);
     --canvas-hero-eyebrow: var(--color-accent-light);
-    --canvas-export-bar-bg: rgba(19, 20, 26, 0.94);
-    --canvas-export-button-bg: var(--color-accent);
-    --canvas-export-button-text: #ffffff;
-    --canvas-export-status-color: rgba(255, 255, 255, 0.78);
-    --canvas-dot-color: rgba(19, 20, 26, 0.18);
-    --canvas-dot-active: var(--color-accent);
-    --canvas-dot-ring: rgba(165, 32, 32, 0.18);
+    --runtime-dot-color: rgba(19, 20, 26, 0.18);
+    --runtime-dot-active: var(--color-accent);
+    --runtime-dot-ring: rgba(165, 32, 32, 0.18);
     --canvas-logo-right: none;
     --canvas-logo-left: none;
   }

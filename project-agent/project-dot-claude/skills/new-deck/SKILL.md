@@ -22,12 +22,12 @@ Then:
 - design each slide: for every slide in the outline, decide how it will look — which primitives, how it differs from neighbors, whether it needs images; record design notes in the outline
 - do not start building slide HTML until the theme is finalized and every slide in the outline has a design decision
 - build the source slides in /abs/path-to-project/slides/<NNN-id>/slide.html following the per-slide design decisions
-- for decks with more than 10 slides, build in batches of 5 and run npm run check -- --project /abs/path-to-project after each batch
+- for decks with more than 10 slides, build in batches of 5 and run node .presentation/framework-cli.mjs check after each batch
 - use optional /abs/path-to-project/slides/<NNN-id>/slide.css only when a slide needs local CSS
 - keep assets either deck-shared in /abs/path-to-project/assets/ or slide-local in each slide folder
 - keep framework changes out of scope unless truly necessary
 - inspect the preview, screenshots, and downloaded PDF yourself; if it does not read like a presentation yet, revise theme.css or slide-local slide.css before finalizing
-- run npm run finalize -- --project /abs/path-to-project
+- run node .presentation/framework-cli.mjs finalize
 
 At the end, tell me:
 1. the project folder path

@@ -1,7 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, utilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell, utilityProcess } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { resolveProjectFrameworkAssetForElectron } from './project-framework-resolver.mjs';
+import { resolveProjectFrameworkAsset } from '../framework/application/project-framework-resolver.mjs';
 import { renderElectronPreviewHtml } from './preview-document-shell.mjs';
 
 const ELECTRON_ROOT = dirname(fileURLToPath(import.meta.url));
@@ -138,6 +138,16 @@ ipcMain.handle('presentation:choose-directory', async () => {
   };
 });
 
+ipcMain.handle('presentation:reveal-in-finder', async (_event, targetPath) => {
+  const normalizedPath = String(targetPath || '').trim();
+  if (!normalizedPath) {
+    throw new Error('Provide a file or folder path to reveal.');
+  }
+
+  shell.showItemInFolder(normalizedPath);
+  return { ok: true };
+});
+
 // Register custom protocol before app is ready
 protocol.registerSchemesAsPrivileged([{
   scheme: 'presentation',
@@ -152,13 +162,16 @@ app.whenReady().then(async () => {
     // presentation://preview/current — assembled deck HTML
     if (url.host === 'preview' && url.pathname === '/current') {
       try {
-        const response = await invokeWorker('project:getPreviewHtml');
+        const response = await invokeWorker('preview:getDocument');
         if (!response?.ok || !response.data?.html) {
           return new Response('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#999">No preview available</body></html>', {
             headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
           });
         }
-        return new Response(renderElectronPreviewHtml(response.data.html, response.data.kind), {
+        return new Response(renderElectronPreviewHtml(response.data.html, {
+          kind: response.data.kind,
+          viewport: response.data.viewport,
+        }), {
           headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
         });
       } catch {
@@ -187,7 +200,7 @@ app.whenReady().then(async () => {
         const projectRoot = metaResponse?.data?.projectRoot;
         if (!projectRoot) return new Response('No project', { status: 404 });
         const relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '');
-        const filePath = resolveProjectFrameworkAssetForElectron(projectRoot, relativePath);
+        const filePath = resolveProjectFrameworkAsset(projectRoot, relativePath);
         return net.fetch(`file://${filePath}`);
       } catch {
         return new Response('Not found', { status: 404 });

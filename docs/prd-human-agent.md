@@ -29,7 +29,7 @@ The human is not expected to understand the framework internals. They work exclu
 - **Create professional presentation decks** from scratch or from a plain-English brief
 - **Preview slides live** during authoring -- every file save triggers an immediate preview refresh
 - **Validate deck quality** before delivery using automated policy checks and multi-agent review swarms
-- **Export to PDF** and screenshot artifacts suitable for distribution, printing, or embedding
+- **Export selected slides** as one combined PDF or individual PNGs, plus screenshot artifacts suitable for distribution, printing, or embedding
 - **Collaborate with an AI agent** to accelerate deck creation -- from zero to finalized deck in minutes
 - **Maintain creative control** while delegating execution -- the human can intervene at any point in the process
 

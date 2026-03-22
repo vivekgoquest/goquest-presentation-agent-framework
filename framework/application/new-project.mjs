@@ -1,4 +1,4 @@
-import { createProjectScaffold, parseNewDeckCliArgs } from '../application/project-scaffold-service.mjs';
+import { createProjectScaffold, parseNewDeckCliArgs } from './project-scaffold-service.mjs';
 
 let parsed;
 try {

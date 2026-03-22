@@ -47,13 +47,73 @@ function buildProjectMetrics(projectState = {}) {
   ].filter(Boolean);
 }
 
-export function deriveActionUiModel(actions = []) {
-  const descriptors = Array.isArray(actions) ? actions : [];
+export function deriveActionUiModel({
+  meta = null,
+  projectState = null,
+  reviewAvailability = null,
+} = {}) {
+  const hasProject = Boolean(meta?.active);
+  const status = projectState?.status || '';
+  const isReady = READY_STATUSES.has(status);
+  const reviewReason = reviewAvailability?.reasonUnavailable || 'This action is unavailable right now.';
+
+  if (!hasProject) {
+    return {
+      primary: null,
+      secondary: null,
+      menu: [],
+    };
+  }
 
   return {
-    primary: descriptors.find((action) => action.surface === 'primary') || null,
-    secondary: descriptors.find((action) => action.surface === 'secondary') || null,
-    menu: descriptors.filter((action) => action.surface === 'menu'),
+    primary: {
+      id: 'build.finalize',
+      label: 'Build presentation',
+      enabled: isReady,
+      reasonDisabled: isReady
+        ? ''
+        : 'Presentation is still in progress. Complete the brief, slides, and policy fixes before building.',
+    },
+    secondary: {
+      id: 'export.start',
+      label: 'Export',
+      enabled: isReady,
+      reasonDisabled: isReady
+        ? ''
+        : 'Presentation is still in progress. Complete the brief, slides, and policy fixes before exporting.',
+    },
+    menu: [
+      {
+        id: 'build.check',
+        label: 'Check presentation',
+        enabled: true,
+        reasonDisabled: '',
+      },
+      {
+        id: 'build.captureScreenshots',
+        label: 'Capture screenshots',
+        enabled: true,
+        reasonDisabled: '',
+      },
+      {
+        id: 'review.run',
+        label: 'Review presentation',
+        enabled: Boolean(reviewAvailability?.run),
+        reasonDisabled: reviewAvailability?.run ? '' : reviewReason,
+      },
+      {
+        id: 'review.revise',
+        label: 'Revise presentation',
+        enabled: Boolean(reviewAvailability?.revise),
+        reasonDisabled: reviewAvailability?.revise ? '' : reviewReason,
+      },
+      {
+        id: 'review.fixWarnings',
+        label: 'Fix warnings',
+        enabled: Boolean(reviewAvailability?.fixWarnings),
+        reasonDisabled: reviewAvailability?.fixWarnings ? '' : reviewReason,
+      },
+    ],
   };
 }
 
@@ -178,7 +238,7 @@ export function normalizeRuntimeActionResult(actionLabel, result = {}) {
     return {
       tone: 'success',
       message: `${label} completed.`,
-      detail: issues[0] || warnings[0] || '',
+      detail: result.detail || issues[0] || warnings[0] || '',
     };
   }
 
@@ -186,7 +246,7 @@ export function normalizeRuntimeActionResult(actionLabel, result = {}) {
     return {
       tone: 'warning',
       message: `${label} completed but needs review.`,
-      detail: issues[0] || warnings[0] || 'Review the generated outputs before treating them as final.',
+      detail: result.detail || issues[0] || warnings[0] || 'Review the generated outputs before treating them as final.',
     };
   }
 
@@ -194,7 +254,7 @@ export function normalizeRuntimeActionResult(actionLabel, result = {}) {
     return {
       tone: 'error',
       message: `${label} failed.`,
-      detail: issues[0] || 'Review diagnostics for details.',
+      detail: result.detail || issues[0] || 'Review diagnostics for details.',
     };
   }
 
