@@ -64,3 +64,23 @@ test('scaffold writes initial intent and generated package files', async (t) => 
   assert.equal(intent.schemaVersion, 1);
   assert.equal(manifest.schemaVersion, 1);
 });
+
+test('renderPresentationHtml regenerates missing package files for legacy projects', async (t) => {
+  const [{ createProjectScaffold }, { renderPresentationHtml }] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../deck-assemble.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  writeFileSync(resolve(projectRoot, 'brief.md'), '# Brief\n\nFilled in');
+  rmSync(resolve(projectRoot, '.presentation', 'intent.json'), { force: true });
+  rmSync(resolve(projectRoot, '.presentation', 'package.generated.json'), { force: true });
+
+  const preview = renderPresentationHtml({ projectRoot });
+  assert.equal(preview.slideIds.length, 2);
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'intent.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'package.generated.json')));
+});

@@ -9,6 +9,7 @@ import {
   getPresentationOutputPaths,
   getProjectPaths,
 } from '../runtime/deck-paths.js';
+import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { buildProjectTreeNode } from '../runtime/project-tree.js';
 import { getProjectState } from '../runtime/project-state.js';
 import { listSlideSourceEntries } from '../runtime/deck-source.js';
@@ -97,6 +98,8 @@ export function createProjectQueryService(options = {}) {
       frameworkVersion: activeProjectPaths.metadata.frameworkVersion,
       frameworkCopiedAt: activeProjectPaths.metadata.frameworkCopiedAt,
       canvasPolicy: activeProjectPaths.metadata.canvasPolicy,
+      historyPolicy: activeProjectPaths.metadata.historyPolicy,
+      packageModel: 'deterministic',
       outputsPath: activeProjectPaths.outputsDirAbs,
     };
   }
@@ -122,6 +125,16 @@ export function createProjectQueryService(options = {}) {
 
   function getSlides() {
     const projectPaths = requireActiveProjectPaths();
+    const { manifest } = ensurePresentationPackageFiles(projectPaths.projectRootAbs);
+    if (Array.isArray(manifest?.slides)) {
+      return manifest.slides.map((slide) => ({
+        id: slide.id,
+        dirName: slide.dir.split('/').at(-1) || slide.id,
+        orderLabel: slide.orderLabel,
+        orderValue: slide.orderValue,
+      }));
+    }
+
     return listSlideSourceEntries(projectPaths)
       .filter((entry) => entry.isValidName)
       .map((entry) => ({

@@ -43,9 +43,10 @@ function fillBrief(projectRoot) {
 }
 
 test('project query service creates, opens, and previews a project through application-owned queries', async (t) => {
-  const [{ createProjectQueryService }, { createProjectScaffold }] = await Promise.all([
+  const [{ createProjectQueryService }, { createProjectScaffold }, { writeRenderState }] = await Promise.all([
     import('../project-query-service.mjs'),
     import('../project-scaffold-service.mjs'),
+    import('../../runtime/presentation-runtime-state.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -58,6 +59,19 @@ test('project query service creates, opens, and previews a project through appli
   const openResult = service.openProject({ projectRoot });
   assert.equal(openResult.meta.projectRoot, projectRoot);
   assert.equal(openResult.meta.active, true);
+  assert.equal(openResult.meta.packageModel, 'deterministic');
+
+  writeRenderState(projectRoot, {
+    status: 'pass',
+    slideIds: ['intro', 'close'],
+    lastCheckedAt: '2026-03-22T00:00:00.000Z',
+  });
+
+  const state = service.getState();
+  assert.equal(state.packageStateAvailable, true);
+  assert.equal(state.runtimeEvidenceAvailable, true);
+  assert.equal(state.lastRenderStatus, 'pass');
+  assert.equal(state.lastCheckedAt, '2026-03-22T00:00:00.000Z');
 
   const previewMeta = service.getPreviewMeta();
   assert.equal(previewMeta.kind, 'slides');

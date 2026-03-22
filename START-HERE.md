@@ -29,4 +29,11 @@ After finalize, look in:
 - `outputs/report.json`
 - `outputs/summary.md`
 
+The project also keeps presentation package state in `.presentation/`:
+
+- `project.json` for stable package identity
+- `intent.json` for authorable deck intent
+- `package.generated.json` for deterministic structural truth
+- `runtime/` for render state, artifacts, and last-good evidence
+
 This repo no longer supports browser operator mode or legacy `--deck` / `--example` targets.

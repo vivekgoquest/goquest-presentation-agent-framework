@@ -1,10 +1,17 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getProjectPaths } from './deck-paths.js';
 
 function writeJson(absPath, payload) {
   mkdirSync(dirname(absPath), { recursive: true });
   writeFileSync(absPath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function readJson(absPath) {
+  if (!existsSync(absPath)) {
+    return null;
+  }
+  return JSON.parse(readFileSync(absPath, 'utf8'));
 }
 
 export function writeRenderState(projectRootInput, payload = {}) {
@@ -45,4 +52,19 @@ export function writeLastGood(projectRootInput, payload = {}) {
   };
   writeJson(paths.lastGoodAbs, lastGood);
   return lastGood;
+}
+
+export function readRenderState(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  return readJson(paths.renderStateAbs);
+}
+
+export function readArtifacts(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  return readJson(paths.artifactsAbs);
+}
+
+export function readLastGood(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  return readJson(paths.lastGoodAbs);
 }

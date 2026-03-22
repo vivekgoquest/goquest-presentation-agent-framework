@@ -6,6 +6,7 @@
 - set deck-local reusable styling in `theme.css`
 - add slide-scoped selectors in optional `slides/<NNN-slide-id>/slide.css`
 - add `outline.md` for decks with more than 10 slides
+- update `.presentation/intent.json` with audience, objective, narrative notes, and per-slide purpose
 - use existing canvas utility classes
 - add deck-shared assets in `assets/` or slide-local assets in `slides/<NNN-slide-id>/assets/`
 
@@ -22,6 +23,8 @@
 - slide CSS that escapes its own slide or targets another slide
 - slide CSS that redefine theme primitives with colors, typography, borders, or shadows
 - root-relative, sibling-slide, or cross-workspace asset references
+- editing `.presentation/package.generated.json` directly
+- editing `.presentation/runtime/*.json` directly
 
 ## Verification Workflow
 
@@ -47,6 +50,8 @@ The repo check currently fails on:
 
 ## Authoring Heuristics For Agents
 
+- generated structure is deterministic: the hook regenerates `.presentation/package.generated.json` from source on every clean stop
+- runtime evidence is read-only: `.presentation/runtime/*.json` is owned by the framework, not by deck edits
 - prefer deck-local theme variables over one-off visual hacks
 - for decks with more than 10 slides, lock the story in `outline.md` before slide-by-slide buildout
 - for decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch

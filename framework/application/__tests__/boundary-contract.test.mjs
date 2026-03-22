@@ -77,3 +77,25 @@ test('renderer no longer consumes the generic public watch bridge', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'electron', 'renderer', 'app.js'), 'utf8');
   assert.doesNotMatch(content, /window\.electron\.watch/);
 });
+
+test('project authoring rules describe deterministic package ownership', () => {
+  const frameworkRules = readFileSync(
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'rules', 'framework.md'),
+    'utf8'
+  );
+  const fileBoundaries = readFileSync(
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'rules', 'file-boundaries.md'),
+    'utf8'
+  );
+  const authoringRules = readFileSync(
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'rules', 'authoring-rules.md'),
+    'utf8'
+  );
+
+  assert.doesNotMatch(frameworkRules, /folder naming is the manifest/i);
+  assert.match(fileBoundaries, /\.presentation\/intent\.json/);
+  assert.match(fileBoundaries, /package\.generated\.json/i);
+  assert.match(fileBoundaries, /runtime\/render-state\.json/i);
+  assert.match(authoringRules, /generated structure is deterministic/i);
+  assert.match(authoringRules, /runtime evidence is read-only/i);
+});

@@ -173,6 +173,7 @@ function buildDefaultProjectMetadata(projectRootAbs, frameworkMode = 'linked') {
     frameworkSourceVersion: FRAMEWORK_VERSION,
     frameworkCopiedAt: normalizedFrameworkMode === 'copied' ? new Date().toISOString() : null,
     canvasPolicy: 'protected',
+    historyPolicy: 'checkpointed',
   };
 }
 
@@ -204,6 +205,7 @@ export function readProjectMetadata(projectRootInput) {
     frameworkSourceVersion: data.frameworkSourceVersion || FRAMEWORK_VERSION,
     frameworkCopiedAt: data.frameworkCopiedAt || null,
     canvasPolicy: data.canvasPolicy || 'protected',
+    historyPolicy: data.historyPolicy || 'checkpointed',
   };
 }
 
@@ -219,6 +221,7 @@ export function createProjectMetadata(projectRootInput, options = {}) {
       ? ((options.overrides && options.overrides.frameworkMode) || base.frameworkMode)
       : 'linked',
     canvasPolicy: 'protected',
+    historyPolicy: (options.overrides && options.overrides.historyPolicy) || base.historyPolicy || 'checkpointed',
   };
 }
 

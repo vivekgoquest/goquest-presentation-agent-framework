@@ -20,9 +20,9 @@ import {
   slugToTitle,
 } from '../deck-paths.js';
 import {
-  writeInitialPresentationIntent,
   writePresentationPackageManifest,
 } from '../presentation-package.js';
+import { writeInitialPresentationIntent } from '../presentation-intent.js';
 
 export function parseNewDeckCliArgs(argv) {
   let slideCount = 3;

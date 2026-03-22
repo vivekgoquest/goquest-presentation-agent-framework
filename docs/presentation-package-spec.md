@@ -446,7 +446,18 @@ With this model:
 
 ## Status
 
-This document defines the target package contract.
+Implemented now:
 
-It does not mean all files listed above already exist in the current implementation.
-Those files and hooks should be introduced in a later implementation phase.
+- `.presentation/intent.json`
+- `.presentation/package.generated.json`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
+- `.presentation/runtime/last-good.json`
+- deterministic regeneration during preview/check/finalize flows
+- package-oriented stop hook through `.claude/hooks/check-presentation-package.mjs`
+
+Still evolving:
+
+- richer runtime fingerprints in `last-good.json`
+- broader Electron-facing query summaries over package/runtime evidence
+- any future migration tooling beyond the current automatic regeneration-on-use behavior

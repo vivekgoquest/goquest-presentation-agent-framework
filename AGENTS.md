@@ -32,6 +32,11 @@ Keep the product reliable across:
 - Legacy `--deck`, `--example`, browser operator UI, and `/workspaces` routes are removed.
 - CSS ownership stays `content < theme < canvas`.
 - Scaffolding must continue producing independent project `.claude` rules/skills/hooks/settings.
+- Presentation package ownership is:
+  - source + `.presentation/intent.json` are authorable
+  - `.presentation/package.generated.json` is deterministic structure
+  - `.presentation/runtime/*.json` is deterministic runtime evidence
+  - git is the history lane
 
 ## Module boundaries
 

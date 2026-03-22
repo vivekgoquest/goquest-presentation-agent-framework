@@ -51,7 +51,14 @@ Generated review artifacts should usually live at:
 - `<project>/outputs/slides/`
 - `<project>/outputs/summary.md`
 
-Folder naming is the manifest:
+Presentation package files live under `.presentation/`:
+
+- `.presentation/project.json` is stable system identity
+- `.presentation/intent.json` is editable authoring intent
+- `.presentation/package.generated.json` is deterministic structure generated from source
+- `.presentation/runtime/` contains deterministic runtime evidence
+
+Folder naming is source input, not package truth:
 
 - folder pattern: `NNN-slide-id`
 - order comes from the numeric prefix
@@ -98,6 +105,7 @@ Deck work should usually:
 - add or revise content within the local slide folders
 - set reusable deck visuals in `theme.css`
 - keep local layout or one-off styling in optional `slides/<NNN-slide-id>/slide.css`
+- edit `.presentation/intent.json` when audience, purpose, or per-slide intent needs to change
 - consume existing canvas utilities instead of redefining them
 
 Deck work should not:
@@ -106,4 +114,6 @@ Deck work should not:
 - change grid semantics
 - redefine protected canvas selectors from theme or slide-local CSS
 - restyle runtime chrome selectors from slide-local CSS
+- hand-edit `.presentation/package.generated.json`
+- hand-edit `.presentation/runtime/*.json`
 - create standalone root-level HTML decks when a project workspace is the intended flow

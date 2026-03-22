@@ -9,10 +9,19 @@ Agents should assume these are safe to edit for deck work:
 - optional `<project>/slides/<NNN-slide-id>/slide.css`
 - `<project>/brief.md`
 - `<project>/outline.md` for decks with more than 10 slides
+- `<project>/.presentation/intent.json`
 - shared images and other assets inside `<project>/assets/`
 - slide-local assets inside `<project>/slides/<NNN-slide-id>/assets/`
 
 When `slides/` exists, treat `/preview/` as the source preview/export route and never try to edit a rendered HTML output directly.
+
+Generated package and runtime truth are read-only:
+
+- `<project>/.presentation/project.json`
+- `<project>/.presentation/package.generated.json`
+- `<project>/.presentation/runtime/render-state.json`
+- `<project>/.presentation/runtime/artifacts.json`
+- `<project>/.presentation/runtime/last-good.json`
 
 ## Shared Framework Files
 

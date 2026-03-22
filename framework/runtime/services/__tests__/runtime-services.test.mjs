@@ -220,6 +220,39 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.deepEqual(runtimeArtifacts.slides.map((slide) => slide.id), ['intro']);
 });
 
+test('runtime commands regenerate missing package files for legacy projects', async (t) => {
+  const [
+    { createProjectScaffold },
+    { runDeckCheck },
+    { finalizePresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../check-service.mjs'),
+    import('../finalize-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  rmSync(resolve(projectRoot, '.presentation', 'intent.json'), { force: true });
+  rmSync(resolve(projectRoot, '.presentation', 'package.generated.json'), { force: true });
+  rmSync(resolve(projectRoot, '.presentation', 'runtime'), { recursive: true, force: true });
+
+  const checkDir = resolve(projectRoot, '.artifacts', 'legacy-check');
+  const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
+  assert.equal(check.status, 'pass');
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'intent.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'package.generated.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
+
+  const finalized = await finalizePresentation({ projectRoot });
+  assert.equal(finalized.status, 'pass');
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
+});
+
 test('rendered contract checks fail when a copied framework canvas breaks the stage contract', async (t) => {
   const [
     { createProjectScaffold },

@@ -23,13 +23,22 @@ Each presentation is an independent project folder:
 my-deck/
 ├── brief.md
 ├── theme.css
+├── outline.md
 ├── slides/
 │   ├── 010-intro/slide.html
 │   ├── 020-slide-02/slide.html
 │   └── 030-close/slide.html
 ├── assets/
 ├── outputs/
-├── .presentation/project.json
+├── .presentation/
+│   ├── project.json
+│   ├── intent.json
+│   ├── package.generated.json
+│   ├── runtime/
+│   │   ├── render-state.json
+│   │   ├── artifacts.json
+│   │   └── last-good.json
+│   └── framework-cli.mjs
 └── .claude/
     ├── CLAUDE.md
     ├── rules/
@@ -39,6 +48,14 @@ my-deck/
 ```
 
 The cascade contract is enforced as `content < theme < canvas`.
+
+The presentation package model is:
+
+- source is authored
+- intent is authored
+- structure is deterministic
+- runtime evidence is deterministic
+- git is the history lane
 
 ## Commands (project-only)
 

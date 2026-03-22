@@ -14,6 +14,7 @@ import {
 import {
   CANVAS_LAYER_ORDER,
 } from '../canvas/canvas-contract.mjs';
+import { ensurePresentationPackageFiles } from './presentation-package.js';
 import {
   validateDeckSource,
   validateSlideDeckWorkspace,
@@ -120,6 +121,7 @@ ${sections}
 export function renderPresentationHtml(input) {
   const target = createPresentationTarget(input);
   const paths = getPresentationPaths(target);
+  ensurePresentationPackageFiles(paths.projectRootAbs);
 
   validateSlideDeckWorkspace(paths);
 

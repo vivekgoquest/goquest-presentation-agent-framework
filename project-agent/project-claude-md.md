@@ -13,11 +13,12 @@ This project is a presentation built with the Presentation Framework. Follow the
 7. Build or revise source slides in `slides/<NNN-id>/slide.html`.
 8. Keep reusable deck styling in `theme.css`.
 9. Keep slide-specific CSS in optional `slides/<NNN-id>/slide.css`.
-10. Keep assets deck-shared in `assets/` or slide-local in `slides/<NNN-id>/assets/`.
-11. For decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch.
-12. Inspect the preview yourself. If it does not read like a presentation yet, revise `theme.css` and optional slide-local `slide.css` before finalizing.
-13. Run `node .presentation/framework-cli.mjs finalize`
-14. Report the exact output paths in `outputs/`.
+10. Keep authoring intent in `.presentation/intent.json` when audience, objective, or per-slide purpose needs to change.
+11. Keep assets deck-shared in `assets/` or slide-local in `slides/<NNN-id>/assets/`.
+12. For decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch.
+13. Inspect the preview yourself. If it does not read like a presentation yet, revise `theme.css` and optional slide-local `slide.css` before finalizing.
+14. Run `node .presentation/framework-cli.mjs finalize`
+15. Report the exact output paths in `outputs/`.
 
 ## Core Rule
 
@@ -37,10 +38,12 @@ Edit these first:
 - `slides/<NNN-id>/slide.html`
 - optional `slides/<NNN-id>/slide.css`
 - `brief.md`
+- `.presentation/intent.json`
 - shared assets inside `assets/`
 - slide-local assets inside `slides/<NNN-id>/assets/`
 
 Use sparse numbering such as `010`, `020`, `030` so a later insertion can become `025-case-study` without renumbering.
+Folder naming remains source input, but `.presentation/package.generated.json` is deterministic framework-owned package truth.
 
 ## Banned Authoring Patterns
 
@@ -52,6 +55,8 @@ Use sparse numbering such as `010`, `020`, `030` so a later insertion can become
 - no slide CSS selectors that are not scoped to the generated `#<slide-id>`
 - no slide CSS that styles another slide's root or escapes its own slide scope
 - no slide CSS that restyles theme primitives with colors, typography, borders, or shadows
+- no hand-editing `.presentation/package.generated.json`
+- no hand-editing `.presentation/runtime/*.json`
 - no full-document wrappers, `<section data-slide>`, or outer `<body>` tags inside `slide.html`
 - no root-relative or cross-workspace asset paths
 

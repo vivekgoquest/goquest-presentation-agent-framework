@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { LONG_DECK_OUTLINE_THRESHOLD, getProjectPaths } from './deck-paths.js';
 import { listSlideSourceEntries } from './deck-source.js';
+import { writeInitialPresentationIntent } from './presentation-intent.js';
 
 const TODO_MARKER_RE = /\[\[TODO_[A-Z0-9_]+\]\]/;
 
@@ -14,19 +15,6 @@ function readIfExists(absPath) {
 
 function hasTodoMarkers(content) {
   return TODO_MARKER_RE.test(content || '');
-}
-
-export function createInitialPresentationIntent(paths) {
-  return {
-    schemaVersion: 1,
-    presentationTitle: paths.title,
-    audience: '',
-    objective: '',
-    tone: '',
-    targetSlideCount: 0,
-    narrativeNotes: '',
-    slideIntent: {},
-  };
 }
 
 export function generatePresentationPackageManifest(projectRootInput) {
@@ -88,10 +76,23 @@ export function writePresentationPackageManifest(projectRootInput) {
   return manifest;
 }
 
-export function writeInitialPresentationIntent(projectRootInput) {
+export function readPresentationPackageManifest(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
-  const intent = createInitialPresentationIntent(paths);
-  mkdirSync(dirname(paths.intentAbs), { recursive: true });
-  writeFileSync(paths.intentAbs, `${JSON.stringify(intent, null, 2)}\n`);
-  return intent;
+  if (!existsSync(paths.packageManifestAbs)) {
+    return null;
+  }
+  return JSON.parse(readFileSync(paths.packageManifestAbs, 'utf8'));
+}
+
+export function ensurePresentationPackageFiles(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  if (!existsSync(paths.intentAbs)) {
+    writeInitialPresentationIntent(paths.projectRootAbs);
+  }
+
+  const manifest = writePresentationPackageManifest(paths.projectRootAbs);
+  return {
+    paths,
+    manifest,
+  };
 }

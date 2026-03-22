@@ -5,6 +5,8 @@ import {
   getPresentationOutputPaths,
   getProjectPaths,
 } from './deck-paths.js';
+import { ensurePresentationPackageFiles } from './presentation-package.js';
+import { readRenderState } from './presentation-runtime-state.js';
 import { validateSlideDeckWorkspace } from './deck-policy.js';
 import { listSlideSourceEntries } from './deck-source.js';
 import { checkDeckQuality } from './deck-quality.js';
@@ -58,6 +60,8 @@ export function getProjectState(projectRootInput) {
     projectRoot: projectRootInput?.projectRootAbs || projectRootInput?.projectRoot || projectRootInput,
   });
   const paths = getProjectPaths(target.projectRootAbs);
+  const { manifest } = ensurePresentationPackageFiles(paths.projectRootAbs);
+  const renderState = readRenderState(paths.projectRootAbs);
   const outputs = getPresentationOutputPaths(target);
   const slideEntries = listSlideSourceEntries(paths).filter((entry) => entry.isValidName);
 
@@ -126,12 +130,16 @@ export function getProjectState(projectRootInput) {
     briefComplete,
     outlineRequired,
     outlineComplete,
-    slidesTotal: slideEntries.length,
+    slidesTotal: manifest?.counts?.slidesTotal ?? slideEntries.length,
     slidesComplete: completedSlides.length,
     remainingSlides,
     pdfReady,
     reportReady,
     summaryReady,
+    packageStateAvailable: Boolean(manifest),
+    runtimeEvidenceAvailable: Boolean(renderState),
+    lastRenderStatus: renderState?.status || 'unknown',
+    lastCheckedAt: renderState?.lastCheckedAt || '',
     lastPolicyError: validationError || '',
     policyCategory,
     qualityWarningCount: quality.warnings.length,
