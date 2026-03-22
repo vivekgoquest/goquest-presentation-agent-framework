@@ -104,4 +104,5 @@ Only change with explicit intent:
 - `project-agent/project-dot-claude/rules/slide-patterns.md`
 - `project-agent/project-dot-claude/rules/tokens.md`
 - `docs/base-canvas-contract.md`
+- `docs/presentation-package-spec.md`
 - `docs/prd-human-agent.md`
