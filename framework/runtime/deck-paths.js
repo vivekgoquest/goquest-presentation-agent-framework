@@ -7,6 +7,12 @@ export const LONG_DECK_OUTLINE_THRESHOLD = 10;
 export const LONG_DECK_BATCH_SIZE = 5;
 export const PROJECT_SYSTEM_DIRNAME = '.presentation';
 export const PROJECT_METADATA_FILENAME = 'project.json';
+export const PROJECT_INTENT_FILENAME = 'intent.json';
+export const PROJECT_PACKAGE_MANIFEST_FILENAME = 'package.generated.json';
+export const PROJECT_RUNTIME_DIRNAME = 'runtime';
+export const PROJECT_RENDER_STATE_FILENAME = 'render-state.json';
+export const PROJECT_ARTIFACTS_FILENAME = 'artifacts.json';
+export const PROJECT_LAST_GOOD_FILENAME = 'last-good.json';
 export const PROJECT_FRAMEWORK_DIRNAME = 'framework';
 export const PROJECT_FRAMEWORK_BASE_DIRNAME = 'base';
 export const PROJECT_FRAMEWORK_OVERRIDES_DIRNAME = 'overrides';
@@ -127,6 +133,12 @@ export function getProjectSystemPaths(projectRootInput) {
   const ref = createProjectRef(projectRootInput);
   const systemDirAbs = resolve(ref.projectRootAbs, PROJECT_SYSTEM_DIRNAME);
   const metadataAbs = resolve(systemDirAbs, PROJECT_METADATA_FILENAME);
+  const intentAbs = resolve(systemDirAbs, PROJECT_INTENT_FILENAME);
+  const packageManifestAbs = resolve(systemDirAbs, PROJECT_PACKAGE_MANIFEST_FILENAME);
+  const runtimeDirAbs = resolve(systemDirAbs, PROJECT_RUNTIME_DIRNAME);
+  const renderStateAbs = resolve(runtimeDirAbs, PROJECT_RENDER_STATE_FILENAME);
+  const artifactsAbs = resolve(runtimeDirAbs, PROJECT_ARTIFACTS_FILENAME);
+  const lastGoodAbs = resolve(runtimeDirAbs, PROJECT_LAST_GOOD_FILENAME);
   const frameworkDirAbs = resolve(systemDirAbs, PROJECT_FRAMEWORK_DIRNAME);
   const frameworkBaseAbs = resolve(frameworkDirAbs, PROJECT_FRAMEWORK_BASE_DIRNAME);
   const frameworkOverridesAbs = resolve(frameworkDirAbs, PROJECT_FRAMEWORK_OVERRIDES_DIRNAME);
@@ -135,6 +147,12 @@ export function getProjectSystemPaths(projectRootInput) {
     projectRootAbs: ref.projectRootAbs,
     systemDirAbs,
     metadataAbs,
+    intentAbs,
+    packageManifestAbs,
+    runtimeDirAbs,
+    renderStateAbs,
+    artifactsAbs,
+    lastGoodAbs,
     frameworkDirAbs,
     frameworkBaseAbs,
     frameworkOverridesAbs,
@@ -237,6 +255,18 @@ export function getProjectPaths(projectRootInput) {
     systemDirAbs: systemPaths.systemDirAbs,
     metadataRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_METADATA_FILENAME}`,
     metadataAbs: systemPaths.metadataAbs,
+    intentRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_INTENT_FILENAME}`,
+    intentAbs: systemPaths.intentAbs,
+    packageManifestRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_PACKAGE_MANIFEST_FILENAME}`,
+    packageManifestAbs: systemPaths.packageManifestAbs,
+    runtimeDirRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}`,
+    runtimeDirAbs: systemPaths.runtimeDirAbs,
+    renderStateRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_RENDER_STATE_FILENAME}`,
+    renderStateAbs: systemPaths.renderStateAbs,
+    artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_ARTIFACTS_FILENAME}`,
+    artifactsAbs: systemPaths.artifactsAbs,
+    lastGoodRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_LAST_GOOD_FILENAME}`,
+    lastGoodAbs: systemPaths.lastGoodAbs,
     frameworkDirRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_FRAMEWORK_DIRNAME}`,
     frameworkDirAbs: systemPaths.frameworkDirAbs,
     frameworkBaseRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_FRAMEWORK_DIRNAME}/${PROJECT_FRAMEWORK_BASE_DIRNAME}`,
