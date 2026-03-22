@@ -11,21 +11,15 @@ export const ACTION_SURFACES = Object.freeze({
 
 const ACTION_CATALOG = Object.freeze([
   {
-    id: 'build_presentation',
-    label: 'Build presentation',
+    id: 'export_presentation',
+    label: 'Export presentation',
     surface: ACTION_SURFACES.PRIMARY,
     kind: ACTION_KINDS.PRESENTATION,
   },
   {
-    id: 'export_presentation',
-    label: 'Export',
+    id: 'validate_presentation',
+    label: 'Validate presentation',
     surface: ACTION_SURFACES.SECONDARY,
-    kind: ACTION_KINDS.PRESENTATION,
-  },
-  {
-    id: 'check_presentation',
-    label: 'Check presentation',
-    surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.PRESENTATION,
   },
   {
@@ -35,20 +29,32 @@ const ACTION_CATALOG = Object.freeze([
     kind: ACTION_KINDS.PRESENTATION,
   },
   {
-    id: 'review_presentation',
-    label: 'Review presentation',
+    id: 'fix_validation_issues',
+    label: 'Fix validation issues',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
   },
   {
-    id: 'revise_presentation',
-    label: 'Revise presentation',
+    id: 'review_narrative_presentation',
+    label: 'Review narrative',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
   },
   {
-    id: 'fix_warnings',
-    label: 'Fix warnings',
+    id: 'apply_narrative_review_changes',
+    label: 'Apply narrative fixes',
+    surface: ACTION_SURFACES.MENU,
+    kind: ACTION_KINDS.AGENT,
+  },
+  {
+    id: 'review_visual_presentation',
+    label: 'Review visuals',
+    surface: ACTION_SURFACES.MENU,
+    kind: ACTION_KINDS.AGENT,
+  },
+  {
+    id: 'apply_visual_review_changes',
+    label: 'Apply visual fixes',
     surface: ACTION_SURFACES.MENU,
     kind: ACTION_KINDS.AGENT,
   },

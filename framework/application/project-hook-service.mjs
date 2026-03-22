@@ -2,10 +2,11 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createActionWorkflowService } from './action-workflow-service.mjs';
+import { createPresentationActionAdapter } from './presentation-action-adapter.mjs';
 import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { validatePresentationIntentFile } from '../runtime/presentation-intent.js';
 import { runProjectQualityCheck } from '../runtime/project-quality-check.mjs';
-import { runDeckCheck } from '../runtime/services/check-service.mjs';
 import { checkpointProjectGit } from './project-history-service.mjs';
 
 function loadProjectMetadata(projectRoot) {
@@ -21,10 +22,6 @@ function loadProjectMetadata(projectRoot) {
   }
 }
 
-function formatQualityWarning(warning) {
-  return `${warning.rule} [${warning.slideId}] ${warning.message} Fix: ${warning.fix}`;
-}
-
 function shouldSkipHook(projectRoot, metadata) {
   if (!metadata?.frameworkSource) {
     return true;
@@ -38,6 +35,26 @@ function maybeCheckpointProject(projectRoot, metadata) {
     return { committed: false, commit: '' };
   }
   return checkpointProjectGit(projectRoot);
+}
+
+async function runValidatePresentationAction(projectRoot, outputDir) {
+  const workflowService = createActionWorkflowService({
+    presentationAdapter: createPresentationActionAdapter(),
+  });
+
+  return await workflowService.invokeAction('validate_presentation', {
+    trigger: 'hook',
+    target: {
+      kind: 'project',
+      projectRootAbs: projectRoot,
+    },
+    args: {
+      outputDir,
+    },
+    outputPaths: {
+      outputDirAbs: outputDir,
+    },
+  });
 }
 
 export async function runProjectStopHookWorkflow(projectRoot) {
@@ -57,9 +74,9 @@ export async function runProjectStopHookWorkflow(projectRoot) {
 
   const hookOutputDir = mkdtempSync(join(tmpdir(), 'pf-stop-hook-check-'));
   try {
-    let check;
+    let validation;
     try {
-      check = await runDeckCheck({ projectRoot }, { outputDir: hookOutputDir });
+      validation = await runValidatePresentationAction(projectRoot, hookOutputDir);
     } catch (err) {
       return {
         status: 'fail',
@@ -67,12 +84,10 @@ export async function runProjectStopHookWorkflow(projectRoot) {
       };
     }
 
-    if (check.status !== 'pass') {
-      const messages = check.failures.length > 0
-        ? check.failures
-        : Array.isArray(check.qualityWarnings) && check.qualityWarnings.length > 0
-          ? check.qualityWarnings.map(formatQualityWarning)
-          : ['Presentation runtime check failed.'];
+    if (validation.status !== 'pass') {
+      const messages = Array.isArray(validation.failures) && validation.failures.length > 0
+        ? validation.failures
+        : [validation.detail || 'Presentation validation failed.'];
 
       return {
         status: 'fail',

@@ -7,15 +7,16 @@ const ACTION_EVENT_STATUS_BY_CHANNEL = Object.freeze({
 });
 
 const BUILD_OPERATION_BY_ACTION_ID = Object.freeze({
-  build_presentation: 'finalize',
-  check_presentation: 'check',
+  validate_presentation: 'validate',
   capture_screenshots: 'capture',
 });
 
 const REVIEW_OPERATION_BY_ACTION_ID = Object.freeze({
-  review_presentation: 'run',
-  revise_presentation: 'revise',
-  fix_warnings: 'fix_warnings',
+  fix_validation_issues: 'fix_validation_issues',
+  review_narrative_presentation: 'review_narrative',
+  apply_narrative_review_changes: 'apply_narrative',
+  review_visual_presentation: 'review_visual',
+  apply_visual_review_changes: 'apply_visual',
 });
 
 function isActionLifecycleEvent(event) {

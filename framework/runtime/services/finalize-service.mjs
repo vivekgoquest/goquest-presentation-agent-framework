@@ -8,8 +8,6 @@ import {
   getPresentationPaths,
   toRelativeWithin,
 } from '../deck-paths.js';
-import { listSlideSourceEntries } from '../deck-source.js';
-import { checkDeckQuality } from '../deck-quality.js';
 import { writeArtifacts, writeLastGood, writeRenderState } from '../presentation-runtime-state.js';
 import { capturePresentation } from './capture-service.mjs';
 import { exportDeckPdf } from './export-service.mjs';
@@ -100,15 +98,13 @@ export async function finalizePresentation(targetInput, options = {}) {
     await exportDeckPdf(target, outputPaths.pdfAbs);
 
     if (issues.length > 0) {
-      status = 'needs-review';
+      status = 'fail';
     }
   } catch (err) {
     status = 'fail';
     issues = [err.message];
   }
 
-  const slideEntries = listSlideSourceEntries(sourcePaths).filter((entry) => entry.isValidName);
-  const qualityWarnings = checkDeckQuality(slideEntries).warnings;
   const summary = buildSummary({
     target,
     sourcePaths,
@@ -121,7 +117,6 @@ export async function finalizePresentation(targetInput, options = {}) {
   if (report) {
     report.status = status;
     report.issues = issues;
-    report.qualityWarnings = qualityWarnings;
     report.slideIds = report.slideIds || report.slides.map((slide) => slide.id);
     report.consoleErrorCount = report.consoleErrors.length;
     report.overflowSlides = report.consistency.slidesWithOverflow;
@@ -160,7 +155,6 @@ export async function finalizePresentation(targetInput, options = {}) {
     canvasContract: report?.consistency?.canvasContract || null,
     consoleErrorCount: report?.consoleErrors?.length || 0,
     overflowSlides: report?.consistency?.slidesWithOverflow || [],
-    qualityWarnings,
     issues,
     lastCheckedAt: new Date().toISOString(),
   });
@@ -189,6 +183,5 @@ export async function finalizePresentation(targetInput, options = {}) {
     screenshots: outputPaths.slidesDirRel,
     summary: outputPaths.summaryRel,
     issues,
-    qualityWarnings,
   };
 }

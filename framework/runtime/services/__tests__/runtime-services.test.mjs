@@ -127,7 +127,7 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const [
     { createProjectScaffold },
     { capturePresentation },
-    { runDeckCheck },
+    { validatePresentation },
     { exportDeckPdf },
     { finalizePresentation },
   ] = await Promise.all([
@@ -152,7 +152,7 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   assert.deepEqual(initialArtifacts.slides, []);
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check');
-  const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
+  const check = await validatePresentation({ projectRoot }, { outputDir: checkDir });
   assert.equal(check.status, 'pass');
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
   const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
@@ -244,10 +244,10 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.deepEqual(runtimeArtifacts.slides.map((slide) => slide.id), ['intro']);
 });
 
-test('runDeckCheck marks warning-only decks as needs-review and keeps canonical artifacts unchanged', async (t) => {
+test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
   const [
     { createProjectScaffold },
-    { runDeckCheck },
+    { validatePresentation },
     { finalizePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
@@ -272,12 +272,12 @@ test('runDeckCheck marks warning-only decks as needs-review and keeps canonical 
   const artifactsBeforeCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
 
   const checkDir = resolve(projectRoot, '.artifacts', 'warning-check');
-  const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
+  const check = await validatePresentation({ projectRoot }, { outputDir: checkDir });
 
-  assert.equal(check.status, 'needs-review');
-  assert.ok(check.qualityWarnings.length > 0);
+  assert.equal(check.status, 'pass');
+  assert.deepEqual(check.failures, []);
   const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
-  assert.equal(renderState.status, 'needs-review');
+  assert.equal(renderState.status, 'pass');
   const artifactsAfterCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.deepEqual(artifactsAfterCheck, artifactsBeforeCheck);
 });
@@ -285,7 +285,7 @@ test('runDeckCheck marks warning-only decks as needs-review and keeps canonical 
 test('runtime commands regenerate missing package files for legacy projects', async (t) => {
   const [
     { createProjectScaffold },
-    { runDeckCheck },
+    { validatePresentation },
     { finalizePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
@@ -304,7 +304,7 @@ test('runtime commands regenerate missing package files for legacy projects', as
   rmSync(resolve(projectRoot, '.presentation', 'runtime'), { recursive: true, force: true });
 
   const checkDir = resolve(projectRoot, '.artifacts', 'legacy-check');
-  const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
+  const check = await validatePresentation({ projectRoot }, { outputDir: checkDir });
   assert.equal(check.status, 'pass');
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'intent.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'package.generated.json')));
@@ -318,7 +318,7 @@ test('runtime commands regenerate missing package files for legacy projects', as
 test('rendered contract checks fail when a copied framework canvas breaks the stage contract', async (t) => {
   const [
     { createProjectScaffold },
-    { runDeckCheck },
+    { validatePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
     import('../check-service.mjs'),
@@ -339,7 +339,7 @@ test('rendered contract checks fail when a copied framework canvas breaks the st
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check-bad-canvas');
   await assert.rejects(
-    () => runDeckCheck({ projectRoot }, { outputDir: checkDir }),
+    () => validatePresentation({ projectRoot }, { outputDir: checkDir }),
     /canvas|slide-ratio|4 \/ 3|framework\/canvas\/canvas\.css/i
   );
 });

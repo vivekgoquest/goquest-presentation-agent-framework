@@ -24,8 +24,7 @@ test('deriveProjectUiModel keeps the main shell minimal during onboarding', () =
   });
 
   assert.equal(model.hasProject, true);
-  assert.equal(model.actions.check.enabled, true);
-  assert.equal(model.actions.build.enabled, false);
+  assert.equal(model.actions.validate.enabled, true);
   assert.equal(model.actions.export.enabled, false);
   assert.equal(model.preview.showChrome, false);
   assert.equal(model.status.visible, false);
@@ -47,8 +46,7 @@ test('deriveProjectUiModel keeps advanced actions available when project is read
     },
   });
 
-  assert.equal(model.actions.check.enabled, true);
-  assert.equal(model.actions.build.enabled, true);
+  assert.equal(model.actions.validate.enabled, true);
   assert.equal(model.actions.export.enabled, true);
   assert.equal(model.actions.more.enabled, true);
   assert.equal(model.preview.showChrome, false);
@@ -80,21 +78,46 @@ test('deriveActionUiModel keeps toolbar actions separate from menu actions', () 
   const model = deriveActionUiModel({
     meta: { active: true },
     projectState: { status: 'ready_to_finalize' },
-    reviewAvailability: {
-      run: true,
-      revise: true,
-      fixWarnings: false,
+    agentActionAvailability: {
+      fixValidationIssues: false,
+      reviewNarrative: true,
+      applyNarrativeChanges: true,
+      reviewVisual: true,
+      applyVisualChanges: true,
       reasonUnavailable: 'Review actions are unavailable right now.',
     },
   });
 
-  assert.equal(model.primary?.id, 'build.finalize');
-  assert.equal(model.secondary?.id, 'export.start');
+  assert.equal(model.primary?.id, 'export_presentation');
+  assert.equal(model.secondary?.id, 'validate_presentation');
   assert.deepEqual(
     model.menu.map((action) => action.id),
-    ['build.check', 'build.captureScreenshots', 'review.run', 'review.revise', 'review.fixWarnings']
+    [
+      'capture_screenshots',
+      'fix_validation_issues',
+      'review_narrative_presentation',
+      'apply_narrative_review_changes',
+      'review_visual_presentation',
+      'apply_visual_review_changes',
+    ]
   );
-  assert.equal(model.menu.find((action) => action.id === 'review.fixWarnings')?.enabled, false);
+  assert.equal(model.menu.find((action) => action.id === 'fix_validation_issues')?.enabled, false);
+});
+
+test('normalizeRuntimeActionResult treats started as success and blocked as error', () => {
+  const started = normalizeRuntimeActionResult('Review visuals', {
+    status: 'started',
+    message: 'Visual review started in the agent terminal.',
+  });
+  assert.equal(started.tone, 'success');
+  assert.match(started.message, /started/i);
+
+  const blocked = normalizeRuntimeActionResult('Apply visual fixes', {
+    status: 'blocked',
+    message: 'Visual review issue file is missing.',
+  });
+  assert.equal(blocked.tone, 'error');
+  assert.match(blocked.message, /missing/i);
 });
 
 test('normalizeRuntimeActionResult preserves explicit detail on successful export actions', () => {

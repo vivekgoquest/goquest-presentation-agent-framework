@@ -1,9 +1,14 @@
 import { WORKER_REQUEST_CHANNELS } from '../../electron/worker/ipc-contract.mjs';
 
 const REVIEW_ACTION_IDS = Object.freeze({
-  run: 'review_presentation',
-  revise: 'revise_presentation',
-  fixWarnings: 'fix_warnings',
+  run: 'review_narrative_presentation',
+  revise: 'apply_narrative_review_changes',
+  fixWarnings: 'fix_validation_issues',
+  fixValidationIssues: 'fix_validation_issues',
+  reviewNarrative: 'review_narrative_presentation',
+  applyNarrativeChanges: 'apply_narrative_review_changes',
+  reviewVisual: 'review_visual_presentation',
+  applyVisualChanges: 'apply_visual_review_changes',
 });
 
 function buildReviewAvailability(actions = []) {
@@ -11,15 +16,29 @@ function buildReviewAvailability(actions = []) {
   const reviewAction = actionMap.get(REVIEW_ACTION_IDS.run);
   const reviseAction = actionMap.get(REVIEW_ACTION_IDS.revise);
   const fixWarningsAction = actionMap.get(REVIEW_ACTION_IDS.fixWarnings);
+  const fixValidationIssuesAction = actionMap.get(REVIEW_ACTION_IDS.fixValidationIssues);
+  const reviewNarrativeAction = actionMap.get(REVIEW_ACTION_IDS.reviewNarrative);
+  const applyNarrativeChangesAction = actionMap.get(REVIEW_ACTION_IDS.applyNarrativeChanges);
+  const reviewVisualAction = actionMap.get(REVIEW_ACTION_IDS.reviewVisual);
+  const applyVisualChangesAction = actionMap.get(REVIEW_ACTION_IDS.applyVisualChanges);
 
   return {
     run: Boolean(reviewAction?.enabled),
     revise: Boolean(reviseAction?.enabled),
     fixWarnings: Boolean(fixWarningsAction?.enabled),
+    fixValidationIssues: Boolean(fixValidationIssuesAction?.enabled),
+    reviewNarrative: Boolean(reviewNarrativeAction?.enabled),
+    applyNarrativeChanges: Boolean(applyNarrativeChangesAction?.enabled),
+    reviewVisual: Boolean(reviewVisualAction?.enabled),
+    applyVisualChanges: Boolean(applyVisualChangesAction?.enabled),
     reasonUnavailable:
       reviewAction?.reasonDisabled
       || reviseAction?.reasonDisabled
       || fixWarningsAction?.reasonDisabled
+      || reviewNarrativeAction?.reasonDisabled
+      || applyNarrativeChangesAction?.reasonDisabled
+      || reviewVisualAction?.reasonDisabled
+      || applyVisualChangesAction?.reasonDisabled
       || '',
   };
 }
@@ -70,12 +89,12 @@ export function createElectronRequestService(options = {}) {
           return meta;
         }
         case WORKER_REQUEST_CHANNELS.BUILD_CHECK:
-          return actionService.invokeAction('check_presentation', {
+          return actionService.invokeAction('validate_presentation', {
             outputDir: payload.outputDir,
             options: payload,
           });
         case WORKER_REQUEST_CHANNELS.BUILD_FINALIZE:
-          return actionService.invokeAction('build_presentation', {
+          return actionService.invokeAction('export_presentation', {
             options: payload,
           });
         case WORKER_REQUEST_CHANNELS.BUILD_CAPTURE_SCREENSHOTS:

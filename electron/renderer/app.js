@@ -70,10 +70,12 @@ const state = {
   slides: [],
   terminalMeta: null,
   hasProject: false,
-  reviewAvailability: {
-    run: false,
-    revise: false,
-    fixWarnings: false,
+  agentActionAvailability: {
+    fixValidationIssues: false,
+    reviewNarrative: false,
+    applyNarrativeChanges: false,
+    reviewVisual: false,
+    applyVisualChanges: false,
     reasonUnavailable: '',
   },
   actionModel: {
@@ -223,10 +225,6 @@ function bindToolbarAction(button, action) {
   button.title = action?.enabled ? '' : (action?.reasonDisabled || '');
 }
 
-function isExportAction(actionId) {
-  return actionId === 'export.start';
-}
-
 function humanizeSlideId(slideId = '') {
   return String(slideId || '')
     .split('-')
@@ -333,7 +331,7 @@ function renderActionControls() {
   const model = deriveActionUiModel({
     meta: state.meta,
     projectState: state.projectState,
-    reviewAvailability: state.reviewAvailability,
+    agentActionAvailability: state.agentActionAvailability,
   });
   state.actionModel = model;
   bindToolbarAction(el.primaryAction, model.primary);
@@ -432,24 +430,26 @@ function updateTerminalState(meta) {
 }
 
 async function refreshProjectPanels() {
-  const [meta, ps, files, slidesResponse, tm, reviewAvailability] = await Promise.all([
+  const [meta, ps, files, slidesResponse, tm, agentActionAvailability] = await Promise.all([
     window.electron.project.getMeta(),
     window.electron.project.getState(),
     window.electron.project.getFiles().catch(() => ({ root: '', tree: {} })),
     window.electron.project.getSlides().catch(() => ({ slides: [] })),
     window.electron.terminal.getMeta(),
     window.electron.review.getAvailability().catch(() => ({
-      run: false,
-      revise: false,
-      fixWarnings: false,
-      reasonUnavailable: 'Review actions are unavailable right now.',
+      fixValidationIssues: false,
+      reviewNarrative: false,
+      applyNarrativeChanges: false,
+      reviewVisual: false,
+      applyVisualChanges: false,
+      reasonUnavailable: 'Agent actions are unavailable right now.',
     })),
   ]);
   state.meta = meta;
   state.projectState = ps;
   state.files = files;
   state.slides = slidesResponse.slides || [];
-  state.reviewAvailability = reviewAvailability || state.reviewAvailability;
+  state.agentActionAvailability = agentActionAvailability || state.agentActionAvailability;
   updateAppState(); updateTerminalState(tm);
   setJson(el.actionJson, state.actionModel || {});
   renderExportModal();
@@ -481,24 +481,7 @@ function getActionDescriptor(actionId) {
 }
 
 function invokeProductAction(actionId, args = {}) {
-  switch (actionId) {
-    case 'build.finalize':
-      return window.electron.build.finalize(args);
-    case 'build.check':
-      return window.electron.build.check(args);
-    case 'build.captureScreenshots':
-      return window.electron.build.captureScreenshots(args);
-    case 'export.start':
-      return window.electron.export.start(args);
-    case 'review.run':
-      return window.electron.review.run();
-    case 'review.revise':
-      return window.electron.review.revise();
-    case 'review.fixWarnings':
-      return window.electron.review.fixWarnings();
-    default:
-      throw new Error(`Unknown action "${actionId}".`);
-  }
+  return window.electron.actions.invoke(actionId, args);
 }
 
 async function runProductAction(actionId, btn = null, args = {}) {
@@ -646,31 +629,18 @@ el.moreActions.addEventListener('click', toggleMoreMenu);
 el.primaryAction.addEventListener('click', () => {
   const actionId = el.primaryAction.dataset.actionId;
   if (actionId) {
-    if (isExportAction(actionId)) {
-      openExportModal();
-      return;
-    }
     runProductAction(actionId, el.primaryAction).catch(() => {});
   }
 });
 el.secondaryAction.addEventListener('click', () => {
   const actionId = el.secondaryAction.dataset.actionId;
   if (actionId) {
-    if (isExportAction(actionId)) {
-      openExportModal();
-      return;
-    }
     runProductAction(actionId, el.secondaryAction).catch(() => {});
   }
 });
 el.moreMenuItems.addEventListener('click', (event) => {
   const button = event.target.closest('button[data-action-id]');
   if (!button || button.disabled) {
-    return;
-  }
-
-  if (isExportAction(button.dataset.actionId)) {
-    openExportModal();
     return;
   }
 

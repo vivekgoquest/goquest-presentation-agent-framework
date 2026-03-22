@@ -137,8 +137,8 @@ test('electron worker host creates a project and runs actions without runtime by
     payload: {},
   });
   assert.equal(actionListResponse.ok, true);
-  assert(actionListResponse.data.actions.some((action) => action.id === 'build_presentation'));
   assert(actionListResponse.data.actions.some((action) => action.id === 'export_presentation'));
+  assert(actionListResponse.data.actions.some((action) => action.id === 'validate_presentation'));
 
   const buildCheckResponse = await host.handleRequest({
     channel: 'build:check',
@@ -152,7 +152,9 @@ test('electron worker host creates a project and runs actions without runtime by
     payload: {},
   });
   assert.equal(reviewAvailabilityResponse.ok, true);
-  assert.equal(typeof reviewAvailabilityResponse.data.run, 'boolean');
+  assert.equal(typeof reviewAvailabilityResponse.data.fixValidationIssues, 'boolean');
+  assert.equal(typeof reviewAvailabilityResponse.data.reviewNarrative, 'boolean');
+  assert.equal(typeof reviewAvailabilityResponse.data.reviewVisual, 'boolean');
 });
 
 test('electron worker host relays terminal events from the shared core', async (t) => {

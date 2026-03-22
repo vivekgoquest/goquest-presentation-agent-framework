@@ -12,16 +12,6 @@ try {
 try {
   const result = await finalizePresentation(parsed.target);
 
-  if (result.qualityWarnings.length > 0) {
-    console.log('\n--- QUALITY WARNINGS ---');
-    for (const warning of result.qualityWarnings) {
-      console.log(`\n⚠ ${warning.rule} [${warning.slideId}]`);
-      console.log(`  ${warning.message}`);
-      console.log(`  Fix: ${warning.fix}`);
-    }
-    console.log(`\n${result.qualityWarnings.length} quality warning(s).`);
-  }
-
   console.log(JSON.stringify({
     status: result.status,
     deck: result.deck,
@@ -31,7 +21,6 @@ try {
     screenshots: result.screenshots,
     summary: result.summary,
     issues: result.issues,
-    qualityWarnings: result.qualityWarnings.length,
   }, null, 2));
 
   if (result.status !== 'pass') {

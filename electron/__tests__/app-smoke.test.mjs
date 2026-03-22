@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
@@ -44,6 +44,16 @@ function fillBrief(projectRoot, title = 'Electron Preview Brief') {
       '',
     ].join('\n')
   );
+}
+
+async function waitForCondition(predicate, attempts = 40, delayMs = 250) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (predicate()) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return false;
 }
 
 async function waitForPreviewFrame(page) {
@@ -154,14 +164,15 @@ test('electron shell boots and can create a project through the preload bridge',
     };
   });
   assert.equal(visibleActions.primaryHidden, false);
-  assert.match(visibleActions.primaryText, /build presentation/i);
+  assert.match(visibleActions.primaryText, /export presentation/i);
   assert.equal(visibleActions.secondaryHidden, false);
-  assert.match(visibleActions.secondaryText, /export/i);
+  assert.match(visibleActions.secondaryText, /validate presentation/i);
 
   const reviewAvailability = await page.evaluate(async () => {
     return window.electron.review.getAvailability();
   });
-  assert.equal(reviewAvailability.run, true);
+  assert.equal(reviewAvailability.reviewNarrative, true);
+  assert.equal(reviewAvailability.reviewVisual, true);
 
   const filmstripCount = await page.locator('#filmstrip').count();
   assert.equal(filmstripCount, 0);
@@ -281,7 +292,7 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   assert.ok(stageDetails.firstSectionWidth >= 1200);
 });
 
-test('electron export action opens a simple export modal with slide selection', async (t) => {
+test('electron export action runs directly from the toolbar without opening the legacy export modal', async (t) => {
   const [{ _electron: electron }, { createProjectScaffold }] = await Promise.all([
     import('playwright'),
     import('../../framework/application/project-scaffold-service.mjs'),
@@ -307,20 +318,18 @@ test('electron export action opens a simple export modal with slide selection', 
   const page = await app.firstWindow();
   await page.waitForSelector('#app-shell');
   await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
-  await page.waitForFunction(() => document.getElementById('secondary-action')?.textContent?.match(/export/i));
+  await page.waitForFunction(() => document.getElementById('primary-action')?.textContent?.match(/export presentation/i));
 
-  await page.locator('#secondary-action').click();
-  await page.waitForSelector('#export-modal[data-open="true"]');
+  await page.locator('#primary-action').click();
+  await page.waitForFunction(() => /export/i.test(document.getElementById('action-status-label')?.textContent || ''));
 
-  const modalState = await page.evaluate(() => ({
-    title: document.getElementById('export-modal-title')?.textContent || '',
-    selectedCount: document.querySelectorAll('#export-slide-list input[type=\"checkbox\"]:checked').length,
-    slideCount: document.querySelectorAll('#export-slide-list input[type=\"checkbox\"]').length,
-    confirmDisabled: document.getElementById('export-confirm')?.disabled,
+  const exportState = await page.evaluate(() => ({
+    modalOpen: document.getElementById('export-modal')?.dataset.open === 'true',
+    actionStatus: document.getElementById('action-status-label')?.textContent || '',
   }));
 
-  assert.match(modalState.title, /export/i);
-  assert.equal(modalState.slideCount, 2);
-  assert.equal(modalState.selectedCount, 2);
-  assert.equal(modalState.confirmDisabled, true);
+  assert.equal(exportState.modalOpen, false);
+  assert.match(exportState.actionStatus, /export/i);
+  const pdfReady = await waitForCondition(() => existsSync(resolve(projectRoot, 'outputs', 'deck.pdf')));
+  assert.equal(pdfReady, true);
 });

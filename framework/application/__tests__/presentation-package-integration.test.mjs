@@ -64,7 +64,7 @@ function gitRevCount(projectRoot) {
 }
 
 function runStopHook(projectRoot) {
-  return execFileSync('node', ['.claude/hooks/check-presentation-package.mjs'], {
+  return execFileSync('node', ['.claude/hooks/run-presentation-stop-workflow.mjs'], {
     cwd: projectRoot,
     input: JSON.stringify({ cwd: projectRoot }),
     encoding: 'utf8',
@@ -73,7 +73,7 @@ function runStopHook(projectRoot) {
 }
 
 function runStopHookDetailed(projectRoot) {
-  return spawnSync('node', ['.claude/hooks/check-presentation-package.mjs'], {
+  return spawnSync('node', ['.claude/hooks/run-presentation-stop-workflow.mjs'], {
     cwd: projectRoot,
     input: JSON.stringify({ cwd: projectRoot }),
     encoding: 'utf8',
@@ -89,7 +89,7 @@ test('presentation stop hook regenerates package state and checkpoints a clean p
   fillBrief(projectRoot);
 
   const settings = JSON.parse(readFileSync(resolve(projectRoot, '.claude', 'settings.json'), 'utf8'));
-  assert.match(settings.hooks.Stop[0].hooks[0].command, /check-presentation-package/);
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /run-presentation-stop-workflow/);
 
   const proofDir = resolve(projectRoot, 'slides', '030-proof');
   mkdirSync(proofDir, { recursive: true });

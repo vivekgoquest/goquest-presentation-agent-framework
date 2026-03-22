@@ -72,8 +72,17 @@ export function generatePresentationPackageManifest(projectRootInput) {
 export function writePresentationPackageManifest(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
   const manifest = generatePresentationPackageManifest(projectRootInput);
+  const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
   mkdirSync(dirname(paths.packageManifestAbs), { recursive: true });
-  writeFileSync(paths.packageManifestAbs, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  if (existsSync(paths.packageManifestAbs)) {
+    const existingManifest = readFileSync(paths.packageManifestAbs, 'utf8');
+    if (existingManifest === serializedManifest) {
+      return manifest;
+    }
+  }
+
+  writeFileSync(paths.packageManifestAbs, serializedManifest);
   return manifest;
 }
 

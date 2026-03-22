@@ -33,8 +33,12 @@ function resolveActionEventChannel(status) {
 
 export function mapResultStatusToLifecycleStatus(status = '') {
   switch (status) {
+    case 'blocked':
+      return ACTION_LIFECYCLE_STATUSES.FAILED;
     case 'needs-review':
       return ACTION_LIFECYCLE_STATUSES.NEEDS_INPUT;
+    case 'started':
+      return ACTION_LIFECYCLE_STATUSES.SUCCEEDED;
     case 'fail':
       return ACTION_LIFECYCLE_STATUSES.FAILED;
     default:

@@ -1,22 +1,18 @@
 import { capturePresentation } from '../runtime/services/capture-service.mjs';
-import { runDeckCheck } from '../runtime/services/check-service.mjs';
+import { validatePresentation } from '../runtime/services/check-service.mjs';
 import { exportPresentation } from '../runtime/services/export-service.mjs';
 import { finalizePresentation } from '../runtime/services/finalize-service.mjs';
 
 function toActionMessage(actionId, result = {}) {
   switch (actionId) {
-    case 'build_presentation':
-      return result.status === 'needs-review'
-        ? 'Build finished, but the outputs need review.'
-        : 'Presentation build completed.';
     case 'export_presentation':
       return result.format === 'png'
         ? 'PNG export completed.'
-        : 'PDF export completed.';
-    case 'check_presentation':
+        : 'Presentation export completed.';
+    case 'validate_presentation':
       return result.status === 'fail'
-        ? 'Presentation check found issues.'
-        : 'Presentation check passed.';
+        ? 'Presentation validation found issues.'
+        : 'Presentation validation passed.';
     case 'capture_screenshots':
       return result.status === 'needs-review'
         ? 'Capture completed, but the screenshots need review.'
@@ -34,34 +30,40 @@ export function createPresentationActionAdapter() {
       const args = context.args || {};
 
       switch (actionId) {
-        case 'build_presentation': {
+        case 'export_presentation': {
+          const useDirectArtifactExport = Boolean(
+            args.format || args.slideIds || args.outputDir || args.outputFile
+          );
+
+          if (useDirectArtifactExport) {
+            const result = await exportPresentation(target, {
+              format: args.format,
+              slideIds: args.slideIds,
+              outputDir: args.outputDir,
+              outputFile: args.outputFile,
+              pdfOptions: args.options?.pdfOptions || {},
+              captureOptions: args.options?.captureOptions || {},
+            }, args.options || {});
+            return {
+              ...result,
+              status: 'pass',
+              message: toActionMessage(actionId, result),
+              detail: result.format === 'png'
+                ? `Saved ${result.outputPaths.length} PNG file${result.outputPaths.length === 1 ? '' : 's'} to ${result.outputDir}`
+                : (result.outputPath || ''),
+            };
+          }
+
           const result = await finalizePresentation(target, args.options || {});
           return {
             ...result,
             status: result.status || 'pass',
             message: toActionMessage(actionId, result),
+            detail: result.pdf || result.summary || result.report || '',
           };
         }
-        case 'export_presentation': {
-          const result = await exportPresentation(target, {
-            format: args.format,
-            slideIds: args.slideIds,
-            outputDir: args.outputDir,
-            outputFile: args.outputFile,
-            pdfOptions: args.options?.pdfOptions || {},
-            captureOptions: args.options?.captureOptions || {},
-          }, args.options || {});
-          return {
-            ...result,
-            status: 'pass',
-            message: toActionMessage(actionId, result),
-            detail: result.format === 'png'
-              ? `Saved ${result.outputPaths.length} PNG file${result.outputPaths.length === 1 ? '' : 's'} to ${result.outputDir}`
-              : (result.outputPath || ''),
-          };
-        }
-        case 'check_presentation': {
-          const result = await runDeckCheck(target, {
+        case 'validate_presentation': {
+          const result = await validatePresentation(target, {
             ...(args.options || {}),
             outputDir: args.outputDir || args.options?.outputDir || outputPaths.outputDirAbs,
           });

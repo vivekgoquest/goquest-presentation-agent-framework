@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Legacy quality-only helper. The stop hook now runs through
-// check-presentation-package.mjs so package structure, intent, and runtime
+// run-presentation-stop-workflow.mjs so package structure, intent, and runtime
 // evidence stay synchronized before quality warnings can stop the agent.
 
 import { existsSync, readFileSync } from 'node:fs';

@@ -166,7 +166,7 @@ test('project stop hook workflow normalizes runtime policy exceptions', async (t
   assert.match(result.messages.join('\n'), /Deck policy violation|brief\.md|TODO/i);
 });
 
-test('project stop hook workflow formats quality warnings as failure messages', async (t) => {
+test('project stop hook workflow ignores deck-quality heuristics and still passes cleanly', async (t) => {
   const [{ createProjectScaffold }, { runProjectStopHookWorkflow }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../project-hook-service.mjs'),
@@ -185,8 +185,8 @@ test('project stop hook workflow formats quality warnings as failure messages', 
 
   const result = await runProjectStopHookWorkflow(projectRoot);
 
-  assert.equal(result.status, 'fail');
-  assert.match(result.messages.join('\n'), /layout-variety|Fix:/i);
+  assert.equal(result.status, 'pass');
+  assert.deepEqual(result.messages, []);
 });
 
 test('project quality hook workflow respects manual history policy on clean pass', async (t) => {

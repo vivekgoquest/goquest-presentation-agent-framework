@@ -1,6 +1,4 @@
 import { createPresentationTarget, getPresentationPaths } from '../deck-paths.js';
-import { listSlideSourceEntries } from '../deck-source.js';
-import { checkDeckQuality } from '../deck-quality.js';
 import { writeRenderState } from '../presentation-runtime-state.js';
 import { capturePresentation, getDefaultCaptureOutputDir } from './capture-service.mjs';
 
@@ -23,23 +21,14 @@ function buildFailures(report) {
   return failures;
 }
 
-export async function runDeckCheck(targetInput, options = {}) {
+export async function validatePresentation(targetInput, options = {}) {
   const target = createPresentationTarget(targetInput);
   const targetPaths = getPresentationPaths(target);
   const outputDir = options.outputDir || getDefaultCaptureOutputDir(target);
-  const strict = Boolean(options.strict);
 
   const report = await capturePresentation(target, outputDir);
   const failures = buildFailures(report);
-  const slideEntries = listSlideSourceEntries(targetPaths).filter((entry) => entry.isValidName);
-  const qualityWarnings = checkDeckQuality(slideEntries).warnings;
-  const strictFailure = strict && qualityWarnings.length > 0;
-  let status = 'pass';
-  if (failures.length > 0 || strictFailure) {
-    status = 'fail';
-  } else if (qualityWarnings.length > 0) {
-    status = 'needs-review';
-  }
+  const status = failures.length > 0 ? 'fail' : 'pass';
 
   writeRenderState(targetPaths.projectRootAbs, {
     status,
@@ -48,9 +37,7 @@ export async function runDeckCheck(targetInput, options = {}) {
     canvasContract: report.consistency.canvasContract,
     consoleErrorCount: report.consoleErrors.length,
     overflowSlides: report.consistency.slidesWithOverflow,
-    qualityWarnings,
     failures,
-    strictFailure,
     lastCheckedAt: new Date().toISOString(),
   });
 
@@ -60,9 +47,7 @@ export async function runDeckCheck(targetInput, options = {}) {
     slideCount: report.slideCount,
     consoleErrors: report.consoleErrors.length,
     overflowSlides: report.consistency.slidesWithOverflow,
-    qualityWarnings,
     failures,
-    strictFailure,
     status,
   };
 }

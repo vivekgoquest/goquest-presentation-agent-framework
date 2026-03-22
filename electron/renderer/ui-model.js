@@ -50,12 +50,12 @@ function buildProjectMetrics(projectState = {}) {
 export function deriveActionUiModel({
   meta = null,
   projectState = null,
-  reviewAvailability = null,
+  agentActionAvailability = null,
 } = {}) {
   const hasProject = Boolean(meta?.active);
   const status = projectState?.status || '';
   const isReady = READY_STATUSES.has(status);
-  const reviewReason = reviewAvailability?.reasonUnavailable || 'This action is unavailable right now.';
+  const agentActionReason = agentActionAvailability?.reasonUnavailable || 'This action is unavailable right now.';
 
   if (!hasProject) {
     return {
@@ -67,51 +67,55 @@ export function deriveActionUiModel({
 
   return {
     primary: {
-      id: 'build.finalize',
-      label: 'Build presentation',
-      enabled: isReady,
-      reasonDisabled: isReady
-        ? ''
-        : 'Presentation is still in progress. Complete the brief, slides, and policy fixes before building.',
-    },
-    secondary: {
-      id: 'export.start',
-      label: 'Export',
+      id: 'export_presentation',
+      label: 'Export presentation',
       enabled: isReady,
       reasonDisabled: isReady
         ? ''
         : 'Presentation is still in progress. Complete the brief, slides, and policy fixes before exporting.',
     },
+    secondary: {
+      id: 'validate_presentation',
+      label: 'Validate presentation',
+      enabled: true,
+      reasonDisabled: '',
+    },
     menu: [
       {
-        id: 'build.check',
-        label: 'Check presentation',
-        enabled: true,
-        reasonDisabled: '',
-      },
-      {
-        id: 'build.captureScreenshots',
+        id: 'capture_screenshots',
         label: 'Capture screenshots',
         enabled: true,
         reasonDisabled: '',
       },
       {
-        id: 'review.run',
-        label: 'Review presentation',
-        enabled: Boolean(reviewAvailability?.run),
-        reasonDisabled: reviewAvailability?.run ? '' : reviewReason,
+        id: 'fix_validation_issues',
+        label: 'Fix validation issues',
+        enabled: Boolean(agentActionAvailability?.fixValidationIssues),
+        reasonDisabled: agentActionAvailability?.fixValidationIssues ? '' : agentActionReason,
       },
       {
-        id: 'review.revise',
-        label: 'Revise presentation',
-        enabled: Boolean(reviewAvailability?.revise),
-        reasonDisabled: reviewAvailability?.revise ? '' : reviewReason,
+        id: 'review_narrative_presentation',
+        label: 'Review narrative',
+        enabled: Boolean(agentActionAvailability?.reviewNarrative),
+        reasonDisabled: agentActionAvailability?.reviewNarrative ? '' : agentActionReason,
       },
       {
-        id: 'review.fixWarnings',
-        label: 'Fix warnings',
-        enabled: Boolean(reviewAvailability?.fixWarnings),
-        reasonDisabled: reviewAvailability?.fixWarnings ? '' : reviewReason,
+        id: 'apply_narrative_review_changes',
+        label: 'Apply narrative fixes',
+        enabled: Boolean(agentActionAvailability?.applyNarrativeChanges),
+        reasonDisabled: agentActionAvailability?.applyNarrativeChanges ? '' : agentActionReason,
+      },
+      {
+        id: 'review_visual_presentation',
+        label: 'Review visuals',
+        enabled: Boolean(agentActionAvailability?.reviewVisual),
+        reasonDisabled: agentActionAvailability?.reviewVisual ? '' : agentActionReason,
+      },
+      {
+        id: 'apply_visual_review_changes',
+        label: 'Apply visual fixes',
+        enabled: Boolean(agentActionAvailability?.applyVisualChanges),
+        reasonDisabled: agentActionAvailability?.applyVisualChanges ? '' : agentActionReason,
       },
     ],
   };
@@ -138,16 +142,13 @@ export function deriveProjectUiModel({ meta = null, projectState = null } = {}) 
       showSlideCounter: false,
     },
     actions: {
-      check: {
+      validate: {
         enabled: hasProject,
-        primary: false,
-      },
-      build: {
-        enabled: hasProject && isReady,
         primary: false,
       },
       export: {
         enabled: hasProject && isReady,
+        primary: true,
       },
       capture: {
         enabled: hasProject,
@@ -255,6 +256,22 @@ export function normalizeRuntimeActionResult(actionLabel, result = {}) {
       tone: 'error',
       message: `${label} failed.`,
       detail: result.detail || issues[0] || 'Review diagnostics for details.',
+    };
+  }
+
+  if (result.status === 'started') {
+    return {
+      tone: 'success',
+      message: result.message || `${label} started.`,
+      detail: result.detail || '',
+    };
+  }
+
+  if (result.status === 'blocked') {
+    return {
+      tone: 'error',
+      message: result.message || `${label} is blocked.`,
+      detail: result.detail || issues[0] || 'Resolve the blocking issue before retrying.',
     };
   }
 

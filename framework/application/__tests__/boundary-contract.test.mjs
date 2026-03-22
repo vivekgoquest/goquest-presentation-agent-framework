@@ -68,7 +68,7 @@ test('project-local hook wrappers do not import runtime modules directly', () =>
 
 test('project-local hook wrappers do not own git checkpoint execution', () => {
   const hookFiles = [
-    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-presentation-package.mjs'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'run-presentation-stop-workflow.mjs'),
     resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'),
   ];
 
@@ -95,9 +95,11 @@ test('terminal core remains vendor-neutral shell transport', () => {
   assert.doesNotMatch(content, /['"]codex['"]/);
 });
 
-test('renderer no longer consumes the generic public actions bridge', () => {
+test('renderer uses only the generic action invoke bridge and does not take over action lifecycle orchestration', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'electron', 'renderer', 'app.js'), 'utf8');
-  assert.doesNotMatch(content, /window\.electron\.actions/);
+  assert.match(content, /window\.electron\.actions\.invoke/);
+  assert.doesNotMatch(content, /window\.electron\.actions\.list/);
+  assert.doesNotMatch(content, /window\.electron\.actions\.onEvent/);
   assert.doesNotMatch(content, /window\.electron\.events/);
 });
 

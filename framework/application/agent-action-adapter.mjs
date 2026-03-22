@@ -4,8 +4,8 @@ export function createAgentActionAdapter(options = {}) {
   const launcher = createProjectAgentLauncher(options);
 
   return {
-    getAvailability(capabilityId) {
-      return launcher.getAvailability(capabilityId);
+    getAvailability(capabilityId, context = {}) {
+      return launcher.getAvailability(capabilityId, context);
     },
     invoke(capabilityId, context = {}) {
       return launcher.invoke(capabilityId, context);

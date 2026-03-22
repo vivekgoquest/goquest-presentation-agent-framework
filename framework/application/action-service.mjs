@@ -23,7 +23,7 @@ function resolveReadinessDisableReason(projectState) {
     return '';
   }
 
-  return 'Presentation is still in progress. Complete the brief, slides, and policy fixes before building.';
+  return 'Presentation is still in progress. Complete the brief, slides, and policy fixes before exporting.';
 }
 
 function cloneActionDescriptor(action, overrides = {}) {
@@ -41,6 +41,7 @@ async function resolveActionAvailability(action, {
   meta,
   projectState,
   agentAdapter,
+  frameworkRoot,
 }) {
   const baseReason = resolveBaseDisableReason(meta);
 
@@ -52,7 +53,7 @@ async function resolveActionAvailability(action, {
       });
     }
 
-    if (action.id === 'build_presentation' || action.id === 'export_presentation') {
+    if (action.id === 'export_presentation') {
       const reason = resolveReadinessDisableReason(projectState);
       return cloneActionDescriptor(action, {
         enabled: !reason,
@@ -73,7 +74,13 @@ async function resolveActionAvailability(action, {
   }
 
   const availability = typeof agentAdapter?.getAvailability === 'function'
-    ? await agentAdapter.getAvailability(action.id)
+    ? await agentAdapter.getAvailability(action.id, {
+      meta,
+      target: meta?.active
+        ? { kind: 'project', projectRootAbs: meta.projectRoot }
+        : null,
+      frameworkRoot,
+    })
     : { available: true };
 
   return cloneActionDescriptor(action, {
@@ -140,6 +147,7 @@ export function createActionService(options = {}) {
         meta,
         projectState,
         agentAdapter,
+        frameworkRoot,
       })));
     },
 

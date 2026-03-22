@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -43,6 +43,20 @@ function fillBrief(projectRoot) {
   );
 }
 
+function fillOutline(projectRoot) {
+  writeFileSync(
+    resolve(projectRoot, 'outline.md'),
+    [
+      '# Outline',
+      '',
+      '1. Intro',
+      '2. Proof',
+      '3. Close',
+      '',
+    ].join('\n')
+  );
+}
+
 function createQualityWarningSlideHtml(title) {
   return [
     '<div class="slide">',
@@ -57,11 +71,22 @@ function createQualityWarningSlideHtml(title) {
   ].join('\n');
 }
 
+function createValidationFailureSlideHtml(title) {
+  return [
+    '<div class="slide" style="padding: 24px;">',
+    '  <div class="eyebrow">Validation Failure Deck</div>',
+    `  <h2 class="sect-title">${title}</h2>`,
+    '  <p class="body-text">This slide should fail deterministic validation because it uses an inline style.</p>',
+    '</div>',
+    '',
+  ].join('\n');
+}
+
 function createWorkflowContext(projectRoot, overrides = {}) {
   return {
     action: {
-      id: overrides.actionId || 'review_presentation',
-      label: overrides.label || 'Review presentation',
+      id: overrides.actionId || 'fix_validation_issues',
+      label: overrides.label || 'Fix validation issues',
     },
     args: overrides.args || {},
     meta: {
@@ -93,25 +118,38 @@ test('action workflow service exposes canonical workflow definitions for all pro
   assert.deepEqual(
     definitions.map((definition) => definition.actionId),
     [
-      'build_presentation',
       'export_presentation',
-      'check_presentation',
+      'validate_presentation',
       'capture_screenshots',
-      'review_presentation',
-      'revise_presentation',
-      'fix_warnings',
+      'fix_validation_issues',
+      'review_narrative_presentation',
+      'apply_narrative_review_changes',
+      'review_visual_presentation',
+      'apply_visual_review_changes',
     ]
   );
 
-  const review = definitions.find((definition) => definition.actionId === 'review_presentation');
-  assert.equal(review.workflowId, 'presentation-review');
-  assert.deepEqual(review.allowedTriggers, ['electron', 'hook', 'agent', 'cli']);
+  const validate = definitions.find((definition) => definition.actionId === 'validate_presentation');
+  assert.equal(validate.workflowId, 'presentation-validate');
+  assert.deepEqual(validate.allowedTriggers, ['electron', 'hook', 'agent', 'cli']);
 
-  const fixWarnings = definitions.find((definition) => definition.actionId === 'fix_warnings');
-  assert.equal(fixWarnings.workflowId, 'presentation-fix-warnings');
+  const fixValidationIssues = definitions.find((definition) => definition.actionId === 'fix_validation_issues');
+  assert.equal(fixValidationIssues.workflowId, 'presentation-fix-validation-issues');
+
+  const reviewNarrative = definitions.find((definition) => definition.actionId === 'review_narrative_presentation');
+  assert.equal(reviewNarrative.workflowId, 'presentation-narrative-review');
+
+  const applyNarrative = definitions.find((definition) => definition.actionId === 'apply_narrative_review_changes');
+  assert.equal(applyNarrative.workflowId, 'presentation-apply-narrative-review');
+
+  const reviewVisual = definitions.find((definition) => definition.actionId === 'review_visual_presentation');
+  assert.equal(reviewVisual.workflowId, 'presentation-visual-review');
+
+  const applyVisual = definitions.find((definition) => definition.actionId === 'apply_visual_review_changes');
+  assert.equal(applyVisual.workflowId, 'presentation-apply-visual-review');
 });
 
-test('review workflow prepares canonical project truth before invoking the agent adapter', async (t) => {
+test('fix validation issues workflow prepares canonical project truth before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../action-workflow-service.mjs'),
@@ -122,11 +160,23 @@ test('review workflow prepares canonical project truth before invoking the agent
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+  writeFileSync(
+    resolve(projectRoot, 'slides', '010-intro', 'slide.html'),
+    createValidationFailureSlideHtml('Inline style violation')
+  );
 
   const terminalStarts = [];
   const agentCalls = [];
   const workflowService = createActionWorkflowService({
-    presentationAdapter: { invoke: async () => ({ status: 'pass', message: 'noop' }) },
+    presentationAdapter: {
+      invoke: async (actionId) => actionId === 'validate_presentation'
+        ? {
+          status: 'fail',
+          failures: ['Inline style violation'],
+          detail: 'Inline style violation',
+        }
+        : { status: 'pass', message: 'noop' },
+    },
     agentAdapter: {
       async invoke(actionId, context) {
         agentCalls.push({ actionId, workflow: context.workflow });
@@ -136,8 +186,10 @@ test('review workflow prepares canonical project truth before invoking the agent
   });
 
   const result = await workflowService.invokeAction(
-    'review_presentation',
+    'fix_validation_issues',
     createWorkflowContext(projectRoot, {
+      actionId: 'fix_validation_issues',
+      label: 'Fix validation issues',
       terminalService: {
         getMeta() {
           return { alive: false, mode: null };
@@ -151,20 +203,20 @@ test('review workflow prepares canonical project truth before invoking the agent
   );
 
   assert.equal(result.status, 'pass');
-  assert.equal(result.actionId, 'review_presentation');
-  assert.equal(result.workflowId, 'presentation-review');
+  assert.equal(result.actionId, 'fix_validation_issues');
+  assert.equal(result.workflowId, 'presentation-fix-validation-issues');
   assert.equal(result.trigger, 'electron');
   assert.deepEqual(terminalStarts, ['shell']);
   assert.equal(agentCalls.length, 1);
-  assert.equal(agentCalls[0].actionId, 'review_presentation');
-  assert.equal(agentCalls[0].workflow.workflowId, 'presentation-review');
+  assert.equal(agentCalls[0].actionId, 'fix_validation_issues');
+  assert.equal(agentCalls[0].workflow.workflowId, 'presentation-fix-validation-issues');
   assert.match(agentCalls[0].workflow.prompt, /package\.generated\.json/);
   assert.match(agentCalls[0].workflow.prompt, /render-state\.json/);
   assert.match(agentCalls[0].workflow.prompt, /artifacts\.json/);
   assert.match(agentCalls[0].workflow.prompt, /last-good\.json/);
 });
 
-test('fix warnings workflow skips agent execution when the refreshed check has no warnings', async (t) => {
+test('fix validation issues workflow skips agent execution when the refreshed validation has no failures', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../action-workflow-service.mjs'),
@@ -188,20 +240,20 @@ test('fix warnings workflow skips agent execution when the refreshed check has n
   });
 
   const result = await workflowService.invokeAction(
-    'fix_warnings',
+    'fix_validation_issues',
     createWorkflowContext(projectRoot, {
-      actionId: 'fix_warnings',
-      label: 'Fix warnings',
+      actionId: 'fix_validation_issues',
+      label: 'Fix validation issues',
     })
   );
 
   assert.equal(agentCalls, 0);
   assert.equal(result.status, 'skip');
-  assert.match(result.message, /no quality warnings/i);
-  assert.equal(result.workflowId, 'presentation-fix-warnings');
+  assert.match(result.message, /no validation failures/i);
+  assert.equal(result.workflowId, 'presentation-fix-validation-issues');
 });
 
-test('fix warnings workflow refreshes warnings before invoking the agent adapter', async (t) => {
+test('fix validation issues workflow refreshes deterministic failures before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../action-workflow-service.mjs'),
@@ -210,19 +262,24 @@ test('fix warnings workflow refreshes warnings before invoking the agent adapter
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 5, copyFramework: false });
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
-
-  for (const slideDir of ['010-intro', '020-slide-02', '030-slide-03', '040-slide-04', '050-close']) {
-    writeFileSync(
-      resolve(projectRoot, 'slides', slideDir, 'slide.html'),
-      createQualityWarningSlideHtml(`Repeated layout ${slideDir}`)
-    );
-  }
+  writeFileSync(
+    resolve(projectRoot, 'slides', '020-close', 'slide.html'),
+    createValidationFailureSlideHtml('Inline style violation')
+  );
 
   const agentCalls = [];
   const workflowService = createActionWorkflowService({
-    presentationAdapter: { invoke: async () => ({ status: 'pass', message: 'noop' }) },
+    presentationAdapter: {
+      invoke: async (actionId) => actionId === 'validate_presentation'
+        ? {
+          status: 'fail',
+          failures: ['Inline style violation'],
+          detail: 'Inline style violation',
+        }
+        : { status: 'pass', message: 'noop' },
+    },
     agentAdapter: {
       async invoke(actionId, context) {
         agentCalls.push({ actionId, workflow: context.workflow });
@@ -232,10 +289,10 @@ test('fix warnings workflow refreshes warnings before invoking the agent adapter
   });
 
   const result = await workflowService.invokeAction(
-    'fix_warnings',
+    'fix_validation_issues',
     createWorkflowContext(projectRoot, {
-      actionId: 'fix_warnings',
-      label: 'Fix warnings',
+      actionId: 'fix_validation_issues',
+      label: 'Fix validation issues',
       trigger: 'hook',
     })
   );
@@ -243,7 +300,401 @@ test('fix warnings workflow refreshes warnings before invoking the agent adapter
   assert.equal(result.status, 'pass');
   assert.equal(result.trigger, 'hook');
   assert.equal(agentCalls.length, 1);
-  assert.equal(agentCalls[0].workflow.preflight.checkStatus, 'needs-review');
-  assert.ok(agentCalls[0].workflow.preflight.warningCount > 0);
-  assert.match(agentCalls[0].workflow.prompt, /Current quality warnings:/);
+  assert.equal(agentCalls[0].workflow.preflight.checkStatus, 'fail');
+  assert.ok(agentCalls[0].workflow.preflight.failureCount > 0);
+  assert.match(agentCalls[0].workflow.prompt, /Current validation failures:/);
+});
+
+test('visual review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const calls = [];
+  const workflowService = createActionWorkflowService({
+    exportPdf: async (target, outputFile) => {
+      calls.push(['exportPdf', target.projectRootAbs, outputFile]);
+      return { outputPath: outputFile };
+    },
+    agentAdapter: {
+      async getAvailability(actionId) {
+        calls.push(['availability', actionId]);
+        return { available: true };
+      },
+      async invoke(actionId, context) {
+        calls.push(['agent', actionId, context.workflow.outputPath]);
+        return {
+          status: 'started',
+          message: 'Visual review started in the agent terminal.',
+          outputPath: context.workflow.outputPath,
+        };
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'review_visual_presentation',
+    createWorkflowContext(projectRoot, {
+      actionId: 'review_visual_presentation',
+      label: 'Review visuals',
+    })
+  );
+
+  assert.equal(result.status, 'started');
+  assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json'));
+  assert.deepEqual(calls[0], ['availability', 'review_visual_presentation']);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, resolve(projectRoot, 'outputs', 'deck.pdf')]);
+  assert.deepEqual(calls[2], ['agent', 'review_visual_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json')]);
+});
+
+test('narrative review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const calls = [];
+  const workflowService = createActionWorkflowService({
+    exportPdf: async (target, outputFile) => {
+      calls.push(['exportPdf', target.projectRootAbs, outputFile]);
+      return { outputPath: outputFile };
+    },
+    agentAdapter: {
+      async getAvailability(actionId) {
+        calls.push(['availability', actionId]);
+        return { available: true };
+      },
+      async invoke(actionId, context) {
+        calls.push(['agent', actionId, context.workflow.outputPath]);
+        return {
+          status: 'started',
+          message: 'Narrative review started in the agent terminal.',
+          outputPath: context.workflow.outputPath,
+        };
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'review_narrative_presentation',
+    createWorkflowContext(projectRoot, {
+      actionId: 'review_narrative_presentation',
+      label: 'Review narrative',
+    })
+  );
+
+  assert.equal(result.status, 'started');
+  assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json'));
+  assert.deepEqual(calls[0], ['availability', 'review_narrative_presentation']);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, resolve(projectRoot, 'outputs', 'deck.pdf')]);
+  assert.deepEqual(calls[2], ['agent', 'review_narrative_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json')]);
+});
+
+test('narrative review workflow blocks when brief.md is missing', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  unlinkSync(resolve(projectRoot, 'brief.md'));
+  fillOutline(projectRoot);
+
+  const workflowService = createActionWorkflowService({
+    exportPdf: async () => {
+      throw new Error('export should not run');
+    },
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke() {
+        throw new Error('agent should not run');
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'review_narrative_presentation',
+    createWorkflowContext(projectRoot, {
+      actionId: 'review_narrative_presentation',
+      label: 'Review narrative',
+    })
+  );
+
+  assert.equal(result.status, 'blocked');
+  assert.match(result.message, /brief\.md/i);
+});
+
+test('visual review workflow blocks when outline.md is missing', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const workflowService = createActionWorkflowService({
+    exportPdf: async () => {
+      throw new Error('export should not run');
+    },
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke() {
+        throw new Error('agent should not run');
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'review_visual_presentation',
+    createWorkflowContext(projectRoot, {
+      actionId: 'review_visual_presentation',
+      label: 'Review visuals',
+    })
+  );
+
+  assert.equal(result.status, 'blocked');
+  assert.match(result.message, /outline\.md/i);
+});
+
+test('visual review workflow blocks when the reviewer bank is incomplete', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  const fakeFrameworkRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+  t.after(() => rmSync(fakeFrameworkRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const workflowService = createActionWorkflowService({
+    exportPdf: async () => {
+      throw new Error('export should not run');
+    },
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke() {
+        throw new Error('agent should not run');
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'review_visual_presentation',
+    createWorkflowContext(projectRoot, {
+      actionId: 'review_visual_presentation',
+      label: 'Review visuals',
+      frameworkRoot: fakeFrameworkRoot,
+    })
+  );
+
+  assert.equal(result.status, 'blocked');
+  assert.match(result.message, /reviewer bank/i);
+});
+
+test('apply visual review workflow blocks when the canonical review JSON is missing or invalid', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const workflowService = createActionWorkflowService({
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke() {
+        throw new Error('agent should not run');
+      },
+    },
+  });
+
+  const missingResult = await workflowService.invokeAction(
+    'apply_visual_review_changes',
+    createWorkflowContext(projectRoot, {
+      actionId: 'apply_visual_review_changes',
+      label: 'Apply visual fixes',
+    })
+  );
+  assert.equal(missingResult.status, 'blocked');
+  assert.match(missingResult.message, /visual-review-issues\.json/i);
+
+  const reviewDir = resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual');
+  mkdirSync(reviewDir, { recursive: true });
+  writeFileSync(resolve(reviewDir, 'visual-review-issues.json'), '{not-valid-json');
+
+  const invalidResult = await workflowService.invokeAction(
+    'apply_visual_review_changes',
+    createWorkflowContext(projectRoot, {
+      actionId: 'apply_visual_review_changes',
+      label: 'Apply visual fixes',
+    })
+  );
+  assert.equal(invalidResult.status, 'blocked');
+  assert.match(invalidResult.message, /invalid/i);
+});
+
+test('apply visual review workflow uses the canonical review JSON path as the full implementation brief and returns started', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const reviewDir = resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual');
+  mkdirSync(reviewDir, { recursive: true });
+  writeFileSync(
+    resolve(reviewDir, 'visual-review-issues.json'),
+    JSON.stringify({
+      kind: 'visual-review-issues',
+      reviewedAt: '2026-03-22T00:00:00Z',
+      reviewersUsed: ['theme-reviewer'],
+      overallJudgment: 'Needs work.',
+      issues: [
+        {
+          id: 'VR-001',
+          issue: 'Typography hierarchy is weak.',
+          fix: 'Strengthen heading contrast.',
+        },
+      ],
+    }, null, 2)
+  );
+
+  const agentCalls = [];
+  const workflowService = createActionWorkflowService({
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke(actionId, context) {
+        agentCalls.push({ actionId, workflow: context.workflow });
+        return {
+          status: 'started',
+          message: 'Applying visual review changes in the agent terminal.',
+        };
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'apply_visual_review_changes',
+    createWorkflowContext(projectRoot, {
+      actionId: 'apply_visual_review_changes',
+      label: 'Apply visual fixes',
+    })
+  );
+
+  assert.equal(result.status, 'started');
+  assert.equal(agentCalls.length, 1);
+  assert.equal(agentCalls[0].actionId, 'apply_visual_review_changes');
+  assert.equal(agentCalls[0].workflow.reviewIssuesPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json'));
+  assert.match(agentCalls[0].workflow.prompt, /single execution brief/i);
+});
+
+test('apply narrative review workflow uses the canonical review JSON path as the full implementation brief and returns started', async (t) => {
+  const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../action-workflow-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3, copyFramework: false });
+  fillBrief(projectRoot);
+  fillOutline(projectRoot);
+
+  const reviewDir = resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative');
+  mkdirSync(reviewDir, { recursive: true });
+  writeFileSync(
+    resolve(reviewDir, 'narrative-review-issues.json'),
+    JSON.stringify({
+      kind: 'narrative-review-issues',
+      reviewedAt: '2026-03-22T00:00:00Z',
+      reviewersUsed: ['message-reviewer'],
+      overallJudgment: 'Message is muddy.',
+      issues: [
+        {
+          id: 'NR-001',
+          issue: 'The core thesis is not obvious in the opening.',
+          fix: 'State the central takeaway more directly in the first two slides.',
+        },
+      ],
+    }, null, 2)
+  );
+
+  const agentCalls = [];
+  const workflowService = createActionWorkflowService({
+    agentAdapter: {
+      async getAvailability() {
+        return { available: true };
+      },
+      async invoke(actionId, context) {
+        agentCalls.push({ actionId, workflow: context.workflow });
+        return {
+          status: 'started',
+          message: 'Applying narrative review changes in the agent terminal.',
+        };
+      },
+    },
+  });
+
+  const result = await workflowService.invokeAction(
+    'apply_narrative_review_changes',
+    createWorkflowContext(projectRoot, {
+      actionId: 'apply_narrative_review_changes',
+      label: 'Apply narrative fixes',
+    })
+  );
+
+  assert.equal(result.status, 'started');
+  assert.equal(agentCalls.length, 1);
+  assert.equal(agentCalls[0].actionId, 'apply_narrative_review_changes');
+  assert.equal(agentCalls[0].workflow.reviewIssuesPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json'));
+  assert.match(agentCalls[0].workflow.prompt, /single execution brief/i);
 });

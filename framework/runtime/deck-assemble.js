@@ -19,7 +19,6 @@ import {
   validateDeckSource,
   validateSlideDeckWorkspace,
 } from './deck-policy.js';
-import { checkDeckQuality } from './deck-quality.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -129,8 +128,6 @@ export function renderPresentationHtml(input) {
   const html = buildVirtualDeckHtml(target, paths, slideEntries);
   validateDeckSource(html, `${getPresentationId(target)} (virtual)`);
 
-  const quality = checkDeckQuality(slideEntries);
-
   return {
     html,
     title: getPresentationTitle(paths),
@@ -139,6 +136,5 @@ export function renderPresentationHtml(input) {
     presentationId: getPresentationId(target),
     previewPath: getPresentationPreviewPath(target),
     paths,
-    qualityWarnings: quality.warnings,
   };
 }

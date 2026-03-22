@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -83,4 +83,25 @@ test('renderPresentationHtml regenerates missing package files for legacy projec
   assert.equal(preview.slideIds.length, 2);
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'intent.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'package.generated.json')));
+});
+
+test('ensurePresentationPackageFiles does not rewrite an unchanged package manifest', async (t) => {
+  const [{ createProjectScaffold }, { ensurePresentationPackageFiles }] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../presentation-package.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+
+  const manifestPath = resolve(projectRoot, '.presentation', 'package.generated.json');
+  const before = statSync(manifestPath).mtimeMs;
+
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 20));
+  ensurePresentationPackageFiles(projectRoot);
+
+  const after = statSync(manifestPath).mtimeMs;
+  assert.equal(after, before);
 });

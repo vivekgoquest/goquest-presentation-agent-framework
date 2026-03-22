@@ -106,7 +106,7 @@ export function createProjectAgentLauncher(options = {}) {
   }
 
   return {
-    async getAvailability(capabilityId) {
+    async getAvailability(capabilityId, context = {}) {
       const capability = getAgentCapability(capabilityId);
       if (!capability) {
         return {
@@ -126,6 +126,20 @@ export function createProjectAgentLauncher(options = {}) {
         };
       }
 
+      if (capability.requiresProject) {
+        try {
+          createCapabilityPrompt(capability, {
+            ...context,
+            frameworkRoot,
+          }, { resolveContractPaths });
+        } catch (error) {
+          return {
+            available: false,
+            reason: error?.message || `Capability "${capabilityId}" is misconfigured.`,
+          };
+        }
+      }
+
       return {
         available: true,
         vendor: selectedVendor,
@@ -139,7 +153,7 @@ export function createProjectAgentLauncher(options = {}) {
         throw new Error(`Unsupported agent capability "${capabilityId}".`);
       }
 
-      const availability = await this.getAvailability(capabilityId);
+      const availability = await this.getAvailability(capabilityId, context);
       if (!availability.available) {
         return {
           status: 'fail',
@@ -180,6 +194,7 @@ export function createProjectAgentLauncher(options = {}) {
 
         let stdout = '';
         let stderr = '';
+        let settled = false;
 
         child.stdout.setEncoding('utf8');
         child.stderr.setEncoding('utf8');
@@ -195,12 +210,39 @@ export function createProjectAgentLauncher(options = {}) {
         });
 
         child.on('error', (error) => {
+          if (settled) {
+            context.terminalService?.writeSystemOutput?.(`${error?.message || 'Agent process failed to start.'}\r\n`);
+            return;
+          }
           reject(error);
         });
 
+        if (capability.completionMode === 'async-start') {
+          setImmediate(() => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            resolvePromise({
+              status: 'started',
+              message: `${capability.label} started in the agent terminal.`,
+              vendor: availability.vendor,
+            });
+          });
+        }
+
         child.on('close', (code) => {
+          if (capability.completionMode === 'async-start') {
+            if (code !== 0) {
+              const detail = tailText(stdout || stderr) || `Exited with code ${code}.`;
+              context.terminalService?.writeSystemOutput?.(`${capability.label} failed. ${detail}\r\n`);
+            }
+            return;
+          }
+
           const detail = tailText(stdout || stderr);
           if (code === 0) {
+            settled = true;
             resolvePromise({
               status: 'pass',
               message: `${capability.label} completed.`,
@@ -210,6 +252,7 @@ export function createProjectAgentLauncher(options = {}) {
             return;
           }
 
+          settled = true;
           resolvePromise({
             status: 'fail',
             message: `${capability.label} failed.`,

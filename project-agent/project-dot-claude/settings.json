@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/check-presentation-package.mjs",
+            "command": "node .claude/hooks/run-presentation-stop-workflow.mjs",
             "timeout": 15,
-            "statusMessage": "Checking presentation package…"
+            "statusMessage": "Validating presentation and checkpointing local git…"
           }
         ]
       }
