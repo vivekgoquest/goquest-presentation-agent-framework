@@ -42,6 +42,10 @@ function fillBrief(projectRoot) {
   );
 }
 
+function readJson(absPath) {
+  return JSON.parse(readFileSync(absPath, 'utf8'));
+}
+
 test('application scaffold creates a linked project scaffold with the required agent package contract', async (t) => {
   const [
     { createProjectScaffold },
@@ -120,22 +124,36 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const capture = await capturePresentation({ projectRoot }, captureDir);
   assert.ok(capture.slideCount >= 1);
   assert.ok(existsSync(resolve(captureDir, 'report.json')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
+  const captureArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.ok(Array.isArray(captureArtifacts.slides));
+  assert.ok(captureArtifacts.slides.length >= 1);
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check');
   const check = await runDeckCheck({ projectRoot }, { outputDir: checkDir });
   assert.equal(check.status, 'pass');
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
+  const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
+  assert.equal(renderState.status, 'pass');
+  assert.deepEqual(renderState.slideIds.sort(), ['close', 'intro']);
 
   const exportPath = resolve(projectRoot, 'outputs', 'service-export.pdf');
   const exported = await exportDeckPdf({ projectRoot }, exportPath);
   assert.equal(exported.outputPath, exportPath);
   assert.ok(existsSync(exportPath));
   assert.equal(readFileSync(exportPath).subarray(0, 4).toString(), '%PDF');
+  const exportedArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.equal(exportedArtifacts.pdf.path, 'outputs/service-export.pdf');
 
   const finalized = await finalizePresentation({ projectRoot });
   assert.equal(finalized.status, 'pass');
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'deck.pdf')));
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'report.json')));
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'summary.md')));
+  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
+  const lastGood = readJson(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json'));
+  assert.equal(lastGood.status, 'pass');
+  assert.equal(lastGood.artifacts.pdf, 'outputs/deck.pdf');
 });
 
 test('assembled deck keeps export in Electron and out of the deck html', async (t) => {
@@ -198,6 +216,8 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.equal(pngResult.outputPaths.length, 1);
   assert.ok(existsSync(pngResult.outputPaths[0]));
   assert.equal(existsSync(resolve(pngOutputDir, 'report.json')), false);
+  const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.deepEqual(runtimeArtifacts.slides.map((slide) => slide.id), ['intro']);
 });
 
 test('rendered contract checks fail when a copied framework canvas breaks the stage contract', async (t) => {

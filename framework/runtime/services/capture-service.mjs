@@ -5,8 +5,10 @@ import {
   createPresentationTarget,
   getPresentationId,
   getPresentationPaths,
+  toRelativeWithin,
 } from '../deck-paths.js';
 import { renderPresentationHtml } from '../deck-assemble.js';
+import { writeArtifacts, writeRenderState } from '../presentation-runtime-state.js';
 import { withRuntimeServer } from '../runtime-app.js';
 import {
   DEFAULT_VIEWPORT,
@@ -31,6 +33,18 @@ function buildReportSummary(slides, consoleErrors) {
       ? 'needs-review'
       : 'pass',
   };
+}
+
+function toProjectArtifactPath(projectPaths, pathValue) {
+  if (!pathValue) {
+    return '';
+  }
+
+  try {
+    return toRelativeWithin(projectPaths.projectRootAbs, pathValue);
+  } catch {
+    return pathValue;
+  }
 }
 
 async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options = {}) {
@@ -290,6 +304,29 @@ async function captureDeckFromPreviewUrl(previewUrl, target, outputDir, options 
   if (writeReport) {
     writeFileSync(resolve(outputDir, 'report.json'), JSON.stringify(report, null, 2));
   }
+
+  const projectPaths = getPresentationPaths(target);
+  writeArtifacts(projectPaths.projectRootAbs, {
+    outputDir: toProjectArtifactPath(projectPaths, outputDir),
+    fullPage: captureFullPage ? { path: toProjectArtifactPath(projectPaths, resolve(outputDir, 'full-page.png')) } : null,
+    report: writeReport ? { path: toProjectArtifactPath(projectPaths, resolve(outputDir, 'report.json')) } : null,
+    slides: selectedSlides
+      .filter((slide) => slide.screenshotPath)
+      .map((slide) => ({
+        id: slide.id,
+        path: toProjectArtifactPath(projectPaths, slide.screenshotPath),
+      })),
+  });
+  writeRenderState(projectPaths.projectRootAbs, {
+    status: report.status,
+    slideIds: report.slideIds,
+    previewKind: 'slides',
+    canvasContract: report.consistency.canvasContract,
+    consoleErrorCount: report.consoleErrors.length,
+    overflowSlides: report.consistency.slidesWithOverflow,
+    lastCheckedAt: report.timestamp,
+  });
+
   return report;
 }
 

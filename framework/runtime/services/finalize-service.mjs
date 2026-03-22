@@ -6,11 +6,25 @@ import {
   getPresentationId,
   getPresentationOutputPaths,
   getPresentationPaths,
+  toRelativeWithin,
 } from '../deck-paths.js';
 import { listSlideSourceEntries } from '../deck-source.js';
 import { checkDeckQuality } from '../deck-quality.js';
+import { writeArtifacts, writeLastGood, writeRenderState } from '../presentation-runtime-state.js';
 import { capturePresentation } from './capture-service.mjs';
 import { exportDeckPdf } from './export-service.mjs';
+
+function toProjectArtifactPath(sourcePaths, pathValue) {
+  if (!pathValue) {
+    return '';
+  }
+
+  try {
+    return toRelativeWithin(sourcePaths.projectRootAbs, pathValue);
+  } catch {
+    return pathValue;
+  }
+}
 
 function summarizeIssues(report) {
   const issues = [];
@@ -123,6 +137,48 @@ export async function finalizePresentation(targetInput, options = {}) {
   }
 
   writeFileSync(outputPaths.summaryAbs, summary);
+
+  writeArtifacts(sourcePaths.projectRootAbs, {
+    outputDir: outputPaths.outputDirRel,
+    pdf: { path: outputPaths.pdfRel },
+    fullPage: { path: outputPaths.fullPageRel },
+    report: report ? { path: outputPaths.reportRel } : null,
+    summary: { path: outputPaths.summaryRel },
+    slides: report
+      ? report.slides
+        .filter((slide) => slide.screenshotPath)
+        .map((slide) => ({
+          id: slide.id,
+          path: toProjectArtifactPath(sourcePaths, slide.screenshotPath),
+        }))
+      : [],
+  });
+  writeRenderState(sourcePaths.projectRootAbs, {
+    status,
+    slideIds: report?.slideIds || [],
+    previewKind: 'slides',
+    canvasContract: report?.consistency?.canvasContract || null,
+    consoleErrorCount: report?.consoleErrors?.length || 0,
+    overflowSlides: report?.consistency?.slidesWithOverflow || [],
+    qualityWarnings,
+    issues,
+    lastCheckedAt: new Date().toISOString(),
+  });
+  if (status === 'pass') {
+    writeLastGood(sourcePaths.projectRootAbs, {
+      status,
+      approvedAt: new Date().toISOString(),
+      slideIds: report?.slideIds || [],
+      artifacts: {
+        pdf: outputPaths.pdfRel,
+        slides: report
+          ? report.slides
+            .filter((slide) => slide.screenshotPath)
+            .map((slide) => toProjectArtifactPath(sourcePaths, slide.screenshotPath))
+          : [],
+      },
+    });
+  }
 
   return {
     status,

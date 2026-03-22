@@ -1,6 +1,7 @@
 import { createPresentationTarget, getPresentationPaths } from '../deck-paths.js';
 import { listSlideSourceEntries } from '../deck-source.js';
 import { checkDeckQuality } from '../deck-quality.js';
+import { writeRenderState } from '../presentation-runtime-state.js';
 import { capturePresentation, getDefaultCaptureOutputDir } from './capture-service.mjs';
 
 function buildFailures(report) {
@@ -34,6 +35,19 @@ export async function runDeckCheck(targetInput, options = {}) {
   const qualityWarnings = checkDeckQuality(slideEntries).warnings;
   const strictFailure = strict && qualityWarnings.length > 0;
   const status = failures.length === 0 && !strictFailure ? 'pass' : 'fail';
+
+  writeRenderState(targetPaths.projectRootAbs, {
+    status,
+    slideIds: report.slideIds,
+    previewKind: 'slides',
+    canvasContract: report.consistency.canvasContract,
+    consoleErrorCount: report.consoleErrors.length,
+    overflowSlides: report.consistency.slidesWithOverflow,
+    qualityWarnings,
+    failures,
+    strictFailure,
+    lastCheckedAt: new Date().toISOString(),
+  });
 
   return {
     workspace: report.workspace,

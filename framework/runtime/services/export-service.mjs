@@ -1,17 +1,33 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { generatePDF } from '../pdf-export.js';
+import { writeArtifacts } from '../presentation-runtime-state.js';
 import { capturePresentation } from './capture-service.mjs';
 import {
   createPresentationTarget,
   getPresentationId,
+  getPresentationPaths,
   getSuggestedPdfName,
+  toRelativeWithin,
 } from '../deck-paths.js';
+
+function toProjectArtifactPath(projectPaths, pathValue) {
+  if (!pathValue) {
+    return '';
+  }
+
+  try {
+    return toRelativeWithin(projectPaths.projectRootAbs, pathValue);
+  } catch {
+    return pathValue;
+  }
+}
 
 export async function exportDeckPdf(targetInput, outputFile = null, options = {}) {
   const target = createPresentationTarget(targetInput);
   const cwd = options.cwd || process.cwd();
   const outputPath = resolve(cwd, outputFile || getSuggestedPdfName(target));
+  const projectPaths = getPresentationPaths(target);
 
   mkdirSync(dirname(outputPath), { recursive: true });
   const pdfBuffer = await generatePDF(target, {
@@ -19,6 +35,12 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
     slideIds: options.slideIds || options.pdfOptions?.slideIds || [],
   });
   writeFileSync(outputPath, pdfBuffer);
+  writeArtifacts(projectPaths.projectRootAbs, {
+    format: 'pdf',
+    outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
+    pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
+    slides: [],
+  });
 
   return {
     target,
@@ -57,6 +79,13 @@ export async function exportPresentation(targetInput, request = {}, options = {}
       slideIds,
       pdfOptions: request.pdfOptions || options.pdfOptions || {},
     });
+    const projectPaths = getPresentationPaths(target);
+    writeArtifacts(projectPaths.projectRootAbs, {
+      format,
+      outputDir: toProjectArtifactPath(projectPaths, outputDir),
+      pdf: { path: toProjectArtifactPath(projectPaths, result.outputPath) },
+      slides: [],
+    });
     return {
       format,
       target,
@@ -75,6 +104,17 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     slidesDirName: '',
     writeReport: false,
     captureFullPage: false,
+  });
+  const projectPaths = getPresentationPaths(target);
+  writeArtifacts(projectPaths.projectRootAbs, {
+    format,
+    outputDir: toProjectArtifactPath(projectPaths, outputDir),
+    slides: report.slides
+      .filter((slide) => slide.screenshotPath)
+      .map((slide) => ({
+        id: slide.id,
+        path: toProjectArtifactPath(projectPaths, slide.screenshotPath),
+      })),
   });
 
   return {
