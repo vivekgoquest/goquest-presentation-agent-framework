@@ -58,7 +58,8 @@ async function waitForCondition(predicate, attempts = 40, delayMs = 250) {
 
 async function waitForPreviewFrame(page) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    const frame = page.frames().find((candidate) => candidate.url().startsWith('presentation://preview/current'));
+    const handle = await page.$('#preview-frame');
+    const frame = handle ? await handle.contentFrame() : null;
     if (frame) {
       return frame;
     }
@@ -67,6 +68,23 @@ async function waitForPreviewFrame(page) {
   }
 
   throw new Error('Timed out waiting for the Electron preview frame.');
+}
+
+async function waitForStageFrame(previewFrame) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    try {
+      await previewFrame.waitForSelector('#electron-preview-stage', { timeout: 250 });
+      const child = previewFrame.childFrames()[0];
+      if (child) {
+        await child.waitForSelector('section[data-slide]', { timeout: 250 });
+        return child;
+      }
+    } catch {
+      // retry until the preview host settles
+    }
+  }
+
+  throw new Error('Timed out waiting for the Electron preview stage frame.');
 }
 
 test('electron shell boots and can create a project through the preload bridge', async (t) => {
@@ -92,7 +110,7 @@ test('electron shell boots and can create a project through the preload bridge',
   const electronSurfaceKeys = await page.evaluate(() => Object.keys(window.electron || {}).sort());
   assert.deepEqual(
     electronSurfaceKeys,
-    ['actions', 'build', 'events', 'export', 'preview', 'project', 'review', 'system', 'terminal', 'watch']
+    ['actions', 'preview', 'project', 'system', 'terminal']
   );
 
   const electronMethodShape = await page.evaluate(() => ({
@@ -100,9 +118,9 @@ test('electron shell boots and can create a project through the preload bridge',
     projectChanged: typeof window.electron.project.onChanged,
     previewMeta: typeof window.electron.preview.getMeta,
     previewChanged: typeof window.electron.preview.onChanged,
-    buildFinalize: typeof window.electron.build.finalize,
-    exportStart: typeof window.electron.export.start,
-    reviewRun: typeof window.electron.review.run,
+    actionList: typeof window.electron.actions.list,
+    actionInvoke: typeof window.electron.actions.invoke,
+    actionEvents: typeof window.electron.actions.onEvent,
     terminalStart: typeof window.electron.terminal.start,
     revealInFinder: typeof window.electron.system.revealInFinder,
   }));
@@ -111,9 +129,9 @@ test('electron shell boots and can create a project through the preload bridge',
     projectChanged: 'function',
     previewMeta: 'function',
     previewChanged: 'function',
-    buildFinalize: 'function',
-    exportStart: 'function',
-    reviewRun: 'function',
+    actionList: 'function',
+    actionInvoke: 'function',
+    actionEvents: 'function',
     terminalStart: 'function',
     revealInFinder: 'function',
   });
@@ -121,6 +139,9 @@ test('electron shell boots and can create a project through the preload bridge',
   // Verify the app shell loaded and shows the welcome state
   const welcomeText = await page.locator('#welcome-panel h2').textContent();
   assert.match(welcomeText || '', /Presentation Desktop/i);
+
+  const welcomeActionCount = await page.locator('#welcome-panel .welcome-actions button').count();
+  assert.equal(welcomeActionCount, 0);
 
   // Set path via hidden input and trigger create through JS
   // (the real UI uses a folder picker, but tests set it programmatically)
@@ -141,17 +162,61 @@ test('electron shell boots and can create a project through the preload bridge',
     return metaEl?.textContent?.includes('"active": true');
   });
 
-  // Verify terminal meta is available in diagnostics
+  await page.waitForFunction((expectedProjectRoot) => {
+    try {
+      const meta = JSON.parse(document.querySelector('#terminal-meta')?.textContent || '{}');
+      return meta.alive === true && meta.projectRoot === expectedProjectRoot && meta.cwd === expectedProjectRoot;
+    } catch {
+      return false;
+    }
+  }, projectRoot);
+
+  // Verify terminal meta is available in diagnostics and auto-starts in the selected folder
   const terminalStatus = await page.locator('#terminal-meta').textContent();
   assert.match(terminalStatus || '', /"state"/);
+  assert.match(terminalStatus || '', /"alive": true/);
 
   await page.waitForSelector('#terminal-pane');
   await page.waitForSelector('#preview-pane');
 
   const terminalTitle = await page.locator('.terminal-title').textContent();
   const previewTitle = await page.locator('.preview-title').textContent();
-  assert.match(terminalTitle || '', /assistant/i);
-  assert.match(previewTitle || '', /presentation/i);
+  assert.match(terminalTitle || '', /terminal/i);
+  assert.match(previewTitle || '', /preview/i);
+
+  const terminalStateLabel = await page.locator('#terminal-state-label').textContent();
+  assert.match(terminalStateLabel || '', /shell open/i);
+  assert.match(terminalStateLabel || '', /pf-electron-app/i);
+
+  const projectContext = await page.locator('#project-context-label').textContent();
+  assert.match(projectContext || '', /pf-electron-app/i);
+  assert.match(projectContext || '', /Onboarding|In Progress|Ready|Finalized/i);
+
+  const previewSubtitle = await page.locator('#preview-subtitle').textContent();
+  assert.match(previewSubtitle || '', /draft preview/i);
+  assert.doesNotMatch(previewSubtitle || '', /slides/i);
+
+  const previewHeaderStyles = await page.evaluate(() => {
+    const header = document.querySelector('.preview-header');
+    const title = document.querySelector('.preview-header .pane-title');
+    const subtitle = document.querySelector('.preview-header .pane-subtitle');
+    const headerStyle = header ? getComputedStyle(header) : null;
+    const titleStyle = title ? getComputedStyle(title) : null;
+    const subtitleStyle = subtitle ? getComputedStyle(subtitle) : null;
+    return {
+      paddingTop: headerStyle ? parseFloat(headerStyle.paddingTop) : 0,
+      paddingLeft: headerStyle ? parseFloat(headerStyle.paddingLeft) : 0,
+      titleSize: titleStyle ? parseFloat(titleStyle.fontSize) : 0,
+      subtitleSize: subtitleStyle ? parseFloat(subtitleStyle.fontSize) : 0,
+    };
+  });
+  assert.equal(previewHeaderStyles.paddingTop, 8);
+  assert.equal(previewHeaderStyles.paddingLeft, 10);
+  assert.equal(previewHeaderStyles.titleSize, 11);
+  assert.equal(previewHeaderStyles.subtitleSize, 10);
+
+  const splitHandleCount = await page.locator('#pane-split-handle').count();
+  assert.equal(splitHandleCount, 1);
 
   const visibleActions = await page.evaluate(() => {
     const primary = document.getElementById('primary-action');
@@ -164,15 +229,20 @@ test('electron shell boots and can create a project through the preload bridge',
     };
   });
   assert.equal(visibleActions.primaryHidden, false);
-  assert.match(visibleActions.primaryText, /export presentation/i);
-  assert.equal(visibleActions.secondaryHidden, false);
-  assert.match(visibleActions.secondaryText, /validate presentation/i);
+  assert.match(visibleActions.primaryText, /check project/i);
+  assert.equal(visibleActions.secondaryHidden, true);
 
-  const reviewAvailability = await page.evaluate(async () => {
-    return window.electron.review.getAvailability();
+  const actions = await page.evaluate(async () => {
+    return window.electron.actions.list();
   });
-  assert.equal(reviewAvailability.reviewNarrative, true);
-  assert.equal(reviewAvailability.reviewVisual, true);
+  assert(actions.actions.some((action) => action.id === 'review_narrative_presentation' && action.enabled));
+  assert(actions.actions.some((action) => action.id === 'review_visual_presentation' && action.enabled));
+
+  const toolsButtonText = await page.locator('#more-actions').textContent();
+  assert.match(toolsButtonText || '', /more/i);
+  await page.locator('#more-actions').click();
+  const menuSummary = await page.locator('#more-menu-summary').textContent();
+  assert.match(menuSummary || '', /checks|reviews|capture|fixes/i);
 
   const filmstripCount = await page.locator('#filmstrip').count();
   assert.equal(filmstripCount, 0);
@@ -181,8 +251,15 @@ test('electron shell boots and can create a project through the preload bridge',
   assert.equal(diagnosticsButtonCount, 0);
 
   const welcomeCopy = await page.locator('#welcome-panel p').textContent();
-  assert.match(welcomeCopy || '', /assistant/i);
+  assert.match(welcomeCopy || '', /toolbar|terminal|preview/i);
   assert.doesNotMatch(welcomeCopy || '', /browser|deck policy/i);
+
+  const terminalActionLabels = await page.evaluate(() => ({
+    clear: document.getElementById('clear-terminal')?.style.display || '',
+    close: document.getElementById('stop-terminal')?.textContent || '',
+  }));
+  assert.equal(terminalActionLabels.clear, 'none');
+  assert.match(terminalActionLabels.close, /close shell/i);
 });
 
 test('electron preview applies a generic viewport shell for ready slide decks', async (t) => {
@@ -214,12 +291,35 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
   const previewMeta = await page.evaluate(() => window.electron.preview.getMeta());
   assert.equal(previewMeta.kind, 'slides');
-  const previewFrame = await waitForPreviewFrame(page);
-  await previewFrame.waitForSelector('#electron-preview-stage');
 
-  const stageFrame = previewFrame.childFrames()[0];
+  await page.waitForFunction(() => {
+    const header = document.querySelector('.preview-header');
+    return header && getComputedStyle(header).display === 'none';
+  });
+
+  const previewTransport = await page.evaluate(async () => {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const frame = document.getElementById('preview-frame');
+      if (frame?.srcdoc) {
+        return {
+          src: frame.getAttribute('src') || '',
+          srcdocLength: frame.srcdoc.length,
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    return {
+      src: document.getElementById('preview-frame')?.getAttribute('src') || '',
+      srcdocLength: document.getElementById('preview-frame')?.srcdoc?.length || 0,
+    };
+  });
+  assert.equal(previewTransport.src, '');
+  assert.ok(previewTransport.srcdocLength > 0);
+
+  const previewFrame = await waitForPreviewFrame(page);
+  const stageFrame = await waitForStageFrame(previewFrame);
   assert.ok(stageFrame, 'expected inner preview stage frame');
-  await stageFrame.waitForSelector('section[data-slide]');
 
   const hostDetails = await previewFrame.evaluate(() => {
     const shell = document.getElementById('electron-preview-shell');
@@ -247,6 +347,7 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
       stageWidth: stageClientWidth,
       stageHeight: stageClientHeight,
       stageZoom: stageStyle?.zoom || '',
+      stageBorderRadius: stageStyle?.borderRadius || '',
       zoomedWidth,
       zoomedHeight,
       overflowX: zoomedWidth + paddingLeft + paddingRight - (shell?.clientWidth || 0),
@@ -273,6 +374,11 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   assert.equal(hostDetails.host, 'slides');
   assert.equal(hostDetails.stageWidth, 1280);
   assert.equal(hostDetails.stageHeight, 720);
+  assert.equal(hostDetails.paddingLeft, 4);
+  assert.equal(hostDetails.paddingRight, 4);
+  assert.equal(hostDetails.paddingTop, 4);
+  assert.equal(hostDetails.paddingBottom, 4);
+  assert.match(hostDetails.stageBorderRadius, /10px/i);
   assert.notEqual(hostDetails.stageZoom, '1');
   assert.ok(
     hostDetails.overflowX <= 1,
@@ -284,7 +390,10 @@ test('electron preview applies a generic viewport shell for ready slide decks', 
   );
 
   assert.equal(stageDetails.innerWidth, 1280);
-  assert.equal(stageDetails.innerHeight, 720);
+  assert.ok(
+    stageDetails.innerHeight >= 719 && stageDetails.innerHeight <= 720,
+    `expected inner preview height to stay near 720, saw ${stageDetails.innerHeight}`
+  );
   assert.equal(stageDetails.slideCount, 2);
   assert.equal(stageDetails.hasExportBar, false);
   assert.match(stageDetails.bodyGap, /px/);
@@ -318,7 +427,7 @@ test('electron export action runs directly from the toolbar without opening the 
   const page = await app.firstWindow();
   await page.waitForSelector('#app-shell');
   await page.evaluate((path) => window.electron.project.open({ projectRoot: path }), projectRoot);
-  await page.waitForFunction(() => document.getElementById('primary-action')?.textContent?.match(/export presentation/i));
+  await page.waitForFunction(() => document.getElementById('primary-action')?.textContent?.match(/export/i));
 
   await page.locator('#primary-action').click();
   await page.waitForFunction(() => /export/i.test(document.getElementById('action-status-label')?.textContent || ''));

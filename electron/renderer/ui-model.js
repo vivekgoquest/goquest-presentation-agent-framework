@@ -1,5 +1,68 @@
 const READY_STATUSES = new Set(['ready_to_finalize', 'finalized']);
 
+function formatShellName(shellPath = '') {
+  const parts = String(shellPath || '').split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) || '';
+}
+
+function formatShellContext(meta = {}) {
+  const shellName = formatShellName(meta?.shell);
+  if (!shellName) {
+    return '';
+  }
+
+  return meta?.loginShell ? `${shellName} login shell` : `${shellName} shell`;
+}
+
+function splitPathSegments(pathValue = '') {
+  return String(pathValue || '').split(/[\\/]/).filter(Boolean);
+}
+
+function formatCwdContext(meta = {}) {
+  const cwd = String(meta?.cwd || '').trim();
+  const projectRoot = String(meta?.projectRoot || '').trim();
+  if (!cwd || !projectRoot || cwd === projectRoot) {
+    return '';
+  }
+
+  const projectSegments = splitPathSegments(projectRoot);
+  const cwdSegments = splitPathSegments(cwd);
+  const sharesProjectRoot = projectSegments.every((segment, index) => cwdSegments[index] === segment);
+  if (sharesProjectRoot && cwdSegments.length > projectSegments.length) {
+    return cwdSegments.slice(projectSegments.length).join('/');
+  }
+
+  return cwdSegments.at(-1) || '';
+}
+
+function formatCommandContext(meta = {}) {
+  const integration = meta?.shellIntegration || {};
+  if (!integration.supported) {
+    return '';
+  }
+
+  if (integration.commandState === 'running') {
+    return 'command running';
+  }
+
+  if (integration.commandState === 'failed' && Number.isFinite(integration.lastCommandExitCode)) {
+    return `exit ${integration.lastCommandExitCode}`;
+  }
+
+  return '';
+}
+
+function formatShellDetail(meta = {}) {
+  const shellContext = formatShellContext(meta);
+  if (!shellContext) {
+    return meta?.projectRoot ? 'Type here to work in this project.' : 'The shell is ready.';
+  }
+
+  return meta?.projectRoot
+    ? `${shellContext} ready in this project.`
+    : `${shellContext} ready.`;
+}
+
 function formatStatusLabel(status = '') {
   if (!status) return 'Unknown';
   return status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -50,12 +113,9 @@ function buildProjectMetrics(projectState = {}) {
 export function deriveActionUiModel({
   meta = null,
   projectState = null,
-  agentActionAvailability = null,
+  actions = [],
 } = {}) {
   const hasProject = Boolean(meta?.active);
-  const status = projectState?.status || '';
-  const isReady = READY_STATUSES.has(status);
-  const agentActionReason = agentActionAvailability?.reasonUnavailable || 'This action is unavailable right now.';
 
   if (!hasProject) {
     return {
@@ -65,59 +125,24 @@ export function deriveActionUiModel({
     };
   }
 
+  const descriptors = Array.isArray(actions) ? actions : [];
+  const explicitPrimary = descriptors.find((action) => action.surface === 'primary') || null;
+  const explicitSecondary = descriptors.find((action) => action.surface === 'secondary') || null;
+  const menuActions = descriptors.filter((action) => action.surface === 'menu');
+
+  const primary = explicitPrimary?.enabled
+    ? explicitPrimary
+    : (explicitSecondary?.enabled ? explicitSecondary : explicitPrimary || explicitSecondary || null);
+
+  const menu = [
+    ...(explicitSecondary && primary?.id !== explicitSecondary.id ? [explicitSecondary] : []),
+    ...menuActions,
+  ];
+
   return {
-    primary: {
-      id: 'export_presentation',
-      label: 'Export presentation',
-      enabled: isReady,
-      reasonDisabled: isReady
-        ? ''
-        : 'Presentation is still in progress. Complete the brief, slides, and policy fixes before exporting.',
-    },
-    secondary: {
-      id: 'validate_presentation',
-      label: 'Validate presentation',
-      enabled: true,
-      reasonDisabled: '',
-    },
-    menu: [
-      {
-        id: 'capture_screenshots',
-        label: 'Capture screenshots',
-        enabled: true,
-        reasonDisabled: '',
-      },
-      {
-        id: 'fix_validation_issues',
-        label: 'Fix validation issues',
-        enabled: Boolean(agentActionAvailability?.fixValidationIssues),
-        reasonDisabled: agentActionAvailability?.fixValidationIssues ? '' : agentActionReason,
-      },
-      {
-        id: 'review_narrative_presentation',
-        label: 'Review narrative',
-        enabled: Boolean(agentActionAvailability?.reviewNarrative),
-        reasonDisabled: agentActionAvailability?.reviewNarrative ? '' : agentActionReason,
-      },
-      {
-        id: 'apply_narrative_review_changes',
-        label: 'Apply narrative fixes',
-        enabled: Boolean(agentActionAvailability?.applyNarrativeChanges),
-        reasonDisabled: agentActionAvailability?.applyNarrativeChanges ? '' : agentActionReason,
-      },
-      {
-        id: 'review_visual_presentation',
-        label: 'Review visuals',
-        enabled: Boolean(agentActionAvailability?.reviewVisual),
-        reasonDisabled: agentActionAvailability?.reviewVisual ? '' : agentActionReason,
-      },
-      {
-        id: 'apply_visual_review_changes',
-        label: 'Apply visual fixes',
-        enabled: Boolean(agentActionAvailability?.applyVisualChanges),
-        reasonDisabled: agentActionAvailability?.applyVisualChanges ? '' : agentActionReason,
-      },
-    ],
+    primary,
+    secondary: null,
+    menu,
   };
 }
 
@@ -165,7 +190,7 @@ export function deriveTerminalUiModel({ meta = null, startError = '' } = {}) {
   if (errorText) {
     return {
       state: 'failed',
-      label: 'Assistant could not start',
+      label: 'Shell could not open',
       detail: errorText,
       showTerminal: false,
       showRetry: true,
@@ -182,8 +207,8 @@ export function deriveTerminalUiModel({ meta = null, startError = '' } = {}) {
     case 'starting':
       return {
         state,
-        label: 'Starting assistant',
-        detail: 'Preparing the workspace…',
+        label: 'Opening shell',
+        detail: 'Connecting to this project…',
         showTerminal: false,
         showRetry: false,
         showStop: false,
@@ -192,8 +217,11 @@ export function deriveTerminalUiModel({ meta = null, startError = '' } = {}) {
     case 'running':
       return {
         state,
-        label: 'Ready',
-        detail: meta?.projectRoot ? 'Connected to this presentation.' : 'The workspace is ready.',
+        label: 'Shell open',
+        detail: formatShellDetail(meta),
+        context: formatShellContext(meta),
+        cwdContext: formatCwdContext(meta),
+        commandContext: formatCommandContext(meta),
         showTerminal: true,
         showRetry: false,
         showStop: true,
@@ -202,30 +230,42 @@ export function deriveTerminalUiModel({ meta = null, startError = '' } = {}) {
     case 'stopped':
       return {
         state,
-        label: 'Assistant stopped',
-        detail: 'Start it again to keep working on this presentation.',
+        label: 'Shell closed',
+        detail: 'Open the shell to keep working in this project.',
         showTerminal: false,
         showRetry: true,
         showStop: false,
-        showClear: true,
+        showClear: false,
       };
     default:
       return {
         state: 'idle',
-        label: 'Open a presentation',
-        detail: 'Create a new presentation or open an existing one to get started.',
+        label: 'Open a project',
+        detail: 'Open or create a project to launch the shell automatically.',
         showTerminal: false,
-        showRetry: true,
+        showRetry: false,
         showStop: false,
         showClear: false,
       };
   }
 }
 
+export function formatTerminalOutputEvent(event = {}) {
+  const data = String(event?.data || '');
+  if (!data) {
+    return '';
+  }
+
+  if (event?.source === 'system') {
+    return `\u001b[90m${data}\u001b[0m`;
+  }
+
+  return data;
+}
+
 export function normalizeRuntimeActionResult(actionLabel, result = {}) {
   const label = actionLabel || 'Action';
   const issues = Array.isArray(result?.issues) ? result.issues.filter(Boolean) : [];
-  const warnings = Array.isArray(result?.qualityWarnings) ? result.qualityWarnings.filter(Boolean) : [];
 
   if (!result || typeof result !== 'object' || !result.status) {
     return {
@@ -239,15 +279,7 @@ export function normalizeRuntimeActionResult(actionLabel, result = {}) {
     return {
       tone: 'success',
       message: `${label} completed.`,
-      detail: result.detail || issues[0] || warnings[0] || '',
-    };
-  }
-
-  if (result.status === 'needs-review') {
-    return {
-      tone: 'warning',
-      message: `${label} completed but needs review.`,
-      detail: result.detail || issues[0] || warnings[0] || 'Review the generated outputs before treating them as final.',
+      detail: result.detail || issues[0] || '',
     };
   }
 

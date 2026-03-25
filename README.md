@@ -74,7 +74,6 @@ Electron UI, a hook, or an agent adapter.
 ```bash
 npm run setup
 npm run start
-npm run desktop:start
 npm run new -- --project /abs/path
 npm run new -- --project /abs/path --slides 20
 npm run check -- --project /abs/path

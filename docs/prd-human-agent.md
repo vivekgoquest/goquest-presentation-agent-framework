@@ -106,9 +106,9 @@ The human is not expected to understand the framework internals. They work exclu
 
 ### D. Quality & Validation
 
-1. As a human operator, I want to **run `npm run check`** (or click the "Check deck policy" menu item) so that the framework validates all slide source files, theme.css, and the rendered HTML against the deck policy and quality rules.
+1. As a human operator, I want to **run `npm run check`** (or click the "Validate presentation" action) so that the framework validates deterministic source rules and rendered integrity without mixing in subjective review.
 
-2. As a human operator, I want to **see quality warnings with fix instructions** (rule name, slide ID, message, fix suggestion) so that I know exactly what to change and where.
+2. As a human operator, I want to **see deterministic validation failures with fix detail** (file or rendered contract, message, and repair guidance) so that I know exactly what must change for the deck to pass.
 
 3. As a human operator, I want to **run capture** to get per-slide screenshots and a structured report.json so that I can inspect the visual output without scrolling through the preview.
 
@@ -116,17 +116,17 @@ The human is not expected to understand the framework internals. They work exclu
 
 5. As a human operator, I want to **view console error reports** from the headless Playwright capture so that I can identify JavaScript errors or missing assets that break the rendered deck.
 
-6. As a human operator, I want to **invoke /verify-deck** to launch a 6-agent verification swarm (visual consistency, data accuracy, content quality, audience calibration, typography/readability, slide structure) so that I get a comprehensive QA report covering every dimension of deck quality.
+6. As a human operator, I want to **run Review visuals** so that a fixed artifact-only reviewer swarm inspects the exported PDF and writes one canonical visual issue list.
 
-7. As a human operator, I want to **invoke /review-deck-swarm** to launch a 5-agent personality review (impatient executive, design eye, skeptical analyst, confused newcomer, nitpicker) so that I get diverse subjective feedback from distinct perspectives.
+7. As a human operator, I want to **run Review narrative** so that a fixed artifact-only reviewer swarm inspects the exported PDF, brief, and outline and writes one canonical narrative issue list.
 
-8. As a human operator, I want to **triage findings by severity** (CRITICAL must-fix / WARNING should-fix / NOTE or TASTE user-decides) so that I can prioritize my time and choose which issues are worth addressing.
+8. As a human operator, I want to **apply visual or narrative fixes separately** so that review stays judgment-only and implementation happens only when I explicitly trigger the corresponding apply action.
 
 ### E. Export & Delivery
 
-1. As a human operator, I want to **click "Build"** in the toolbar so that the full finalize pipeline runs (check, capture, export, report generation) in a single action.
+1. As a human operator, I want to **click "Export presentation"** in the toolbar so that the full finalize pipeline runs (deterministic validation, capture, export, report generation) in a single action.
 
-2. As a human operator, I want to **click "PDF"** in the toolbar so that a PDF is exported to outputs/electron-export.pdf and downloaded.
+2. As a human operator, I want to **use the export modal** so that a separate direct artifact export action can write PDF or PNG files to a chosen destination without changing the canonical finalize outputs.
 
 3. As a human operator, I want to **click the "Capture screenshots" menu item** so that per-slide PNG screenshots are saved to outputs/electron-capture/.
 
@@ -148,19 +148,19 @@ The human is not expected to understand the framework internals. They work exclu
 
 3. As a human operator, I want to **invoke /new-deck** to create a new presentation from scratch so that the AI handles project scaffolding, brief writing, theme design, outline planning, and slide buildout in a guided workflow.
 
-4. As a human operator, I want to **invoke /revise-deck** to revise an existing deck based on my feedback so that the AI converts my notes into revisions.md and updates only the affected slides.
+4. As a human operator, I want to **invoke /fix-validation-issues** to repair deterministic validation failures so that the AI reads the current validation output, fixes the concrete failures, and re-runs validation until it passes cleanly.
 
-5. As a human operator, I want to **invoke /review-deck** to inspect a deck and get a revision plan so that the AI analyzes the current state and recommends specific improvements before I decide what to change.
+5. As a human operator, I want to **invoke /review-visual-presentation** to generate a visual issue list so that visual critique stays separate from deterministic validation and separate from implementation.
 
-6. As a human operator, I want to **invoke /verify-deck** to run a 6-agent verification swarm so that parallel specialist agents each capture and analyze the deck from a different quality dimension and I receive a synthesized report.
+6. As a human operator, I want to **invoke /apply-visual-review-changes** to implement the visual issue list so that the AI consumes the canonical review JSON and makes only the requested non-narrative visual changes.
 
-7. As a human operator, I want to **invoke /review-deck-swarm** to run a 5-agent personality review so that I hear from simulated stakeholders with distinct perspectives (executive, designer, analyst, newcomer, nitpicker).
+7. As a human operator, I want to **invoke /review-narrative-presentation** to generate a narrative issue list so that message, sequencing, audience fit, and argument quality are reviewed independently from visual polish.
 
-8. As a human operator, I want to **invoke /fix-warnings** to resolve quality warnings so that the AI reads the check output, fixes every warning following the provided fix instructions, and re-runs the check until it passes clean.
+8. As a human operator, I want to **invoke /apply-narrative-review-changes** to implement the narrative issue list so that the AI consumes the canonical review JSON and revises only the message-level issues I asked it to address.
 
 9. As a human operator, I want to **provide feedback** in plain English so that the AI converts my notes into structured revisions.md entries and revises the affected slides accordingly.
 
-10. As a human operator, I want to **triage verification reports** and choose which issues to fix so that the AI does not auto-fix anything without my explicit approval -- I decide what matters.
+10. As a human operator, I want to **review issue lists before applying them** so that the AI does not auto-fix subjective review findings without my explicit approval.
 
 11. As a human operator, I want to **review the AI's work** via the live preview, per-slide screenshots, and the exported PDF so that I can visually confirm the output meets my standards before accepting it.
 
@@ -170,7 +170,7 @@ The human is not expected to understand the framework internals. They work exclu
 
 1. As a human operator, I want to **see a welcome panel on first launch** with a "P" logo mark, "New presentation" and "or open an existing project" actions so that I have clear entry points when no project is loaded.
 
-2. As a human operator, I want to **use toolbar buttons** (Open, New, Build, PDF, ellipsis menu, Stop, Clear) so that all primary actions are accessible from a single toolbar row at the top of the window.
+2. As a human operator, I want to **use toolbar buttons** (Open, New, Export presentation, Validate presentation, ellipsis menu, Stop, Clear) so that all primary actions are accessible from a single toolbar row at the top of the window.
 
 3. As a human operator, I want to **see the project name** displayed in the toolbar center so that I always know which project is active.
 
@@ -182,7 +182,7 @@ The human is not expected to understand the framework internals. They work exclu
 
 7. As a human operator, I want to **use the integrated terminal** (xterm.js, dark theme, Menlo/monospace font at 14px, block cursor, 5000-line scrollback, resizable via the split handle) so that I can run commands, launch the AI agent, and see output without switching to a separate terminal app.
 
-8. As a human operator, I want to **see loading spinners on buttons** during long-running actions (Build, PDF, Check, Capture) so that I know the system is working and can wait for completion.
+8. As a human operator, I want to **see loading spinners on buttons** during long-running actions (Export, Validate, Capture, and agent-triggered review/apply actions) so that I know the system is working and can wait for completion.
 
 9. As a human operator, I want the **"Stop" button to appear only when a terminal process is alive** so that I can kill a runaway process but the button does not clutter the toolbar when there is nothing to stop.
 
@@ -198,9 +198,8 @@ The human is not expected to understand the framework internals. They work exclu
 |--------|-----------|--------------|
 | Create a new project | "New" button or "New presentation" welcome button | None -- opens native file chooser, user selects empty directory |
 | Open an existing project | "Open" button or "or open an existing project" welcome link | None -- opens native file chooser, user selects project directory |
-| Build the presentation | "Build" button (toolbar, primary accent) | Project loaded |
-| Export PDF | "PDF" button (toolbar) | Project loaded |
-| Check deck policy | Ellipsis menu > "Check deck policy" | Project loaded |
+| Export presentation | "Export presentation" button (toolbar, primary accent) | Project loaded |
+| Validate presentation | "Validate presentation" button (toolbar) | Project loaded |
 | Capture screenshots | Ellipsis menu > "Capture screenshots" | Project loaded |
 | Stop terminal process | "Stop" button (toolbar, red/danger) | Terminal process alive |
 | Clear terminal scrollback | "Clear" button (toolbar, dim) | Terminal exists (alive or stopped) |
@@ -235,15 +234,13 @@ The human is not expected to understand the framework internals. They work exclu
 |---------|---------|
 | `npm run setup` | Install dependencies (Playwright, node-pty, xterm, etc.) |
 | `npm run start` | Launch the Electron desktop app |
-| `npm run desktop:start` | Alias for `npm run start` |
 | `npm run new -- --project /abs/path` | Scaffold a new project with 3 slides (default) |
 | `npm run new -- --project /abs/path --slides N` | Scaffold with N slides (1-99) |
 | `npm run new -- --project /abs/path --copy-framework` | Scaffold with vendored framework snapshot |
-| `npm run check -- --project /abs/path` | Validate deck policy + quality (Playwright headless) |
-| `npm run check -- --project /abs/path --strict` | Treat quality warnings as errors |
+| `npm run check -- --project /abs/path` | Validate deterministic deck policy + rendered integrity (Playwright headless) |
 | `npm run capture -- --project /abs/path [output-dir]` | Capture per-slide screenshots + report.json |
-| `npm run export -- --project /abs/path [output.pdf]` | Export PDF |
-| `npm run finalize -- --project /abs/path` | Full pipeline: check + capture + export + report |
+| `npm run export -- --project /abs/path [output.pdf]` | Export a PDF artifact to a chosen path |
+| `npm run finalize -- --project /abs/path` | Generate canonical presentation outputs (`outputs/deck.pdf`, screenshots, `report.json`, `summary.md`) |
 | `npm test` | Run framework test suite |
 | `claude` | Start the AI agent in the project context |
 
@@ -252,14 +249,14 @@ The human is not expected to understand the framework internals. They work exclu
 | Action | Skill | What Happens |
 |--------|-------|-------------|
 | Create a new deck from scratch | `/new-deck` | AI scaffolds project, writes brief, designs theme, plans slides, builds HTML, runs finalize |
-| Revise an existing deck | `/revise-deck` | AI converts feedback to revisions.md, updates affected slides, re-checks |
-| Review a deck and plan revisions | `/review-deck` | AI inspects current state, captures screenshots, summarizes quality, recommends changes |
-| Run 6-agent verification swarm | `/verify-deck` | 6 specialist agents run in parallel, each captures and analyzes from a different angle, findings synthesized |
-| Run 5-agent personality review | `/review-deck-swarm` | 5 personality agents review the deck from distinct perspectives, findings consolidated |
-| Fix quality warnings | `/fix-warnings` | AI reads check output, fixes each warning, re-runs check until clean |
+| Fix validation issues | `/fix-validation-issues` | AI reads deterministic validation failures, fixes each concrete issue, and re-runs validation until it passes clean |
+| Review visuals | `/review-visual-presentation` | AI exports a fresh PDF, runs the artifact-only visual reviewer swarm, and writes `.presentation/runtime/reviews/visual/visual-review-issues.json` |
+| Apply visual fixes | `/apply-visual-review-changes` | AI reads the visual issue list JSON and implements the requested non-narrative visual changes |
+| Review narrative | `/review-narrative-presentation` | AI exports a fresh PDF, reads `brief.md` and `outline.md`, runs the artifact-only narrative reviewer swarm, and writes `.presentation/runtime/reviews/narrative/narrative-review-issues.json` |
+| Apply narrative fixes | `/apply-narrative-review-changes` | AI reads the narrative issue list JSON and implements the requested message and sequencing changes |
 | Give plain-English creative direction | (direct conversation) | AI interprets intent and executes accordingly |
 | Provide revision feedback | (direct conversation) | AI updates revisions.md and revises affected slides |
-| Triage verification reports | (direct conversation) | User tells AI which issues to fix; AI does not auto-fix |
+| Review issue lists before applying | (direct conversation) | User decides whether to run the corresponding apply action; AI does not auto-fix subjective review findings |
 | Accept or reject AI proposals | (direct conversation) | User reviews preview/screenshots/PDF and confirms |
 | Override AI by editing files | (file system) | User edits files directly; watcher detects changes and refreshes preview |
 
@@ -314,17 +311,18 @@ The human is not expected to understand the framework internals. They work exclu
 | Press Arrow Left/Up (terminal not focused) | selectSlide(currentSlide - 1) called; postMessage sent to iframe | Preview navigates to the previous slide; filmstrip updates; slide counter decrements |
 | Press Home (terminal not focused) | selectSlide(0) called | Preview jumps to the first slide |
 | Press End (terminal not focused) | selectSlide(slideEntries.length - 1) called | Preview jumps to the last slide |
-| Click "Build" | Finalize pipeline starts: policy validation, Playwright capture (screenshots + report.json), PDF export, summary generation | Toast notification on completion (success/green or error/red); outputs appear in outputs/: deck.pdf, slides/*.png, report.json, summary.md |
-| Click "PDF" | PDF export runs via Playwright headless browser; PDF saved to outputs/electron-export.pdf | Toast notification on completion; PDF file ready for download/distribution |
-| Click ellipsis > "Check deck policy" | `npm run check` runs: policy validation + Playwright headless capture; console errors, overflow, quality warnings collected | Check results displayed; warnings listed with rule name, slide ID, message, and fix instruction; exit 0 if clean |
+| Click "Export presentation" | Canonical finalize/export pipeline starts: deterministic validation, Playwright capture (screenshots + report.json), PDF export, summary generation | Toast notification on completion; canonical outputs appear in `outputs/` |
+| Use the export modal | Dedicated direct artifact export action runs via Playwright headless browser for selected slides and chosen format | Toast notification on completion; chosen PDF or PNG artifacts are written to the selected destination |
+| Click "Validate presentation" | `npm run check` runs: deterministic policy validation + Playwright headless rendered-integrity checks | Validation results displayed; deterministic failures listed with fix detail; exit 0 if clean |
 | Click ellipsis > "Capture screenshots" | `npm run capture` runs: Playwright captures every slide as PNG + extracts structural data into report.json | Screenshots saved to outputs/electron-capture/; report.json contains per-slide metrics (dimensions, grids, typography, overflow, text content) |
-| Run `npm run check -- --project /abs/path` | Policy validation + Playwright headless capture; console errors, overflow detection, quality warnings | JSON summary output with slide count, console errors, overflow slides, warning count, pass/fail status; quality warnings printed with fix instructions |
-| Run `npm run finalize -- --project /abs/path` | Full pipeline: check + capture + export + report | outputs/deck.pdf + outputs/slides/*.png + outputs/report.json + outputs/summary.md; exit 0 on pass, exit 1 on failure |
+| Run `npm run check -- --project /abs/path` | Deterministic validation + Playwright headless rendered-integrity capture | JSON summary output with slide count, console errors, overflow slides, failure count, and pass/fail status |
+| Run `npm run finalize -- --project /abs/path` | Generate canonical deck outputs | `outputs/deck.pdf` + `outputs/slides/*.png` + `outputs/report.json` + `outputs/summary.md`; exit 0 on pass, exit 1 on failure |
 | Run `claude` in terminal | AI agent starts; reads .claude/CLAUDE.md and all rules in .claude/rules/; ready for natural-language requests | AI agent is context-aware: knows the project structure, authoring constraints, file boundaries, structural primitives, cascade contract, and available skills |
-| Give AI plain-English feedback | AI updates revisions.md with structured revision entries; AI revises affected slides in slides/NNN-id/; AI re-runs check | Stop hook (check-slide-quality.mjs) runs automatically after each AI response: 0 warnings = auto-commit + stop; warnings found = AI continues fixing |
-| Invoke /verify-deck | AI asks for project path and target audience; 6 parallel verification agents launched (visual consistency, data accuracy, content quality, audience calibration, typography, slide structure); each agent captures and analyzes independently | Synthesized verification report presented with CRITICAL/WARNING/NOTE severity; per-agent scores (1-10); overall score averaged; user asked "Should I fix the CRITICAL and WARNING issues?" |
-| Invoke /review-deck-swarm | AI asks for project path and target audience; 5 personality agents launched in parallel (impatient executive, design eye, skeptical analyst, confused newcomer, nitpicker) | Consolidated findings with CRITICAL/WARNING/TASTE severity; personality-flavored commentary preserved; user decides which issues to fix; AI does NOT auto-fix |
-| Invoke /fix-warnings | AI runs `npm run check`, reads each quality warning, edits the affected slide.html or theme.css, re-runs check, repeats until 0 warnings | All quality warnings resolved; check passes clean; AI reports what changed |
+| Give AI plain-English feedback | AI updates revisions.md with structured revision entries; AI revises affected slides in slides/NNN-id/; AI re-runs validation as needed | Stop hook (`run-presentation-stop-workflow.mjs`) runs deterministic validation, then local checkpointing only when validation passes |
+| Invoke /review-visual-presentation | AI exports a fresh PDF, launches the fixed visual reviewer swarm in parallel, and synthesizes one canonical issue list | `.presentation/runtime/reviews/visual/visual-review-issues.json` is written; terminal reports the overall visual judgment and issue count; AI does not auto-fix |
+| Invoke /apply-visual-review-changes | AI reads `.presentation/runtime/reviews/visual/visual-review-issues.json`, maps artifact-space references into project files, edits source, and re-validates | Visual issue list is implemented in source; deterministic validation re-runs before completion |
+| Invoke /review-narrative-presentation | AI exports a fresh PDF, reads `brief.md` and `outline.md`, launches the fixed narrative reviewer swarm in parallel, and synthesizes one canonical issue list | `.presentation/runtime/reviews/narrative/narrative-review-issues.json` is written; terminal reports the overall narrative judgment and issue count; AI does not auto-fix |
+| Invoke /apply-narrative-review-changes | AI reads `.presentation/runtime/reviews/narrative/narrative-review-issues.json`, maps artifact-space references into project files, edits source, and re-validates | Narrative issue list is implemented in source; deterministic validation re-runs before completion |
 | Edit a framework file (canvas, client, runtime) | No immediate guard or system response -- the framework does not block edits at the filesystem level | Subsequent check/finalize may fail if the edit introduced inconsistencies; other projects sharing the same framework installation may break; the human should only do this as explicit framework maintenance work |
 | Use inline `style=""` in slide.html | Policy check catches the violation | check and finalize are blocked; warning printed with fix instruction: "Remove inline style and move to theme.css or slide.css" |
 | Use `!important` in theme.css | Policy check catches the violation | check and finalize are blocked; warning printed with fix instruction: "Remove !important; use layer ordering instead" |
@@ -342,7 +340,7 @@ The human-AI collaboration follows a defined lifecycle. Each phase has clear own
 
 ### Phase 1: Human Initiates
 
-The human starts the AI agent by running `claude` in the integrated terminal, or by invoking a skill directly (/new-deck, /revise-deck, /review-deck, /verify-deck, /review-deck-swarm, /fix-warnings). The human provides creative direction in plain English -- describing the audience, purpose, tone, content focus, and any specific requirements for the deck.
+The human starts the AI agent by running `claude` in the integrated terminal, or by invoking a skill directly (`/new-deck`, `/fix-validation-issues`, `/review-visual-presentation`, `/apply-visual-review-changes`, `/review-narrative-presentation`, `/apply-narrative-review-changes`). The human provides creative direction in plain English -- describing the audience, purpose, tone, content focus, and any specific requirements for the deck.
 
 The human can be as brief or as detailed as they want. "Make me a 10-slide investor pitch for a fintech startup" is a valid starting point. "Revise slide 3 to emphasize the regulatory moat and add a comparison table" is an equally valid mid-cycle instruction.
 
@@ -368,14 +366,14 @@ For decks with more than 10 slides, the AI works in batches of 5 and runs `npm r
 
 ### Phase 4: Stop Hook Enforces Quality
 
-After the AI finishes each response, the `check-slide-quality.mjs` stop hook runs automatically. This hook:
+After the AI finishes each response, the `run-presentation-stop-workflow.mjs` stop hook runs automatically. This hook:
 
 1. Checks whether the project has valid slides
-2. Runs the deck quality checker against all slide source files
-3. If 0 warnings: auto-commits the current state via git (for edit history) and exits 0 -- the AI can stop
-4. If warnings found: prints each warning to stderr with fix instructions and exits 2 -- the AI must continue fixing
+2. Runs deterministic presentation validation through the canonical validate action
+3. If validation passes: auto-commits the current state via git (for edit history) and exits 0 -- the AI can stop
+4. If validation fails: prints the failures to stderr and exits non-zero -- the AI must continue fixing
 
-This creates an automatic quality gate. The AI cannot "finish" until the deck passes the quality check. The human does not need to manually run checks after every AI response -- the hook does it.
+This creates an automatic deterministic gate. The AI cannot "finish" until the deck passes validation. The human does not need to manually run validation after every AI response -- the hook does it.
 
 ### Phase 5: Human Reviews
 
@@ -391,18 +389,18 @@ The human inspects the AI's work through multiple channels:
 
 ### Phase 6: Human Triages
 
-For multi-agent reviews (/verify-deck and /review-deck-swarm), the human receives a structured report with severity levels:
+For visual and narrative reviews, the human receives one canonical issue list per lane. Each issue contains:
 
-- **CRITICAL** -- something is broken, missing, or misleading; must fix
-- **WARNING** -- something weakens the deck; should fix
-- **NOTE** (verify-deck) or **TASTE** (review-deck-swarm) -- subjective opinion; user decides
+- what is wrong
+- what should be fixed
+- an optional artifact-space target (page number, visible title, outline label, description)
 
-The human reads the report and tells the AI which issues to fix. The AI does NOT auto-fix anything from these reports unless the human explicitly approves. This is the key boundary: verification agents surface findings, but the human holds the triage authority.
+The human reads the issue list and decides whether to run the corresponding apply action. The AI does NOT auto-fix subjective review findings unless the human explicitly approves. This is the key boundary: reviewer swarms surface judgment, but the human holds the triage authority.
 
 The human can say:
-- "Fix all critical and warning issues"
-- "Fix items 1, 3, and 5 from the report"
-- "Ignore the executive's feedback, but fix what the nitpicker found"
+- "Apply the visual fixes"
+- "Apply the narrative fixes after I review the issue file"
+- "Only fix the issues on pages 3 and 5"
 - "Leave it as is"
 
 ### Phase 7: Human Overrides
@@ -421,10 +419,11 @@ The file watcher detects these changes and refreshes the preview immediately. Th
 
 The human can start another cycle at any time:
 
-- Invoke /revise-deck with new feedback to trigger a targeted revision pass
-- Invoke /verify-deck again after fixes to confirm issues are resolved
+- Invoke /review-visual-presentation again after fixes to confirm visual issues are resolved
+- Invoke /review-narrative-presentation again after fixes to confirm message issues are resolved
+- Give direct feedback in the terminal to trigger another targeted revision pass
 - Give ad hoc instructions in the terminal ("make the hero slide darker", "add a slide about pricing between slides 5 and 6")
-- Run /fix-warnings if the check reports new warnings after manual edits
+- Run /fix-validation-issues if the check reports new deterministic failures after manual edits
 
 Each cycle follows the same loop: human initiates, AI reads context, AI executes, hook enforces quality, human reviews, human triages. The cycle repeats until the human is satisfied with the output.
 
@@ -443,7 +442,7 @@ A presentation project is considered "done" when all of the following conditions
 
 ### Quality checks pass
 
-- `npm run check -- --project /abs/path` returns 0 quality warnings and 0 policy violations
+- `npm run check -- --project /abs/path` passes cleanly with 0 deterministic validation failures
 - No console errors reported during Playwright capture
 - No overflow detected on any slide (overflowDetected: false for every slide)
 - No slides with missing content, placeholder text ([[TODO_...]], Lorem ipsum, TBD), or empty sections

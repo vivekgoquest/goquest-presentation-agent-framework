@@ -37,8 +37,8 @@ test('electron framework resolver honors override -> base -> shared precedence',
   const resolvedOverride = resolveProjectFrameworkAsset(copiedProjectRoot, 'client/nav.js');
   assert.equal(resolvedOverride, overrideNavAbs);
 
-  const resolvedBase = resolveProjectFrameworkAsset(copiedProjectRoot, 'runtime/deck-quality.js');
-  assert.equal(resolvedBase, resolve(copiedProjectRoot, '.presentation', 'framework', 'base', 'runtime', 'deck-quality.js'));
+  const resolvedBase = resolveProjectFrameworkAsset(copiedProjectRoot, 'runtime/services/presentation-ops-service.mjs');
+  assert.equal(resolvedBase, resolve(copiedProjectRoot, '.presentation', 'framework', 'base', 'runtime', 'services', 'presentation-ops-service.mjs'));
   assert.equal(existsSync(resolvedBase), true);
   const resolvedTemplateOverride = resolveProjectFrameworkAsset(copiedProjectRoot, 'templates/theme.css');
   assert.equal(resolvedTemplateOverride, overrideTemplateAbs);

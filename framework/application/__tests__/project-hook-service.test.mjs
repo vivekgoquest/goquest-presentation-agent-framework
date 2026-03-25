@@ -4,7 +4,6 @@ import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -71,23 +70,14 @@ function createQualityWarningSlideHtml(title) {
   ].join('\n');
 }
 
-function setHistoryPolicy(projectRoot, historyPolicy) {
-  const metadataPath = resolve(projectRoot, '.presentation', 'project.json');
-  const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
-  metadata.historyPolicy = historyPolicy;
-  writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
-}
-
 test('project hook service skips workflows when project metadata or slides are missing', async (t) => {
-  const { runProjectStopHookWorkflow, runProjectQualityHookWorkflow } = await import('../project-hook-service.mjs');
+  const { runProjectStopHookWorkflow } = await import('../project-hook-service.mjs');
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   const stopResult = await runProjectStopHookWorkflow(projectRoot);
-  const qualityResult = await runProjectQualityHookWorkflow(projectRoot);
 
   assert.deepEqual(stopResult, { status: 'skip', messages: [] });
-  assert.deepEqual(qualityResult, { status: 'skip', warnings: [] });
 });
 
 test('project stop hook workflow checkpoints a clean project', async (t) => {
@@ -187,52 +177,4 @@ test('project stop hook workflow ignores deck-quality heuristics and still passe
 
   assert.equal(result.status, 'pass');
   assert.deepEqual(result.messages, []);
-});
-
-test('project quality hook workflow respects manual history policy on clean pass', async (t) => {
-  const [{ createProjectScaffold }, { runProjectQualityHookWorkflow }] = await Promise.all([
-    import('../project-scaffold-service.mjs'),
-    import('../project-hook-service.mjs'),
-  ]);
-  const projectRoot = createTempProjectRoot();
-  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
-
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
-  fillBrief(projectRoot);
-  setHistoryPolicy(projectRoot, 'manual');
-
-  const commitsBefore = gitRevCount(projectRoot);
-  const result = await runProjectQualityHookWorkflow(projectRoot);
-  const commitsAfter = gitRevCount(projectRoot);
-
-  assert.equal(result.status, 'pass');
-  assert.deepEqual(result.warnings, []);
-  assert.deepEqual(result.checkpoint, { committed: false, commit: '' });
-  assert.equal(commitsAfter, commitsBefore);
-});
-
-test('project quality hook workflow returns warnings without checkpointing', async (t) => {
-  const [{ createProjectScaffold }, { runProjectQualityHookWorkflow }] = await Promise.all([
-    import('../project-scaffold-service.mjs'),
-    import('../project-hook-service.mjs'),
-  ]);
-  const projectRoot = createTempProjectRoot();
-  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
-
-  await createProjectScaffold({ projectRoot }, { slideCount: 5, copyFramework: false });
-  fillBrief(projectRoot);
-  for (const slideDir of ['010-intro', '020-slide-02', '030-slide-03', '040-slide-04', '050-close']) {
-    writeFileSync(
-      resolve(projectRoot, 'slides', slideDir, 'slide.html'),
-      createQualityWarningSlideHtml(`Repeated layout ${slideDir}`)
-    );
-  }
-
-  const commitsBefore = gitRevCount(projectRoot);
-  const result = await runProjectQualityHookWorkflow(projectRoot);
-  const commitsAfter = gitRevCount(projectRoot);
-
-  assert.equal(result.status, 'fail');
-  assert.ok(result.warnings.length > 0);
-  assert.equal(commitsAfter, commitsBefore);
 });

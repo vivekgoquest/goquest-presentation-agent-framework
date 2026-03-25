@@ -276,7 +276,7 @@ Editing source may cause this file to change, but the stop hook or runtime regen
     },
     "launch-plan": {
       "purpose": "Explain phases and owners",
-      "status": "needs-review"
+      "status": "ready"
     }
   }
 }

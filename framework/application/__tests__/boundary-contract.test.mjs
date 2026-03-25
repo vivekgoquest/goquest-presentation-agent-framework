@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const REPO_ROOT = process.cwd();
@@ -54,9 +54,21 @@ test('electron does not import project-agent modules directly', () => {
   assert.deepEqual(violations, []);
 });
 
+test('application does not import electron worker modules directly', () => {
+  const applicationFiles = listSourceFiles(resolve(REPO_ROOT, 'framework', 'application'));
+  const violations = getImportViolations(applicationFiles, /from\s+['"][^'"]*electron\/worker\//);
+  assert.deepEqual(violations, []);
+});
+
 test('runtime does not import project-agent modules directly', () => {
   const runtimeFiles = listSourceFiles(resolve(REPO_ROOT, 'framework', 'runtime'));
   const violations = getImportViolations(runtimeFiles, /from\s+['"][^'"]*project-agent\//);
+  assert.deepEqual(violations, []);
+});
+
+test('runtime does not import application modules directly', () => {
+  const runtimeFiles = listSourceFiles(resolve(REPO_ROOT, 'framework', 'runtime'));
+  const violations = getImportViolations(runtimeFiles, /from\s+['"][^'"]*framework\/application\//);
   assert.deepEqual(violations, []);
 });
 
@@ -69,13 +81,30 @@ test('project-local hook wrappers do not import runtime modules directly', () =>
 test('project-local hook wrappers do not own git checkpoint execution', () => {
   const hookFiles = [
     resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'run-presentation-stop-workflow.mjs'),
-    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'),
   ];
 
   for (const hookFile of hookFiles) {
     const content = readFileSync(hookFile, 'utf8');
     assert.doesNotMatch(content, /checkpointGit|git\s*\[/);
     assert.doesNotMatch(content, /diff\s+--cached|rev-parse|git add|git commit/i);
+  }
+});
+
+test('deleted legacy hook and broad-review skill files stay removed', () => {
+  const removedPaths = [
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'hooks', 'check-slide-quality.mjs'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'fix-warnings', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'operator-console-judge', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'operator-console-user-test', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'review-deck', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'revise-deck', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'review-deck-swarm', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'verify-deck', 'SKILL.md'),
+    resolve(REPO_ROOT, 'project-agent', 'project-dot-claude', 'skills', 'autonomous-user-test', 'SKILL.md'),
+  ];
+
+  for (const removedPath of removedPaths) {
+    assert.equal(existsSync(removedPath), false, `${removedPath} should have been deleted`);
   }
 });
 
@@ -95,12 +124,14 @@ test('terminal core remains vendor-neutral shell transport', () => {
   assert.doesNotMatch(content, /['"]codex['"]/);
 });
 
-test('renderer uses only the generic action invoke bridge and does not take over action lifecycle orchestration', () => {
+test('renderer uses only the canonical actions bridge for action availability, invocation, and lifecycle', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'electron', 'renderer', 'app.js'), 'utf8');
   assert.match(content, /window\.electron\.actions\.invoke/);
-  assert.doesNotMatch(content, /window\.electron\.actions\.list/);
-  assert.doesNotMatch(content, /window\.electron\.actions\.onEvent/);
+  assert.match(content, /window\.electron\.actions\.list/);
+  assert.match(content, /window\.electron\.actions\.onEvent/);
+  assert.match(content, /runProductAction\('export_presentation_artifacts'/);
   assert.doesNotMatch(content, /window\.electron\.events/);
+  assert.doesNotMatch(content, /window\.electron\.(build|export|review)\./);
 });
 
 test('renderer no longer consumes the generic public watch bridge', () => {
@@ -115,12 +146,69 @@ test('electron worker host does not hardcode product action ids or action availa
   assert.doesNotMatch(content, /buildReviewAvailability/);
 });
 
-test('electron preload does not own action-id to operation maps', () => {
+test('electron preload exposes no legacy build/export/review action namespaces', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'electron', 'preload.cjs'), 'utf8');
-  assert.doesNotMatch(content, /BUILD_OPERATION_BY_ACTION_ID/);
-  assert.doesNotMatch(content, /REVIEW_OPERATION_BY_ACTION_ID/);
-  assert.doesNotMatch(content, /build_presentation|check_presentation|capture_screenshots/);
-  assert.doesNotMatch(content, /review_presentation|revise_presentation|fix_warnings/);
+  assert.doesNotMatch(content, /\bbuild:\s*\{/);
+  assert.doesNotMatch(content, /\bexport:\s*\{/);
+  assert.doesNotMatch(content, /\breview:\s*\{/);
+  assert.doesNotMatch(content, /build:check|build:finalize|build:captureScreenshots/);
+  assert.doesNotMatch(content, /export:start/);
+  assert.doesNotMatch(content, /review:run|review:revise|review:fixWarnings|review:getAvailability/);
+});
+
+test('deleted legacy electron action bridge stays removed', () => {
+  const removedPath = resolve(REPO_ROOT, 'framework', 'application', 'electron-action-bridge.cjs');
+  assert.equal(existsSync(removedPath), false, `${removedPath} should have been deleted`);
+});
+
+test('merged action and runtime leaf modules stay removed', () => {
+  const removedPaths = [
+    resolve(REPO_ROOT, 'framework', 'application', 'action-catalog.mjs'),
+    resolve(REPO_ROOT, 'framework', 'application', 'action-events.mjs'),
+    resolve(REPO_ROOT, 'framework', 'application', 'action-workflow-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'application', 'project-history-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'services', 'capture-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'services', 'check-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'services', 'export-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'services', 'finalize-service.mjs'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'new-deck.mjs'),
+    resolve(REPO_ROOT, 'electron', 'worker', 'ipc-contract.mjs'),
+  ];
+
+  for (const removedPath of removedPaths) {
+    assert.equal(existsSync(removedPath), false, `${removedPath} should have been deleted`);
+  }
+});
+
+test('deleted deck-quality runtime helper stays removed', () => {
+  const removedPaths = [
+    resolve(REPO_ROOT, 'framework', 'runtime', 'deck-quality.js'),
+    resolve(REPO_ROOT, 'framework', 'runtime', 'project-quality-check.mjs'),
+  ];
+
+  for (const removedPath of removedPaths) {
+    assert.equal(existsSync(removedPath), false, `${removedPath} should have been deleted`);
+  }
+});
+
+test('package scripts expose one desktop launch path and four deterministic runtime cli commands only', () => {
+  const packageJson = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'));
+  assert.equal(packageJson.scripts.start, 'electron electron/main.mjs');
+  assert.equal('desktop:start' in packageJson.scripts, false);
+  assert.equal('debug:preview' in packageJson.scripts, false);
+  assert.equal(packageJson.scripts.check, 'node framework/runtime/check-deck.mjs');
+  assert.equal(packageJson.scripts.capture, 'node framework/runtime/deck-capture.mjs');
+  assert.equal(packageJson.scripts.export, 'node framework/runtime/export-pdf.mjs');
+  assert.equal(packageJson.scripts.finalize, 'node framework/runtime/finalize-deck.mjs');
+});
+
+test('project-local framework cli exposes only check, capture, export, and finalize', () => {
+  const content = readFileSync(resolve(REPO_ROOT, 'framework', 'runtime', 'project-cli-shim.mjs'), 'utf8');
+  assert.match(content, /check: 'framework\/runtime\/check-deck\.mjs'/);
+  assert.match(content, /capture: 'framework\/runtime\/deck-capture\.mjs'/);
+  assert.match(content, /export: 'framework\/runtime\/export-pdf\.mjs'/);
+  assert.match(content, /finalize: 'framework\/runtime\/finalize-deck\.mjs'/);
+  assert.match(content, /<check\|capture\|export\|finalize>/);
 });
 
 test('project authoring rules describe deterministic package ownership', () => {

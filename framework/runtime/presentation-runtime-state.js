@@ -23,7 +23,6 @@ export function createInitialRenderState() {
     canvasContract: null,
     consoleErrorCount: 0,
     overflowSlides: [],
-    qualityWarnings: [],
     failures: [],
     issues: [],
     lastCheckedAt: null,

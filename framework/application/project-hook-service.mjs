@@ -1,13 +1,12 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createActionWorkflowService } from './action-workflow-service.mjs';
+import { createActionWorkflowService } from './action-service.mjs';
 import { createPresentationActionAdapter } from './presentation-action-adapter.mjs';
 import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { validatePresentationIntentFile } from '../runtime/presentation-intent.js';
-import { runProjectQualityCheck } from '../runtime/project-quality-check.mjs';
-import { checkpointProjectGit } from './project-history-service.mjs';
 
 function loadProjectMetadata(projectRoot) {
   const metadataPath = resolve(projectRoot, '.presentation', 'project.json');
@@ -35,6 +34,53 @@ function maybeCheckpointProject(projectRoot, metadata) {
     return { committed: false, commit: '' };
   }
   return checkpointProjectGit(projectRoot);
+}
+
+function buildCommitSummary(projectRoot) {
+  const diff = execFileSync('git', ['diff', '--cached', '--name-only'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+  const changed = diff.split('\n').filter(Boolean);
+  if (changed.length === 0) {
+    return '';
+  }
+  if (changed.length <= 3) {
+    return changed.join(', ');
+  }
+  return `${changed.slice(0, 3).join(', ')} +${changed.length - 3} more`;
+}
+
+function checkpointProjectGit(projectRoot) {
+  try {
+    execFileSync('git', ['add', '-A'], {
+      cwd: projectRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    try {
+      execFileSync('git', ['diff', '--cached', '--quiet'], {
+        cwd: projectRoot,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      return { committed: false, commit: '' };
+    } catch {
+      const summary = buildCommitSummary(projectRoot);
+      execFileSync('git', ['commit', '-m', `Update: ${summary}`], {
+        cwd: projectRoot,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: projectRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim();
+      return { committed: true, commit };
+    }
+  } catch {
+    return { committed: false, commit: '' };
+  }
 }
 
 async function runValidatePresentationAction(projectRoot, outputDir) {
@@ -104,30 +150,4 @@ export async function runProjectStopHookWorkflow(projectRoot) {
   } finally {
     rmSync(hookOutputDir, { recursive: true, force: true });
   }
-}
-
-export async function runProjectQualityHookWorkflow(projectRoot) {
-  const metadata = loadProjectMetadata(projectRoot);
-  if (shouldSkipHook(projectRoot, metadata)) {
-    return { status: 'skip', warnings: [] };
-  }
-
-  const result = runProjectQualityCheck(projectRoot);
-  if (result.skipped) {
-    return { status: 'skip', warnings: [] };
-  }
-
-  if (result.warnings.length === 0) {
-    const checkpoint = maybeCheckpointProject(projectRoot, metadata);
-    return {
-      status: 'pass',
-      warnings: [],
-      checkpoint,
-    };
-  }
-
-  return {
-    status: 'fail',
-    warnings: result.warnings,
-  };
 }

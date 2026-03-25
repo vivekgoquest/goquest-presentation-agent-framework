@@ -2,17 +2,41 @@ import {
   deriveActionUiModel,
   deriveProjectUiModel,
   deriveTerminalUiModel,
+  formatTerminalOutputEvent,
   normalizeRuntimeActionResult,
 } from './ui-model.js';
+import {
+  getTerminalClipboardAction,
+  getTerminalContextMenuItems,
+  getTerminalShortcutHint,
+  getTerminalSurfaceState,
+  runTerminalClipboardAction,
+} from './terminal-interaction.js';
+import {
+  createTerminalProjectPathLinkProvider,
+  openTerminalExternalLink,
+} from './terminal-links.js';
+import {
+  getTerminalSearchAction,
+  getTerminalSearchUiModel,
+  isTerminalSearchShortcut,
+} from './terminal-search.js';
+import { renderElectronPreviewHtml } from '../preview-document-shell.mjs';
 
-/* global Terminal, FitAddon */
+/* global Terminal, FitAddon, SearchAddon, WebLinksAddon */
 const $ = (id) => document.getElementById(id);
+
+// -----------------------------------------------------------------------------
+// DOM Wiring and UI State
+// -----------------------------------------------------------------------------
 
 const el = {
   appShell: $('app-shell'),
+  mainSplit: document.querySelector('.main-split'),
   choosePath: $('choose-path'),
   createProject: $('create-project'),
   projectNameLabel: $('project-name-label'),
+  projectContextLabel: $('project-context-label'),
   primaryAction: $('primary-action'),
   secondaryAction: $('secondary-action'),
   actionStatusLabel: $('action-status-label'),
@@ -21,11 +45,25 @@ const el = {
   moreMenuItems: $('more-menu-items'),
   stopTerminal: $('stop-terminal'),
   clearTerminal: $('clear-terminal'),
+  terminalFind: $('terminal-find'),
+  terminalSearch: $('terminal-search'),
+  terminalSearchInput: $('terminal-search-input'),
+  terminalSearchPrev: $('terminal-search-prev'),
+  terminalSearchNext: $('terminal-search-next'),
+  terminalSearchClose: $('terminal-search-close'),
   welcomePanel: $('welcome-panel'),
-  welcomeOpen: $('welcome-open'),
-  welcomeCreate: $('welcome-create'),
   projectPath: $('project-path'),
   projectSlides: $('project-slides'),
+  projectLauncherModal: $('project-launcher-modal'),
+  projectLauncherTitle: $('project-launcher-title'),
+  projectLauncherSubtitle: $('project-launcher-subtitle'),
+  projectLauncherPathInput: $('project-launcher-path-input'),
+  projectLauncherBrowse: $('project-launcher-browse'),
+  projectLauncherSlidesField: $('project-launcher-slides-field'),
+  projectLauncherSlidesInput: $('project-launcher-slides-input'),
+  projectLauncherClose: $('project-launcher-close'),
+  projectLauncherCancel: $('project-launcher-cancel'),
+  projectLauncherSubmit: $('project-launcher-submit'),
   terminalPane: $('terminal-pane'),
   terminalStateLabel: $('terminal-state-label'),
   terminalRetry: $('terminal-retry'),
@@ -34,6 +72,8 @@ const el = {
   terminalEmptyDetail: $('terminal-empty-detail'),
   terminalContainer: $('terminal-container'),
   previewPane: $('preview-pane'),
+  paneSplitHandle: $('pane-split-handle'),
+  previewSubtitle: $('preview-subtitle'),
   previewFrame: $('preview-frame'),
   exportModal: $('export-modal'),
   exportClose: $('export-close'),
@@ -70,14 +110,7 @@ const state = {
   slides: [],
   terminalMeta: null,
   hasProject: false,
-  agentActionAvailability: {
-    fixValidationIssues: false,
-    reviewNarrative: false,
-    applyNarrativeChanges: false,
-    reviewVisual: false,
-    applyVisualChanges: false,
-    reasonUnavailable: '',
-  },
+  actionDescriptors: [],
   actionModel: {
     primary: null,
     secondary: null,
@@ -93,18 +126,47 @@ const state = {
     slideIds: [],
     outputDir: '',
   },
+  projectLauncher: {
+    open: false,
+    mode: 'create',
+    path: '',
+    slides: 3,
+  },
+  paneSplitPercent: 52,
+  paneDrag: {
+    active: false,
+    pointerId: null,
+  },
+  pendingTerminalChunks: [],
+  terminalFlushScheduled: false,
+  previewRefreshTimer: null,
+  projectRefreshTimer: null,
+  terminalFitScheduled: false,
+  loadedPreviewProjectRoot: '',
+  terminalSearch: {
+    open: false,
+    query: '',
+  },
 };
 
 // ── xterm ──
 const FitAddonClass = (typeof FitAddon === 'function') ? FitAddon : FitAddon.FitAddon;
+const SearchAddonClass = (typeof SearchAddon === 'function') ? SearchAddon : SearchAddon.SearchAddon;
+const WebLinksAddonClass = (typeof WebLinksAddon === 'function') ? WebLinksAddon : WebLinksAddon.WebLinksAddon;
 const fitAddon = new FitAddonClass();
+const searchAddon = new SearchAddonClass();
+const webLinksAddon = new WebLinksAddonClass((event, uri) => {
+  openTerminalExternalLink(uri, {
+    openExternal: (targetUrl) => window.electron.system.openExternal(targetUrl),
+  }).catch(() => {});
+});
 const term = new Terminal({
   cursorBlink: true, cursorStyle: 'block', fontSize: 14,
   fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, monospace',
   lineHeight: 1.2,
   theme: {
     background: '#1e1e1e', foreground: '#cccccc', cursor: '#aeafad', cursorAccent: '#1e1e1e',
-    selectionBackground: '#264f78', selectionForeground: '#ffffff',
+    selectionBackground: 'rgba(124, 183, 244, 0.34)', selectionInactiveBackground: 'rgba(124, 183, 244, 0.22)', selectionForeground: '#ffffff',
     black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510',
     blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5',
     brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543',
@@ -113,7 +175,19 @@ const term = new Terminal({
   scrollback: 5000, allowProposedApi: true,
 });
 term.loadAddon(fitAddon);
+term.loadAddon(searchAddon);
+term.loadAddon(webLinksAddon);
+term.registerLinkProvider(createTerminalProjectPathLinkProvider(term, {
+  getProjectRoot: () => state.meta?.projectRoot || state.terminalMeta?.projectRoot || '',
+  onActivate: (targetPath) => {
+    window.electron.terminal.reveal(targetPath).catch(() => {});
+  },
+}));
 let xtermMounted = false;
+
+// -----------------------------------------------------------------------------
+// Terminal Rendering
+// -----------------------------------------------------------------------------
 
 function getActiveBuffer() {
   return term.buffer?.active || null;
@@ -144,8 +218,15 @@ function restoreViewportAfterUpdate(distanceFromBottom, followTail) {
   state.terminalAutoFollow = false;
 }
 
-function writeTerminalOutput(chunk) {
-  if (!chunk) return;
+function flushTerminalOutputQueue() {
+  state.terminalFlushScheduled = false;
+  if (state.pendingTerminalChunks.length === 0) {
+    return;
+  }
+
+  const chunk = state.pendingTerminalChunks.join('');
+  state.pendingTerminalChunks.length = 0;
+
   const distanceFromBottom = getViewportDistanceFromBottom();
   const followTail = state.terminalAutoFollow || isViewportAtBottom();
 
@@ -154,11 +235,27 @@ function writeTerminalOutput(chunk) {
   });
 }
 
+function scheduleTerminalFlush() {
+  if (state.terminalFlushScheduled) {
+    return;
+  }
+
+  state.terminalFlushScheduled = true;
+  requestAnimationFrame(() => flushTerminalOutputQueue());
+}
+
+function writeTerminalOutput(chunk) {
+  if (!chunk) return;
+  state.pendingTerminalChunks.push(chunk);
+  scheduleTerminalFlush();
+}
+
 function mountXterm() {
   if (xtermMounted) return;
   term.open(el.terminalContainer);
   xtermMounted = true;
   state.terminalAutoFollow = true;
+  updateTerminalSurfaceState();
   requestAnimationFrame(() => fitAddon.fit());
 }
 
@@ -174,12 +271,169 @@ function fitTerminal() {
   } catch {}
 }
 
-term.onData((data) => { if (state.terminalMeta?.alive) window.electron.terminal.send(data); });
+function scheduleTerminalFit() {
+  if (state.terminalFitScheduled) {
+    return;
+  }
+
+  state.terminalFitScheduled = true;
+  requestAnimationFrame(() => {
+    state.terminalFitScheduled = false;
+    fitTerminal();
+  });
+}
+
+function applyPaneSplit() {
+  el.appShell.style.setProperty('--terminal-pane-percent', String(state.paneSplitPercent));
+}
+
+function clampPaneSplitPercent(value) {
+  return Math.max(32, Math.min(68, value));
+}
+
+function updatePaneSplitFromClientX(clientX) {
+  const bounds = el.mainSplit?.getBoundingClientRect?.() || null;
+  if (!bounds || bounds.width <= 0) {
+    return;
+  }
+
+  const nextPercent = clampPaneSplitPercent(((clientX - bounds.left) / bounds.width) * 100);
+  if (Math.abs(nextPercent - state.paneSplitPercent) < 0.25) {
+    return;
+  }
+
+  state.paneSplitPercent = nextPercent;
+  applyPaneSplit();
+  scheduleTerminalFit();
+}
+
+term.onData((data) => {
+  if (state.terminalMeta?.alive) {
+    window.electron.terminal.send(data);
+  }
+});
 term.onScroll(() => {
   state.terminalAutoFollow = isViewportAtBottom();
 });
+term.onSelectionChange(() => {
+  updateTerminalSurfaceState();
+});
 
-// ── Helpers ──
+function isTerminalFocused() {
+  return Boolean(
+    state.terminalMeta?.alive
+    && xtermMounted
+    && document.activeElement
+    && el.terminalPane.contains(document.activeElement)
+  );
+}
+
+function updateTerminalSurfaceState() {
+  const surfaceState = getTerminalSurfaceState({
+    terminalFocused: isTerminalFocused(),
+    hasSelection: term.hasSelection(),
+  });
+  el.terminalPane.dataset.terminalFocused = surfaceState.focused;
+  el.terminalPane.dataset.terminalSelection = surfaceState.selection;
+  el.terminalContainer.title = getTerminalShortcutHint({
+    platform: navigator.userAgentData?.platform || (navigator.platform || ''),
+  });
+}
+
+function renderTerminalSearch() {
+  const model = getTerminalSearchUiModel(state.terminalSearch);
+  el.terminalSearch.dataset.open = model.open ? 'true' : 'false';
+  el.terminalSearch.style.display = model.open ? '' : 'none';
+  el.terminalSearchInput.placeholder = model.placeholder;
+  if (el.terminalSearchInput.value !== model.query) {
+    el.terminalSearchInput.value = model.query;
+  }
+  el.terminalSearchPrev.disabled = !model.canNavigate;
+  el.terminalSearchNext.disabled = !model.canNavigate;
+}
+
+function applyTerminalSearch(direction = 'next') {
+  const query = String(state.terminalSearch.query || '');
+  if (!query.trim()) {
+    renderTerminalSearch();
+    return false;
+  }
+
+  if (direction === 'previous') {
+    return searchAddon.findPrevious(query);
+  }
+
+  return searchAddon.findNext(query);
+}
+
+function openTerminalSearch(prefill = state.terminalSearch.query || '') {
+  state.terminalSearch.open = true;
+  state.terminalSearch.query = String(prefill || state.terminalSearch.query || '');
+  renderTerminalSearch();
+  requestAnimationFrame(() => {
+    el.terminalSearchInput.focus();
+    el.terminalSearchInput.select();
+  });
+}
+
+function closeTerminalSearch() {
+  state.terminalSearch.open = false;
+  renderTerminalSearch();
+  term.focus();
+}
+
+async function handleTerminalClipboardShortcut(event) {
+  const action = getTerminalClipboardAction({
+    platform: navigator.userAgentData?.platform || (navigator.platform || ''),
+    key: event.key,
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    terminalFocused: isTerminalFocused(),
+    hasSelection: term.hasSelection(),
+  });
+
+  if (!action) {
+    return false;
+  }
+
+  event.preventDefault();
+  await runTerminalClipboardAction(action, {
+    terminal: term,
+    clipboard: {
+      readText: () => window.electron.system.readClipboardText(),
+      writeText: (value) => window.electron.system.writeClipboardText(value),
+    },
+    sendTerminalInput: (value) => window.electron.terminal.send(value),
+  });
+  return true;
+}
+
+async function openTerminalContextMenu(event) {
+  if (!state.terminalMeta?.alive || !xtermMounted) {
+    return;
+  }
+
+  event.preventDefault();
+  const items = getTerminalContextMenuItems({
+    terminalFocused: true,
+    hasSelection: term.hasSelection(),
+  });
+  if (items.length === 0) {
+    return;
+  }
+
+  await window.electron.terminal.showContextMenu({
+    items,
+    selectionText: term.getSelection(),
+  });
+}
+
+// -----------------------------------------------------------------------------
+// UI Helpers and Export Modal
+// -----------------------------------------------------------------------------
+
 function stringify(v) { return JSON.stringify(v, null, 2); }
 function setJson(e, v) { if (e) e.textContent = stringify(v); }
 function setLoading(b, on) {
@@ -304,26 +558,134 @@ function renderExportModal() {
   }
 }
 
+function openProjectLauncher(mode = 'create') {
+  state.projectLauncher = {
+    open: true,
+    mode,
+    path: el.projectPath.value.trim(),
+    slides: Math.max(1, Number.parseInt(el.projectSlides.value || '3', 10) || 3),
+  };
+  renderProjectLauncher();
+  requestAnimationFrame(() => {
+    el.projectLauncherPathInput.focus();
+    el.projectLauncherPathInput.select();
+  });
+}
+
+function closeProjectLauncher() {
+  state.projectLauncher.open = false;
+  renderProjectLauncher();
+}
+
+function renderProjectLauncher() {
+  const open = Boolean(state.projectLauncher.open);
+  const createMode = state.projectLauncher.mode !== 'open';
+  const trimmedPath = String(state.projectLauncher.path || '').trim();
+  const slideCount = Math.max(1, Number.parseInt(String(state.projectLauncher.slides || '3'), 10) || 3);
+
+  el.projectLauncherModal.dataset.open = open ? 'true' : 'false';
+  el.projectLauncherModal.style.display = open ? '' : 'none';
+  if (!open) {
+    return;
+  }
+
+  el.projectLauncherTitle.textContent = createMode ? 'New project' : 'Open project';
+  el.projectLauncherSubtitle.textContent = createMode
+    ? 'Type a folder path for the new project, or browse to choose one.'
+    : 'Type an existing project folder path, or browse to choose one.';
+  el.projectLauncherPathInput.value = trimmedPath;
+  el.projectLauncherSlidesField.style.display = createMode ? '' : 'none';
+  el.projectLauncherSlidesInput.value = String(slideCount);
+  el.projectLauncherSubmit.textContent = createMode ? 'Create project' : 'Open project';
+  el.projectLauncherSubmit.disabled = !trimmedPath;
+}
+
+async function browseProjectLauncher() {
+  const chosenPath = await choosePath();
+  if (!chosenPath) {
+    return;
+  }
+
+  state.projectLauncher.path = chosenPath;
+  renderProjectLauncher();
+}
+
+async function submitProjectLauncher() {
+  const projectRoot = String(state.projectLauncher.path || '').trim();
+  if (!projectRoot) {
+    return;
+  }
+
+  const slideCount = Math.max(1, Number.parseInt(String(state.projectLauncher.slides || '3'), 10) || 3);
+  el.projectPath.value = projectRoot;
+  el.projectSlides.value = String(slideCount);
+
+  if (state.projectLauncher.mode === 'open') {
+    await runAction(async () => window.electron.project.open({ projectRoot }), el.projectLauncherSubmit);
+  } else {
+    await runAction(async () => window.electron.project.create({ projectRoot, slideCount }), el.projectLauncherSubmit);
+  }
+
+  closeProjectLauncher();
+}
+
+function getMenuSections(menuActions = []) {
+  const sections = [
+    {
+      label: 'Project',
+      actions: menuActions.filter((action) => action.id === 'validate_presentation'),
+    },
+    {
+      label: 'Capture',
+      actions: menuActions.filter((action) => action.id === 'capture_screenshots'),
+    },
+    {
+      label: 'Review',
+      actions: menuActions.filter((action) => [
+        'review_narrative_presentation',
+        'review_visual_presentation',
+      ].includes(action.id)),
+    },
+    {
+      label: 'Fix',
+      actions: menuActions.filter((action) => [
+        'fix_validation_issues',
+        'apply_narrative_review_changes',
+        'apply_visual_review_changes',
+      ].includes(action.id)),
+    },
+  ];
+
+  return sections.filter((section) => section.actions.length > 0);
+}
+
 function renderMenuActions(menuActions = []) {
   el.moreMenuItems.innerHTML = '';
 
   if (menuActions.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'menu-empty';
-    empty.textContent = 'No more actions right now.';
+    empty.textContent = 'No additional actions are available right now.';
     el.moreMenuItems.appendChild(empty);
     return;
   }
 
-  for (const action of menuActions) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'menu-item';
-    button.dataset.actionId = action.id;
-    button.textContent = action.label;
-    button.disabled = !action.enabled;
-    button.title = action.enabled ? '' : (action.reasonDisabled || '');
-    el.moreMenuItems.appendChild(button);
+  for (const section of getMenuSections(menuActions)) {
+    const label = document.createElement('div');
+    label.className = 'menu-section-label';
+    label.textContent = section.label;
+    el.moreMenuItems.appendChild(label);
+
+    for (const action of section.actions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'menu-item';
+      button.dataset.actionId = action.id;
+      button.textContent = action.label;
+      button.disabled = !action.enabled;
+      button.title = action.enabled ? '' : (action.reasonDisabled || '');
+      el.moreMenuItems.appendChild(button);
+    }
   }
 }
 
@@ -331,7 +693,7 @@ function renderActionControls() {
   const model = deriveActionUiModel({
     meta: state.meta,
     projectState: state.projectState,
-    agentActionAvailability: state.agentActionAvailability,
+    actions: state.actionDescriptors,
   });
   state.actionModel = model;
   bindToolbarAction(el.primaryAction, model.primary);
@@ -343,21 +705,33 @@ function renderActionControls() {
   el.moreActions.style.display = state.hasProject ? '' : 'none';
 }
 
-// ── Layout ──
+// -----------------------------------------------------------------------------
+// Layout and Derived State
+// -----------------------------------------------------------------------------
+
 function showProjectLayout() {
   el.welcomePanel.style.display = 'none';
   el.terminalPane.style.display = 'flex';
   el.previewPane.style.display = 'flex';
-  requestAnimationFrame(() => { mountXterm(); fitTerminal(); });
+  el.paneSplitHandle.style.display = window.innerWidth >= 1024 ? 'block' : 'none';
+  applyPaneSplit();
+  requestAnimationFrame(() => { mountXterm(); scheduleTerminalFit(); });
 }
 
 function showWelcomeLayout() {
   el.welcomePanel.style.display = 'flex';
   el.previewPane.style.display = 'none';
   el.terminalPane.style.display = 'none';
+  el.paneSplitHandle.style.display = 'none';
 }
 
-window.addEventListener('resize', () => fitTerminal());
+window.addEventListener('resize', () => {
+  if (state.hasProject) {
+    el.paneSplitHandle.style.display = window.innerWidth >= 1024 ? 'block' : 'none';
+    applyPaneSplit();
+  }
+  scheduleTerminalFit();
+});
 
 // ── State ──
 function updateAppState() {
@@ -367,6 +741,10 @@ function updateAppState() {
   if (!has) {
     setActionStatus('');
     closeExportModal();
+    state.loadedPreviewProjectRoot = '';
+    el.previewFrame.removeAttribute('src');
+    el.previewFrame.srcdoc = '';
+    delete el.previewPane.dataset.previewKind;
   }
   has ? showProjectLayout() : showWelcomeLayout();
   const model = deriveProjectUiModel({
@@ -379,6 +757,10 @@ function updateAppState() {
   el.projectNameLabel.textContent = has
     ? (state.meta.title || state.meta.slug || 'Untitled')
     : '';
+  el.projectContextLabel.textContent = has ? formatProjectContext(state.meta, model) : '';
+  el.previewSubtitle.textContent = has
+    ? formatPreviewSubtitle(state.projectState, state.files)
+    : 'Live preview';
 
   // Hidden compat
   if (has && state.meta) {
@@ -389,7 +771,7 @@ function updateAppState() {
     if (el.slideCount) el.slideCount.textContent = sc > 0 ? `${sc} slides` : '';
   }
 
-  if (has && !el.previewFrame.src?.startsWith('presentation://')) loadPreview();
+  if (has && state.loadedPreviewProjectRoot !== state.meta?.projectRoot) loadPreview();
 
   setJson(el.metaJson, state.meta || {});
   setJson(el.stateJson, state.projectState || {});
@@ -402,8 +784,41 @@ function countSlides(f) {
   return sd?.children ? sd.children.filter(c => c.isDirectory || c.kind === 'slide-directory').length : 0;
 }
 
+function formatProjectContext(meta, model) {
+  if (!meta?.active) {
+    return '';
+  }
+
+  const folderName = formatProjectLeaf(meta.projectRoot || '') || meta.slug || '';
+  const statusLabel = model?.status?.label || '';
+  return [folderName, statusLabel].filter(Boolean).join(' • ');
+}
+
+function formatPreviewSubtitle(projectState, files) {
+  const slideCount = countSlides(files);
+  const status = projectState?.status || '';
+
+  switch (status) {
+    case 'ready_to_finalize':
+      return 'Ready to export';
+    case 'finalized':
+      return 'Live preview';
+    case 'policy_error':
+      return 'Preview blocked';
+    case 'onboarding':
+    case 'in_progress':
+      return 'Draft preview';
+    default:
+      return slideCount > 0 ? 'Live preview' : 'Preview';
+  }
+}
+
 function loadPreview() {
-  el.previewFrame.src = 'presentation://preview/current';
+  schedulePreviewRefresh(0);
+}
+
+function formatProjectLeaf(pathValue = '') {
+  return String(pathValue || '').split(/[\\/]/).filter(Boolean).at(-1) || '';
 }
 
 function updateTerminalState(meta) {
@@ -418,42 +833,60 @@ function updateTerminalState(meta) {
     startError: state.terminalStartError,
   });
   el.stopTerminal.style.display = model.showStop ? '' : 'none';
-  el.clearTerminal.style.display = model.showClear ? '' : 'none';
+  el.clearTerminal.style.display = 'none';
+  el.terminalFind.style.display = model.showTerminal ? '' : 'none';
   el.terminalRetry.style.display = model.showRetry ? '' : 'none';
-  el.terminalStateLabel.textContent = model.label;
+  const projectLeaf = formatProjectLeaf(meta?.projectRoot || state.meta?.projectRoot || '');
+  const runningSubtitle = [model.label, projectLeaf, model.context, model.cwdContext, model.commandContext].filter(Boolean).join(' • ');
+  el.terminalStateLabel.textContent = meta?.alive
+    ? (runningSubtitle || model.label)
+    : model.label;
   el.terminalEmptyState.style.display = model.showTerminal ? 'none' : 'flex';
   el.terminalEmptyTitle.textContent = model.label;
   el.terminalEmptyDetail.textContent = model.detail;
   el.terminalContainer.style.display = model.showTerminal ? '' : 'none';
+  if (!model.showTerminal && state.terminalSearch.open) {
+    state.terminalSearch.open = false;
+  }
+  renderTerminalSearch();
   if (!wasAlive && meta?.alive && xtermMounted) term.focus();
   if (!meta?.alive) state.terminalAutoFollow = true;
+  updateTerminalSurfaceState();
 }
 
 async function refreshProjectPanels() {
-  const [meta, ps, files, slidesResponse, tm, agentActionAvailability] = await Promise.all([
+  const [meta, ps, files, slidesResponse, tm, actionDescriptorsResponse] = await Promise.all([
     window.electron.project.getMeta(),
     window.electron.project.getState(),
     window.electron.project.getFiles().catch(() => ({ root: '', tree: {} })),
     window.electron.project.getSlides().catch(() => ({ slides: [] })),
     window.electron.terminal.getMeta(),
-    window.electron.review.getAvailability().catch(() => ({
-      fixValidationIssues: false,
-      reviewNarrative: false,
-      applyNarrativeChanges: false,
-      reviewVisual: false,
-      applyVisualChanges: false,
-      reasonUnavailable: 'Agent actions are unavailable right now.',
-    })),
+    window.electron.actions.list().catch(() => ({ actions: [] })),
   ]);
   state.meta = meta;
   state.projectState = ps;
   state.files = files;
   state.slides = slidesResponse.slides || [];
-  state.agentActionAvailability = agentActionAvailability || state.agentActionAvailability;
+  state.actionDescriptors = actionDescriptorsResponse.actions || [];
   updateAppState(); updateTerminalState(tm);
-  setJson(el.actionJson, state.actionModel || {});
+  setJson(el.actionJson, { actions: state.actionDescriptors });
   renderExportModal();
 }
+
+function scheduleProjectPanelsRefresh(delayMs = 120) {
+  if (state.projectRefreshTimer) {
+    clearTimeout(state.projectRefreshTimer);
+  }
+
+  state.projectRefreshTimer = setTimeout(() => {
+    state.projectRefreshTimer = null;
+    refreshProjectPanels().catch((error) => showToast(error.message, 'error'));
+  }, delayMs);
+}
+
+// -----------------------------------------------------------------------------
+// Action Invocation and Terminal Control
+// -----------------------------------------------------------------------------
 
 async function runAction(fn, btn = null) {
   setLoading(btn, true);
@@ -472,12 +905,7 @@ async function runAction(fn, btn = null) {
 }
 
 function getActionDescriptor(actionId) {
-  const descriptors = [
-    state.actionModel.primary,
-    state.actionModel.secondary,
-    ...state.actionModel.menu,
-  ].filter(Boolean);
-  return descriptors.find((action) => action.id === actionId) || null;
+  return state.actionDescriptors.find((action) => action.id === actionId) || null;
 }
 
 function invokeProductAction(actionId, args = {}) {
@@ -529,7 +957,7 @@ async function submitExport() {
     slideIds: [...state.exportDraft.slideIds],
     outputDir: state.exportDraft.outputDir,
   };
-  await runProductAction('export.start', el.exportConfirm, args);
+  await runProductAction('export_presentation_artifacts', el.exportConfirm, args);
   closeExportModal();
 }
 
@@ -558,7 +986,10 @@ async function startShellSession() {
   }
 }
 
-// ── Project ──
+// -----------------------------------------------------------------------------
+// Project Lifecycle and Menu Actions
+// -----------------------------------------------------------------------------
+
 async function choosePath() {
   try {
     const r = await window.electron.system.chooseDirectory();
@@ -569,10 +1000,12 @@ async function choosePath() {
 
 async function openProject(path) {
   const p = path || el.projectPath.value.trim();
-  if (!p) { const c = await choosePath(); if (c) return openProject(c); return; }
+  if (!p) {
+    openProjectLauncher('open');
+    return;
+  }
   try {
     await runAction(async () => window.electron.project.open({ projectRoot: p }));
-    await startShellSession();
   } catch (e) {
     if (e?.needsInitialization) {
       showToast('That folder is not an initialized presentation project yet.', 'error');
@@ -580,17 +1013,12 @@ async function openProject(path) {
   }
 }
 
-async function createProject() {
-  const chosen = await choosePath();
-  if (!chosen) return;
-  const n = parseInt(el.projectSlides.value || '3', 10);
-  await runAction(async () => window.electron.project.create({ projectRoot: chosen, slideCount: n }), el.createProject);
-  await startShellSession();
+function createProject() {
+  openProjectLauncher('create');
 }
 
-async function toolbarOpen() {
-  const c = await choosePath();
-  if (c) { try { await openProject(c); } catch { /* toast shown */ } }
+function toolbarOpen() {
+  openProjectLauncher('open');
 }
 
 // ── More menu ──
@@ -610,9 +1038,28 @@ document.addEventListener('click', (e) => {
 });
 
 async function refreshPreview() {
-  el.previewFrame.src = `presentation://preview/current?t=${Date.now()}`;
-  await new Promise(resolve => { el.previewFrame.onload = resolve; });
-  await refreshProjectPanels();
+  const previewDocument = await window.electron.preview.getDocument();
+  const html = renderElectronPreviewHtml(previewDocument?.html || '', {
+    kind: previewDocument?.kind || 'slides',
+    viewport: previewDocument?.viewport || null,
+  });
+
+  state.loadedPreviewProjectRoot = state.meta?.projectRoot || '';
+  el.previewPane.dataset.previewKind = previewDocument?.kind || 'slides';
+  el.previewFrame.removeAttribute('src');
+  el.previewFrame.srcdoc = html;
+  await new Promise((resolve) => { el.previewFrame.onload = resolve; });
+}
+
+function schedulePreviewRefresh(delayMs = 80) {
+  if (state.previewRefreshTimer) {
+    clearTimeout(state.previewRefreshTimer);
+  }
+
+  state.previewRefreshTimer = setTimeout(() => {
+    state.previewRefreshTimer = null;
+    refreshPreview().catch((error) => showToast(error.message, 'error'));
+  }, delayMs);
 }
 
 function toggleDiag() {
@@ -620,12 +1067,104 @@ function toggleDiag() {
   el.diagnosticsDrawer.style.display = state.diagnosticsOpen ? '' : 'none';
 }
 
-// ── Events ──
+function stopPaneDrag() {
+  if (!state.paneDrag.active) {
+    return;
+  }
+
+  state.paneDrag.active = false;
+  state.paneDrag.pointerId = null;
+  el.paneSplitHandle.dataset.dragging = 'false';
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+}
+
+function startPaneDrag(event) {
+  if (!state.hasProject || window.innerWidth < 1024) {
+    return;
+  }
+
+  state.paneDrag.active = true;
+  state.paneDrag.pointerId = event.pointerId;
+  el.paneSplitHandle.dataset.dragging = 'true';
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  el.paneSplitHandle.setPointerCapture?.(event.pointerId);
+  updatePaneSplitFromClientX(event.clientX);
+}
+
+function handlePaneDrag(event) {
+  if (!state.paneDrag.active) {
+    return;
+  }
+
+  updatePaneSplitFromClientX(event.clientX);
+}
+
+function handlePaneKeyAdjust(event) {
+  if (!state.hasProject || window.innerWidth < 1024) {
+    return;
+  }
+
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    return;
+  }
+
+  event.preventDefault();
+  const delta = event.key === 'ArrowLeft' ? -2 : 2;
+  state.paneSplitPercent = clampPaneSplitPercent(state.paneSplitPercent + delta);
+  applyPaneSplit();
+  scheduleTerminalFit();
+}
+
+// -----------------------------------------------------------------------------
+// Event Wiring
+// -----------------------------------------------------------------------------
+
 el.choosePath.addEventListener('click', toolbarOpen);
 el.createProject.addEventListener('click', createProject);
-el.welcomeOpen.addEventListener('click', toolbarOpen);
-el.welcomeCreate.addEventListener('click', createProject);
+el.projectLauncherModal.addEventListener('click', (event) => {
+  if (event.target === el.projectLauncherModal || event.target.classList.contains('shell-modal-backdrop')) {
+    closeProjectLauncher();
+  }
+});
+el.projectLauncherClose.addEventListener('click', closeProjectLauncher);
+el.projectLauncherCancel.addEventListener('click', closeProjectLauncher);
+el.projectLauncherBrowse.addEventListener('click', () => {
+  browseProjectLauncher().catch((error) => showToast(error.message, 'error'));
+});
+el.projectLauncherPathInput.addEventListener('input', () => {
+  state.projectLauncher.path = el.projectLauncherPathInput.value || '';
+  renderProjectLauncher();
+});
+el.projectLauncherSlidesInput.addEventListener('input', () => {
+  state.projectLauncher.slides = el.projectLauncherSlidesInput.value || '3';
+  renderProjectLauncher();
+});
+el.projectLauncherPathInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !el.projectLauncherSubmit.disabled) {
+    event.preventDefault();
+    submitProjectLauncher().catch((error) => showToast(error.message, 'error'));
+  }
+});
+el.projectLauncherSlidesInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !el.projectLauncherSubmit.disabled) {
+    event.preventDefault();
+    submitProjectLauncher().catch((error) => showToast(error.message, 'error'));
+  }
+});
+el.projectLauncherSubmit.addEventListener('click', () => {
+  submitProjectLauncher().catch((error) => showToast(error.message, 'error'));
+});
 el.moreActions.addEventListener('click', toggleMoreMenu);
+el.paneSplitHandle.addEventListener('pointerdown', startPaneDrag);
+el.paneSplitHandle.addEventListener('pointermove', handlePaneDrag);
+el.paneSplitHandle.addEventListener('pointerup', stopPaneDrag);
+el.paneSplitHandle.addEventListener('pointercancel', stopPaneDrag);
+el.paneSplitHandle.addEventListener('keydown', handlePaneKeyAdjust);
+document.addEventListener('pointermove', handlePaneDrag);
+document.addEventListener('pointerup', stopPaneDrag);
+document.addEventListener('pointercancel', stopPaneDrag);
 el.primaryAction.addEventListener('click', () => {
   const actionId = el.primaryAction.dataset.actionId;
   if (actionId) {
@@ -649,7 +1188,37 @@ el.moreMenuItems.addEventListener('click', (event) => {
 
 el.stopTerminal.addEventListener('click', () => runAction(() => window.electron.terminal.stop(), el.stopTerminal));
 el.clearTerminal.addEventListener('click', () => runAction(async () => { term.clear(); return window.electron.terminal.clear(); }, el.clearTerminal));
+el.terminalFind.addEventListener('click', () => openTerminalSearch(term.getSelection() || state.terminalSearch.query || ''));
 el.terminalRetry.addEventListener('click', () => startShellSession());
+el.terminalSearchInput.addEventListener('input', () => {
+  state.terminalSearch.query = el.terminalSearchInput.value || '';
+  renderTerminalSearch();
+  applyTerminalSearch('next');
+});
+el.terminalSearchInput.addEventListener('keydown', (event) => {
+  const action = getTerminalSearchAction({
+    searchOpen: state.terminalSearch.open,
+    key: event.key,
+    shiftKey: event.shiftKey,
+  });
+  if (!action) {
+    return;
+  }
+
+  event.preventDefault();
+  if (action === 'close') {
+    closeTerminalSearch();
+    return;
+  }
+
+  applyTerminalSearch(action);
+});
+el.terminalSearchPrev.addEventListener('click', () => applyTerminalSearch('previous'));
+el.terminalSearchNext.addEventListener('click', () => applyTerminalSearch('next'));
+el.terminalSearchClose.addEventListener('click', closeTerminalSearch);
+el.terminalContainer.addEventListener('contextmenu', (event) => {
+  openTerminalContextMenu(event).catch((error) => showToast(error.message || 'Terminal menu failed.', 'error'));
+});
 
 el.exportModal.addEventListener('click', (event) => {
   if (event.target === el.exportModal || event.target.classList.contains('shell-modal-backdrop')) {
@@ -699,13 +1268,44 @@ el.exportConfirm.addEventListener('click', () => {
 });
 
 el.closeDiagnostics.addEventListener('click', toggleDiag);
+document.addEventListener('focusin', () => {
+  updateTerminalSurfaceState();
+});
+document.addEventListener('focusout', () => {
+  requestAnimationFrame(() => updateTerminalSurfaceState());
+});
 
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && state.projectLauncher.open) {
+    event.preventDefault();
+    closeProjectLauncher();
+    return;
+  }
+
   if (event.key === 'Escape' && state.exportDraft.open) {
     event.preventDefault();
     closeExportModal();
     return;
   }
+
+  if (isTerminalSearchShortcut({
+    platform: navigator.userAgentData?.platform || (navigator.platform || ''),
+    key: event.key,
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    terminalFocused: isTerminalFocused(),
+  })) {
+    event.preventDefault();
+    openTerminalSearch(term.getSelection() || state.terminalSearch.query || '');
+    return;
+  }
+
+  handleTerminalClipboardShortcut(event).catch((error) => {
+    showToast(error.message || 'Clipboard action failed.', 'error');
+  });
+
   if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'd') {
     event.preventDefault();
     toggleDiag();
@@ -733,11 +1333,9 @@ function handleActionEvent(event) {
   setJson(el.actionJson, event || {});
 }
 
-window.electron.build.onEvent(handleActionEvent);
-window.electron.export.onEvent(handleActionEvent);
-window.electron.review.onEvent(handleActionEvent);
+window.electron.actions.onEvent(handleActionEvent);
 window.electron.terminal.onOutput((event) => {
-  writeTerminalOutput(event.data || '');
+  writeTerminalOutput(formatTerminalOutputEvent(event));
 });
 window.electron.terminal.onEvent(async (event) => {
   switch (event.channel) {
@@ -759,14 +1357,48 @@ window.electron.terminal.onEvent(async (event) => {
       break;
   }
 });
-window.electron.project.onChanged(() => {
-  refreshProjectPanels().catch((error) => showToast(error.message, 'error'));
+window.electron.terminal.onContextMenuAction((event = {}) => {
+  if (event.action === 'paste' && event.text) {
+    term.focus();
+    window.electron.terminal.send(String(event.text));
+    return;
+  }
+
+  if (event.action === 'selectAll') {
+    term.focus();
+    term.selectAll();
+  }
+});
+window.electron.project.onChanged((event) => {
+  if (event?.meta?.active && !event?.file) {
+    const projectRoot = event.meta.projectRoot || '';
+    const terminalProjectRoot = state.terminalMeta?.projectRoot || '';
+    if (!state.terminalMeta?.alive || terminalProjectRoot !== projectRoot) {
+      startShellSession().catch((error) => showToast(error.message, 'error'));
+    }
+  }
+  scheduleProjectPanelsRefresh();
 });
 window.electron.preview.onChanged(() => {
   if (!state.hasProject) {
     return;
   }
-  refreshPreview().catch((error) => showToast(error.message, 'error'));
+  schedulePreviewRefresh();
+});
+window.electron.system.onNativeMenuCommand((event = {}) => {
+  switch (event.commandId) {
+    case 'project:new':
+      openProjectLauncher('create');
+      break;
+    case 'project:open':
+      openProjectLauncher('open');
+      break;
+    default:
+      break;
+  }
 });
 
+applyPaneSplit();
+renderTerminalSearch();
+renderProjectLauncher();
 refreshProjectPanels().catch(e => showToast(e.message));

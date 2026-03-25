@@ -9,7 +9,6 @@ import { ensurePresentationPackageFiles } from './presentation-package.js';
 import { readRenderState } from './presentation-runtime-state.js';
 import { validateSlideDeckWorkspace } from './deck-policy.js';
 import { listSlideSourceEntries } from './deck-source.js';
-import { checkDeckQuality } from './deck-quality.js';
 
 const TODO_MARKER_RE = /\[\[TODO_[A-Z0-9_]+\]\]/;
 
@@ -96,7 +95,6 @@ export function getProjectState(projectRootInput) {
   const reportReady = existsSync(outputs.reportAbs);
   const summaryReady = existsSync(outputs.summaryAbs);
   const validationError = getValidationError(paths);
-  const quality = checkDeckQuality(slideEntries);
   const policyCategory = validationError ? classifyPolicyErrorMessage(validationError) : null;
 
   let status = 'ready_to_finalize';
@@ -142,7 +140,6 @@ export function getProjectState(projectRootInput) {
     lastCheckedAt: renderState?.lastCheckedAt || '',
     lastPolicyError: validationError || '',
     policyCategory,
-    qualityWarningCount: quality.warnings.length,
     nextStep,
   };
 }

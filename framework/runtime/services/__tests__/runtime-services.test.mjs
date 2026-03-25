@@ -132,10 +132,10 @@ test('runtime services operate on a real scaffolded project', async (t) => {
     { finalizePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
-    import('../capture-service.mjs'),
-    import('../check-service.mjs'),
-    import('../export-service.mjs'),
-    import('../finalize-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -209,7 +209,7 @@ test('runtime export service can export selected slides to one pdf or individual
     { PDFDocument },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
-    import('../export-service.mjs'),
+    import('../presentation-ops-service.mjs'),
     import('pdf-lib'),
   ]);
 
@@ -251,8 +251,8 @@ test('validatePresentation ignores deck-quality heuristics and keeps canonical a
     { finalizePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
-    import('../check-service.mjs'),
-    import('../finalize-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -289,8 +289,8 @@ test('runtime commands regenerate missing package files for legacy projects', as
     { finalizePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
-    import('../check-service.mjs'),
-    import('../finalize-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -321,7 +321,7 @@ test('rendered contract checks fail when a copied framework canvas breaks the st
     { validatePresentation },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
-    import('../check-service.mjs'),
+    import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();

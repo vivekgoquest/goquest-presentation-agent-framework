@@ -1,47 +1,4 @@
-import { WORKER_REQUEST_CHANNELS } from '../../electron/worker/ipc-contract.mjs';
-
-const REVIEW_ACTION_IDS = Object.freeze({
-  run: 'review_narrative_presentation',
-  revise: 'apply_narrative_review_changes',
-  fixWarnings: 'fix_validation_issues',
-  fixValidationIssues: 'fix_validation_issues',
-  reviewNarrative: 'review_narrative_presentation',
-  applyNarrativeChanges: 'apply_narrative_review_changes',
-  reviewVisual: 'review_visual_presentation',
-  applyVisualChanges: 'apply_visual_review_changes',
-});
-
-function buildReviewAvailability(actions = []) {
-  const actionMap = new Map(actions.map((action) => [action.id, action]));
-  const reviewAction = actionMap.get(REVIEW_ACTION_IDS.run);
-  const reviseAction = actionMap.get(REVIEW_ACTION_IDS.revise);
-  const fixWarningsAction = actionMap.get(REVIEW_ACTION_IDS.fixWarnings);
-  const fixValidationIssuesAction = actionMap.get(REVIEW_ACTION_IDS.fixValidationIssues);
-  const reviewNarrativeAction = actionMap.get(REVIEW_ACTION_IDS.reviewNarrative);
-  const applyNarrativeChangesAction = actionMap.get(REVIEW_ACTION_IDS.applyNarrativeChanges);
-  const reviewVisualAction = actionMap.get(REVIEW_ACTION_IDS.reviewVisual);
-  const applyVisualChangesAction = actionMap.get(REVIEW_ACTION_IDS.applyVisualChanges);
-
-  return {
-    run: Boolean(reviewAction?.enabled),
-    revise: Boolean(reviseAction?.enabled),
-    fixWarnings: Boolean(fixWarningsAction?.enabled),
-    fixValidationIssues: Boolean(fixValidationIssuesAction?.enabled),
-    reviewNarrative: Boolean(reviewNarrativeAction?.enabled),
-    applyNarrativeChanges: Boolean(applyNarrativeChangesAction?.enabled),
-    reviewVisual: Boolean(reviewVisualAction?.enabled),
-    applyVisualChanges: Boolean(applyVisualChangesAction?.enabled),
-    reasonUnavailable:
-      reviewAction?.reasonDisabled
-      || reviseAction?.reasonDisabled
-      || fixWarningsAction?.reasonDisabled
-      || reviewNarrativeAction?.reasonDisabled
-      || applyNarrativeChangesAction?.reasonDisabled
-      || reviewVisualAction?.reasonDisabled
-      || applyVisualChangesAction?.reasonDisabled
-      || '',
-  };
-}
+import { WORKER_REQUEST_CHANNELS } from './electron-ipc-contract.mjs';
 
 export function createElectronRequestService(options = {}) {
   const projectService = options.projectService;
@@ -55,14 +12,6 @@ export function createElectronRequestService(options = {}) {
   }
 
   return {
-    async listActionDescriptors() {
-      return listActionDescriptors();
-    },
-
-    async getReviewAvailability() {
-      return buildReviewAvailability(await listActionDescriptors());
-    },
-
     async handleRequest(channel, payload = {}) {
       switch (channel) {
         case WORKER_REQUEST_CHANNELS.PROJECT_CREATE:
@@ -88,30 +37,6 @@ export function createElectronRequestService(options = {}) {
           onPreviewRefresh();
           return meta;
         }
-        case WORKER_REQUEST_CHANNELS.BUILD_CHECK:
-          return actionService.invokeAction('validate_presentation', {
-            outputDir: payload.outputDir,
-            options: payload,
-          });
-        case WORKER_REQUEST_CHANNELS.BUILD_FINALIZE:
-          return actionService.invokeAction('export_presentation', {
-            options: payload,
-          });
-        case WORKER_REQUEST_CHANNELS.BUILD_CAPTURE_SCREENSHOTS:
-          return actionService.invokeAction('capture_screenshots', {
-            outputDir: payload.outputDir,
-            options: payload,
-          });
-        case WORKER_REQUEST_CHANNELS.EXPORT_START:
-          return actionService.invokeAction('export_presentation', payload);
-        case WORKER_REQUEST_CHANNELS.REVIEW_RUN:
-          return actionService.invokeAction(REVIEW_ACTION_IDS.run, payload);
-        case WORKER_REQUEST_CHANNELS.REVIEW_REVISE:
-          return actionService.invokeAction(REVIEW_ACTION_IDS.revise, payload);
-        case WORKER_REQUEST_CHANNELS.REVIEW_FIX_WARNINGS:
-          return actionService.invokeAction(REVIEW_ACTION_IDS.fixWarnings, payload);
-        case WORKER_REQUEST_CHANNELS.REVIEW_GET_AVAILABILITY:
-          return this.getReviewAvailability();
         case WORKER_REQUEST_CHANNELS.ACTION_LIST:
           return {
             actions: await listActionDescriptors(),

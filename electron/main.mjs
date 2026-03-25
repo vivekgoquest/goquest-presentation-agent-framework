@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell, utilityProcess } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, protocol, shell, utilityProcess } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { resolveProjectFrameworkAsset } from '../framework/application/project-framework-resolver.mjs';
@@ -14,6 +14,11 @@ let mainWindow = null;
 let workerProcess = null;
 let requestCounter = 0;
 const pendingRequests = new Map();
+const operatorDialogState = {
+  openDirectory: [],
+  save: [],
+  history: [],
+};
 
 function rejectPendingRequests(message) {
   for (const pending of pendingRequests.values()) {
@@ -21,6 +26,182 @@ function rejectPendingRequests(message) {
   }
   pendingRequests.clear();
 }
+
+function pushDialogHistory(entry) {
+  operatorDialogState.history.push({
+    at: new Date().toISOString(),
+    ...entry,
+  });
+  if (operatorDialogState.history.length > 50) {
+    operatorDialogState.history.splice(0, operatorDialogState.history.length - 50);
+  }
+}
+
+function consumeDialogOverride(kind) {
+  const queue = operatorDialogState[kind];
+  if (!Array.isArray(queue) || queue.length === 0) {
+    return null;
+  }
+
+  return queue.shift() || null;
+}
+
+function queueDialogOverride(kind, response) {
+  if (!Array.isArray(operatorDialogState[kind])) {
+    operatorDialogState[kind] = [];
+  }
+  operatorDialogState[kind].push(response);
+}
+
+function clearDialogOverrides() {
+  operatorDialogState.openDirectory = [];
+  operatorDialogState.save = [];
+  operatorDialogState.history = [];
+}
+
+function sendNativeMenuCommand(commandId, payload = {}) {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send('presentation:native-menu-command', {
+        commandId,
+        payload,
+      });
+    }
+  }
+}
+
+async function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1120,
+    minHeight: 720,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: PRELOAD_ENTRY,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  await mainWindow.loadFile(RENDERER_ENTRY);
+  return mainWindow;
+}
+
+function buildApplicationMenuTemplate() {
+  const fileSubmenu = [
+    {
+      id: 'file.newProject',
+      label: 'New Project…',
+      click: () => sendNativeMenuCommand('project:new'),
+    },
+    {
+      id: 'file.openProject',
+      label: 'Open Project…',
+      click: () => sendNativeMenuCommand('project:open'),
+    },
+    { type: 'separator' },
+    {
+      id: 'file.closeWindow',
+      role: 'close',
+      label: 'Close Window',
+    },
+  ];
+
+  const viewSubmenu = [
+    {
+      id: 'view.reloadWindow',
+      label: 'Reload Window',
+      accelerator: 'CmdOrCtrl+R',
+      click: () => {
+        const target = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+        target?.reload();
+      },
+    },
+    {
+      id: 'view.toggleDevTools',
+      label: 'Toggle Developer Tools',
+      accelerator: 'Alt+CommandOrControl+I',
+      click: () => {
+        const target = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+        target?.webContents?.toggleDevTools();
+      },
+    },
+    { type: 'separator' },
+    {
+      id: 'view.toggleFullScreen',
+      role: 'togglefullscreen',
+      label: 'Toggle Full Screen',
+    },
+  ];
+
+  const windowSubmenu = [
+    {
+      id: 'window.newWindow',
+      label: 'New Window',
+      accelerator: 'CmdOrCtrl+Shift+N',
+      click: async () => {
+        await createMainWindow();
+      },
+    },
+    { type: 'separator' },
+    { id: 'window.minimize', role: 'minimize', label: 'Minimize' },
+    { id: 'window.zoom', role: 'zoom', label: 'Zoom' },
+  ];
+
+  if (process.platform === 'darwin') {
+    return [
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      { label: 'File', submenu: fileSubmenu },
+      { label: 'View', submenu: viewSubmenu },
+      { label: 'Window', submenu: [...windowSubmenu, { type: 'separator' }, { role: 'front' }] },
+      { label: 'Help', submenu: [{ label: 'Presentation Desktop', enabled: false }] },
+    ];
+  }
+
+  return [
+    { label: 'File', submenu: [...fileSubmenu, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'View', submenu: viewSubmenu },
+    { label: 'Window', submenu: windowSubmenu },
+    { label: 'Help', submenu: [{ label: 'Presentation Desktop', enabled: false }] },
+  ];
+}
+
+function installApplicationMenu() {
+  const menu = Menu.buildFromTemplate(buildApplicationMenuTemplate());
+  Menu.setApplicationMenu(menu);
+  return menu;
+}
+
+globalThis.__presentationOperatorApi = {
+  getDialogState() {
+    return JSON.parse(JSON.stringify(operatorDialogState));
+  },
+  queueDialogOverride,
+  clearDialogOverrides,
+  async createWindow() {
+    const window = await createMainWindow();
+    return {
+      id: window.id,
+      title: window.getTitle(),
+      bounds: window.getBounds(),
+    };
+  },
+};
 
 function forwardWorkerEvent(event) {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -104,38 +285,106 @@ async function invokeWorker(channel, payload = {}) {
   });
 }
 
-async function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1120,
-    minHeight: 720,
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: PRELOAD_ENTRY,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-
-  await mainWindow.loadFile(RENDERER_ENTRY);
-}
-
 ipcMain.handle('presentation:invoke', async (_event, request) => {
   const response = await invokeWorker(request?.channel || '', request?.payload || {});
   return response;
 });
 
+ipcMain.on('presentation:terminal-input', (_event, payload = {}) => {
+  const worker = ensureWorkerProcess();
+  worker.postMessage({
+    channel: 'terminal:input',
+    payload: {
+      data: payload?.data || '',
+    },
+  });
+});
+
 ipcMain.handle('presentation:choose-directory', async () => {
+  const override = consumeDialogOverride('openDirectory');
+  if (override) {
+    pushDialogHistory({ kind: 'openDirectory', source: 'override', response: override });
+    return override;
+  }
+
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
   });
 
-  return {
+  const response = {
     canceled: result.canceled,
     path: result.canceled ? '' : (result.filePaths[0] || ''),
   };
+  pushDialogHistory({ kind: 'openDirectory', source: 'native', response });
+  return response;
+});
+
+ipcMain.handle('presentation:save-dialog', async (_event, options = {}) => {
+  const override = consumeDialogOverride('save');
+  if (override) {
+    pushDialogHistory({ kind: 'save', source: 'override', response: override });
+    return override;
+  }
+
+  const result = await dialog.showSaveDialog({
+    title: String(options?.title || 'Save'),
+    defaultPath: String(options?.defaultPath || ''),
+    buttonLabel: String(options?.buttonLabel || 'Save'),
+  });
+  const response = {
+    canceled: result.canceled,
+    path: result.filePath || '',
+  };
+  pushDialogHistory({ kind: 'save', source: 'native', response });
+  return response;
+});
+
+ipcMain.handle('presentation:clipboard-read-text', async () => {
+  return clipboard.readText();
+});
+
+ipcMain.handle('presentation:clipboard-write-text', async (_event, text = '') => {
+  clipboard.writeText(String(text || ''));
+  return { ok: true };
+});
+
+ipcMain.handle('presentation:terminal-context-menu', async (event, options = {}) => {
+  const selectionText = String(options?.selectionText || '');
+  const items = Array.isArray(options?.items) ? options.items : [];
+  const targetWindow = BrowserWindow.fromWebContents(event.sender);
+
+  const menu = Menu.buildFromTemplate(items.map((item) => ({
+    label: String(item?.label || ''),
+    enabled: Boolean(item?.enabled),
+    click: () => {
+      switch (item?.id) {
+        case 'copy':
+          clipboard.writeText(selectionText);
+          break;
+        case 'paste':
+          event.sender.send('presentation:terminal-context-menu-action', {
+            action: 'paste',
+            text: clipboard.readText(),
+          });
+          break;
+        case 'selectAll':
+          event.sender.send('presentation:terminal-context-menu-action', {
+            action: 'selectAll',
+          });
+          break;
+        default:
+          break;
+      }
+    },
+  })));
+
+  menu.popup({ window: targetWindow || undefined });
+  return { ok: true };
+});
+
+ipcMain.handle('presentation:open-external', async (_event, targetUrl = '') => {
+  await shell.openExternal(String(targetUrl || ''));
+  return { ok: true };
 });
 
 ipcMain.handle('presentation:reveal-in-finder', async (_event, targetPath) => {
@@ -211,6 +460,7 @@ app.whenReady().then(async () => {
   });
 
   ensureWorkerProcess();
+  installApplicationMenu();
   await createMainWindow();
 
   app.on('activate', async () => {

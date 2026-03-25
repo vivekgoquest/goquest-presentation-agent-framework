@@ -1,9 +1,6 @@
 import { pathToFileURL } from 'url';
 import { createActionService } from '../../framework/application/action-service.mjs';
 import { createAgentActionAdapter } from '../../framework/application/agent-action-adapter.mjs';
-import { createElectronRequestService } from '../../framework/application/electron-request-service.mjs';
-import { createPresentationActionAdapter } from '../../framework/application/presentation-action-adapter.mjs';
-import { createProjectQueryService } from '../../framework/application/project-query-service.mjs';
 import {
   createErrorResponse,
   createSuccessResponse,
@@ -11,7 +8,10 @@ import {
   normalizeWorkerRequest,
   WORKER_EVENT_CHANNELS,
   WORKER_REQUEST_CHANNELS,
-} from './ipc-contract.mjs';
+} from '../../framework/application/electron-ipc-contract.mjs';
+import { createElectronRequestService } from '../../framework/application/electron-request-service.mjs';
+import { createPresentationActionAdapter } from '../../framework/application/presentation-action-adapter.mjs';
+import { createProjectQueryService } from '../../framework/application/project-query-service.mjs';
 import { createTerminalService } from './terminal-service.mjs';
 import { createWatchService } from './watch-service.mjs';
 

@@ -6,7 +6,7 @@ This `.claude/` directory contains Claude-specific workflow helpers:
 
 - `settings.json` for hook wiring
 - `hooks/` for local wrapper entrypoints into application-owned hook workflows
-- `skills/` for guided workflows such as new, revise, review, and fix-warnings
+- `skills/` for guided workflows such as new deck creation, deterministic validation repair, visual review, and narrative review
 
 Presentation truth lives in:
 

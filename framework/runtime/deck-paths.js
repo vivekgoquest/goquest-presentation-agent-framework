@@ -18,6 +18,10 @@ export const PROJECT_FRAMEWORK_BASE_DIRNAME = 'base';
 export const PROJECT_FRAMEWORK_OVERRIDES_DIRNAME = 'overrides';
 export const PROJECT_PREVIEW_PATH = '/preview/';
 
+// -----------------------------------------------------------------------------
+// Repository and Path Normalization
+// -----------------------------------------------------------------------------
+
 const VALID_FRAMEWORK_MODES = new Set(['linked', 'copied']);
 const PACKAGE_JSON = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf-8'));
 export const FRAMEWORK_VERSION = PACKAGE_JSON.version || '0.0.0';
@@ -159,6 +163,10 @@ export function getProjectSystemPaths(projectRootInput) {
   };
 }
 
+// -----------------------------------------------------------------------------
+// Project Metadata and Project Paths
+// -----------------------------------------------------------------------------
+
 function buildDefaultProjectMetadata(projectRootAbs, frameworkMode = 'linked') {
   const projectSlug = slugifyProjectName(basename(projectRootAbs));
   const normalizedFrameworkMode = VALID_FRAMEWORK_MODES.has(frameworkMode) ? frameworkMode : 'linked';
@@ -293,6 +301,10 @@ export function getProjectPaths(projectRootInput) {
   };
 }
 
+// -----------------------------------------------------------------------------
+// CLI Targets and Output Paths
+// -----------------------------------------------------------------------------
+
 export function parsePresentationTargetCliArgs(argv, options = {}) {
   const {
     allowProject = true,
@@ -386,6 +398,10 @@ export function getPresentationOutputPaths(target) {
   const normalized = createPresentationTarget(target);
   return getProjectOutputPaths(normalized.projectRootAbs);
 }
+
+// -----------------------------------------------------------------------------
+// Framework Asset Resolution
+// -----------------------------------------------------------------------------
 
 function resolveSharedFrameworkAssetAbs(relativePath) {
   const normalized = normalizeRepoRelativePath(relativePath);

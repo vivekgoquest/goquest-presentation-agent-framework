@@ -6,17 +6,18 @@
   "scripts": {
     "setup": "node framework/runtime/setup.mjs",
     "start": "electron electron/main.mjs",
-    "desktop:start": "electron electron/main.mjs",
-    "debug:preview": "node framework/runtime/debug-preview.mjs",
+    "operator": "node electron/operator/cli.mjs",
     "new": "node framework/application/new-project.mjs",
     "finalize": "node framework/runtime/finalize-deck.mjs",
     "export": "node framework/runtime/export-pdf.mjs",
     "capture": "node framework/runtime/deck-capture.mjs",
     "check": "node framework/runtime/check-deck.mjs",
-    "test": "node --test framework/canvas/__tests__/canvas-contract.test.mjs framework/runtime/__tests__/deck-policy.test.mjs framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/terminal-core.test.mjs framework/runtime/__tests__/deck-paths-project-only.test.mjs framework/runtime/__tests__/preview-state-page.test.mjs framework/application/__tests__/action-service.test.mjs framework/application/__tests__/action-workflow-service.test.mjs framework/application/__tests__/project-query-service.test.mjs framework/application/__tests__/project-hook-service.test.mjs framework/application/__tests__/boundary-contract.test.mjs project-agent/__tests__/agent-launcher.test.mjs electron/renderer/__tests__/ui-model.test.mjs electron/worker/__tests__/host.test.mjs electron/__tests__/app-smoke.test.mjs electron/__tests__/project-framework-resolver.test.mjs"
+    "test": "node --test framework/canvas/__tests__/canvas-contract.test.mjs framework/runtime/__tests__/deck-policy.test.mjs framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/terminal-core.test.mjs framework/runtime/__tests__/deck-paths-project-only.test.mjs framework/runtime/__tests__/preview-state-page.test.mjs framework/application/__tests__/action-service.test.mjs framework/application/__tests__/action-workflow-service.test.mjs framework/application/__tests__/project-query-service.test.mjs framework/application/__tests__/project-hook-service.test.mjs framework/application/__tests__/boundary-contract.test.mjs project-agent/__tests__/agent-launcher.test.mjs electron/renderer/__tests__/ui-model.test.mjs electron/renderer/__tests__/terminal-interaction.test.mjs electron/renderer/__tests__/terminal-search.test.mjs electron/renderer/__tests__/terminal-links.test.mjs electron/operator/__tests__/terminal-capture.test.mjs electron/operator/__tests__/os-automation.test.mjs electron/worker/__tests__/host.test.mjs electron/__tests__/operator-cli.test.mjs electron/__tests__/operator-user-cli.test.mjs electron/__tests__/operator-controls.test.mjs electron/__tests__/operator-system-controls.test.mjs electron/__tests__/operator-native-dialog.test.mjs electron/__tests__/terminal-smoke.test.mjs electron/__tests__/app-smoke.test.mjs electron/__tests__/project-framework-resolver.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/addon-web-links": "^0.12.0",
     "express": "^4.21.0",
     "node-pty": "^1.0.0",
     "pdf-lib": "^1.17.1",

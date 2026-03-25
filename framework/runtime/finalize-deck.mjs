@@ -1,5 +1,5 @@
 import { parsePresentationTargetCliArgs } from './deck-paths.js';
-import { finalizePresentation } from './services/finalize-service.mjs';
+import { finalizePresentation } from './services/presentation-ops-service.mjs';
 
 let parsed;
 try {

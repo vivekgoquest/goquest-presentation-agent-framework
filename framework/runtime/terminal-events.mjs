@@ -33,10 +33,11 @@ export function createTerminalMetaEvent(meta) {
   };
 }
 
-export function createTerminalOutputEvent(data) {
+export function createTerminalOutputEvent(data, source = 'pty') {
   return {
     channel: TERMINAL_EVENT_CHANNELS.OUTPUT,
     data: String(data ?? ''),
+    source: source === 'system' ? 'system' : 'pty',
   };
 }
 
@@ -65,7 +66,7 @@ export function toTerminalSocketMessage(event) {
     case TERMINAL_EVENT_CHANNELS.META:
       return { type: 'meta', ...cloneMeta(event.meta) };
     case TERMINAL_EVENT_CHANNELS.OUTPUT:
-      return { type: 'output', data: event.data };
+      return { type: 'output', data: event.data, source: event.source === 'system' ? 'system' : 'pty' };
     case TERMINAL_EVENT_CHANNELS.EXIT:
       return {
         type: 'exit',

@@ -8,25 +8,30 @@
   <link rel="stylesheet" href="./app.css">
   <script src="../../node_modules/xterm/lib/xterm.js"></script>
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+  <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
 </head>
 <body>
   <div id="app-shell" class="app-shell" data-state="no-project">
 
     <header class="toolbar">
       <div class="toolbar-group">
-        <button id="choose-path" type="button" class="tb" title="Open an existing presentation">Open</button>
-        <button id="create-project" type="button" class="tb" title="Start a new presentation">New</button>
+        <button id="choose-path" type="button" class="tb" title="Open an existing presentation project">Open project</button>
+        <button id="create-project" type="button" class="tb" title="Start a new presentation project">New project</button>
       </div>
 
       <div class="tb-sep"></div>
-      <span id="project-name-label" class="tb-name"></span>
+      <div class="toolbar-project-meta">
+        <span id="project-name-label" class="tb-name"></span>
+        <span id="project-context-label" class="tb-context"></span>
+      </div>
 
       <div class="tb-spacer"></div>
 
       <div class="toolbar-group requires-project">
         <button id="primary-action" type="button" class="tb tb-primary" style="display:none"></button>
         <button id="secondary-action" type="button" class="tb tb-dim" style="display:none"></button>
-        <button id="more-actions" type="button" class="tb tb-dim" title="More options" disabled>
+        <button id="more-actions" type="button" class="tb tb-dim" title="More project actions" disabled>
           More
         </button>
       </div>
@@ -34,6 +39,10 @@
       <span id="action-status-label" class="toolbar-status" aria-live="polite"></span>
 
       <div id="more-menu" class="more-menu" style="display:none">
+        <div class="menu-header">
+          <div class="menu-title">More</div>
+          <div id="more-menu-summary" class="menu-summary">Checks, reviews, fixes, and capture tools.</div>
+        </div>
         <div id="more-menu-items"></div>
       </div>
     </header>
@@ -44,26 +53,67 @@
         <div class="welcome-inner">
           <div class="welcome-mark">P</div>
           <h2>Presentation Desktop</h2>
-          <p>Work with your assistant on one side and see the presentation update on the other.</p>
-          <div class="welcome-actions">
-            <button id="welcome-create" type="button" class="w-btn w-btn-primary">New presentation</button>
-            <button id="welcome-open" type="button" class="w-btn w-btn-link">Open a presentation</button>
-          </div>
+          <p>Work in the terminal on one side and see the presentation update on the other.</p>
           <input id="project-path" type="hidden">
           <input id="project-slides" type="hidden" value="3">
+        </div>
+      </div>
+
+      <div id="project-launcher-modal" class="shell-modal" data-open="false" style="display:none">
+        <div class="shell-modal-backdrop"></div>
+        <div class="shell-modal-panel project-launcher-panel" role="dialog" aria-modal="true" aria-labelledby="project-launcher-title">
+          <div class="shell-modal-header">
+            <div>
+              <div id="project-launcher-title" class="shell-modal-title">New project</div>
+              <div id="project-launcher-subtitle" class="shell-modal-subtitle">Type a folder path for the new project, or browse to choose one.</div>
+            </div>
+            <button id="project-launcher-close" type="button" class="tb tb-icon" aria-label="Close project launcher">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="shell-modal-body project-launcher-body">
+            <label class="project-launcher-field">
+              <span class="project-launcher-label">Folder path</span>
+              <input id="project-launcher-path-input" class="project-launcher-input" type="text" placeholder="/absolute/path/to/project" spellcheck="false" autocomplete="off">
+            </label>
+
+            <div class="project-launcher-actions">
+              <button id="project-launcher-browse" type="button" class="tb tb-dim">Browse</button>
+            </div>
+
+            <label id="project-launcher-slides-field" class="project-launcher-field">
+              <span class="project-launcher-label">Slides</span>
+              <input id="project-launcher-slides-input" class="project-launcher-input" type="number" min="1" step="1" value="3" inputmode="numeric">
+            </label>
+          </div>
+
+          <div class="shell-modal-footer">
+            <button id="project-launcher-cancel" type="button" class="tb tb-dim">Cancel</button>
+            <button id="project-launcher-submit" type="button" class="tb tb-primary">Create project</button>
+          </div>
         </div>
       </div>
 
       <div id="terminal-pane" class="pane terminal-pane" style="display:none">
         <div class="pane-header terminal-header">
           <div>
-            <div class="pane-title terminal-title">Assistant</div>
+            <div class="pane-title terminal-title">Terminal</div>
             <div id="terminal-state-label" class="pane-subtitle terminal-state-label"></div>
           </div>
           <div class="pane-actions">
-            <button id="terminal-retry" type="button" class="tb tb-dim" style="display:none">Start</button>
-            <button id="clear-terminal" type="button" class="tb tb-dim" title="Clear the terminal" style="display:none">Clear</button>
-            <button id="stop-terminal" type="button" class="tb tb-dim" title="Stop the terminal session" style="display:none">Stop</button>
+            <button id="terminal-find" type="button" class="tb tb-dim" title="Find in terminal" style="display:none">Find</button>
+            <button id="terminal-retry" type="button" class="tb tb-dim" style="display:none">Open shell</button>
+            <button id="clear-terminal" type="button" class="tb tb-dim" title="Clear the terminal output" style="display:none">Clear terminal</button>
+            <button id="stop-terminal" type="button" class="tb tb-dim" title="Close the shell for this project" style="display:none">Close shell</button>
+          </div>
+        </div>
+        <div id="terminal-search" class="terminal-search" data-open="false" style="display:none">
+          <input id="terminal-search-input" class="terminal-search-input" type="text" placeholder="Find in terminal" spellcheck="false" autocomplete="off">
+          <div class="terminal-search-actions">
+            <button id="terminal-search-prev" type="button" class="tb tb-dim" disabled>Prev</button>
+            <button id="terminal-search-next" type="button" class="tb tb-dim" disabled>Next</button>
+            <button id="terminal-search-close" type="button" class="tb tb-dim" aria-label="Close terminal search">Done</button>
           </div>
         </div>
         <div id="terminal-empty-state" class="terminal-empty-state" style="display:none">
@@ -73,11 +123,13 @@
         <div id="terminal-container" class="terminal-container"></div>
       </div>
 
+      <div id="pane-split-handle" class="pane-split-handle" style="display:none" role="separator" aria-orientation="vertical" aria-label="Resize terminal and preview panes" tabindex="0"></div>
+
       <div id="preview-pane" class="pane preview-pane" style="display:none">
         <div class="pane-header preview-header">
           <div>
-            <div class="pane-title preview-title">Presentation</div>
-            <div class="pane-subtitle">Updates live while you work.</div>
+            <div class="pane-title preview-title">Preview</div>
+            <div id="preview-subtitle" class="pane-subtitle">Updates live while you work.</div>
           </div>
         </div>
         <div class="preview-canvas">
@@ -91,7 +143,7 @@
       <div class="shell-modal-panel" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
         <div class="shell-modal-header">
           <div>
-            <div id="export-modal-title" class="shell-modal-title">Export presentation</div>
+            <div id="export-modal-title" class="shell-modal-title">Export artifacts</div>
             <div class="shell-modal-subtitle">Choose a format, pick the slides, then select a destination folder.</div>
           </div>
           <button id="export-close" type="button" class="tb tb-icon" aria-label="Close export dialog">

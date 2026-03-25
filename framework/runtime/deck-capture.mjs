@@ -12,9 +12,7 @@ import {
 import {
   capturePresentation,
   getDefaultCaptureOutputDir,
-} from './services/capture-service.mjs';
-
-export const captureDeck = capturePresentation;
+} from './services/presentation-ops-service.mjs';
 
 const isCli = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 

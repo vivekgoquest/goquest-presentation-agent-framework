@@ -31,6 +31,20 @@ function createValidationFailureSlideHtml(title) {
   ].join('\n');
 }
 
+function createCaptureFailureSlideHtml() {
+  const paragraphs = Array.from({ length: 80 }, (_value, index) =>
+    `  <p class="body-text">Overflow line ${index + 1} for screenshot capture regression coverage.</p>`
+  );
+  return [
+    '<div class="slide">',
+    '  <div class="eyebrow">Capture Regression Deck</div>',
+    '  <h2 class="sect-title">Overflow capture fixture</h2>',
+    ...paragraphs,
+    '</div>',
+    '',
+  ].join('\n');
+}
+
 function createProjectService(status = 'onboarding', projectRoot = '/tmp/project') {
   return {
     getState() {
@@ -79,6 +93,7 @@ test('action service lists stable product actions with enablement derived from p
 
   const actions = await actionService.listActions();
   const exportAction = actions.find((action) => action.id === 'export_presentation');
+  const exportArtifactsAction = actions.find((action) => action.id === 'export_presentation_artifacts');
   const validateAction = actions.find((action) => action.id === 'validate_presentation');
   const fixValidationIssues = actions.find((action) => action.id === 'fix_validation_issues');
   const narrativeReview = actions.find((action) => action.id === 'review_narrative_presentation');
@@ -87,31 +102,43 @@ test('action service lists stable product actions with enablement derived from p
   const applyVisual = actions.find((action) => action.id === 'apply_visual_review_changes');
 
   assert(exportAction);
+  assert.equal(exportAction.label, 'Export');
   assert.equal(exportAction.kind, 'presentation');
   assert.equal(exportAction.enabled, false);
   assert.match(exportAction.reasonDisabled || '', /presentation is still in progress/i);
 
+  assert(exportArtifactsAction);
+  assert.equal(exportArtifactsAction.label, 'Export files');
+  assert.equal(exportArtifactsAction.kind, 'presentation');
+  assert.equal(exportArtifactsAction.enabled, true);
+
   assert(validateAction);
+  assert.equal(validateAction.label, 'Check project');
   assert.equal(validateAction.kind, 'presentation');
   assert.equal(validateAction.enabled, true);
 
   assert(fixValidationIssues);
+  assert.equal(fixValidationIssues.label, 'Fix issues');
   assert.equal(fixValidationIssues.kind, 'agent');
   assert.equal(fixValidationIssues.enabled, true);
 
   assert(narrativeReview);
+  assert.equal(narrativeReview.label, 'Review writing');
   assert.equal(narrativeReview.kind, 'agent');
   assert.equal(narrativeReview.enabled, true);
 
   assert(applyNarrative);
+  assert.equal(applyNarrative.label, 'Apply writing fixes');
   assert.equal(applyNarrative.kind, 'agent');
   assert.equal(applyNarrative.enabled, true);
 
   assert(visualReview);
+  assert.equal(visualReview.label, 'Review visuals');
   assert.equal(visualReview.kind, 'agent');
   assert.equal(visualReview.enabled, true);
 
   assert(applyVisual);
+  assert.equal(applyVisual.label, 'Apply visual fixes');
   assert.equal(applyVisual.kind, 'agent');
   assert.equal(applyVisual.enabled, true);
 });
@@ -173,17 +200,24 @@ test('action service routes presentation and deterministic-fix agent actions to 
   });
 
   await actionService.invokeAction('export_presentation');
+  await actionService.invokeAction('export_presentation_artifacts', {
+    format: 'png',
+    outputDir: resolve(projectRoot, 'exports'),
+    slideIds: ['010-intro'],
+  });
   await actionService.invokeAction('fix_validation_issues');
 
   rmSync(projectRoot, { recursive: true, force: true });
 
   assert.deepEqual(calls[0], ['presentation', 'export_presentation', projectRoot]);
-  assert.deepEqual(calls[1], ['terminal.start', 'shell']);
-  assert.deepEqual(calls[2], ['presentation', 'validate_presentation', projectRoot]);
-  assert.deepEqual(calls[3], ['agent', 'fix_validation_issues', projectRoot]);
+  assert.deepEqual(calls[1], ['presentation', 'export_presentation_artifacts', projectRoot]);
+  assert.deepEqual(calls[2], ['terminal.start', 'shell']);
+  assert.deepEqual(calls[3], ['presentation', 'validate_presentation', projectRoot]);
+  assert.deepEqual(calls[4], ['agent', 'fix_validation_issues', projectRoot]);
   assert.match(terminalMessages[0] || '', /running review/i);
   assert(events.some((event) => event.status === 'running' && event.actionId === 'fix_validation_issues'));
   assert(events.some((event) => event.status === 'succeeded' && event.actionId === 'export_presentation'));
+  assert(events.some((event) => event.status === 'succeeded' && event.actionId === 'export_presentation_artifacts'));
 });
 
 test('action service delegates execution through the canonical workflow service', async () => {
@@ -215,4 +249,34 @@ test('action service delegates execution through the canonical workflow service'
   }]);
   assert.equal(result.actionId, 'review_visual_presentation');
   assert.equal(result.workflowId, 'test-workflow');
+});
+
+test('presentation action adapter preserves failing screenshot capture status', async (t) => {
+  const [{ createProjectScaffold }, { createPresentationActionAdapter }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../presentation-action-adapter.mjs'),
+  ]);
+
+  const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-presentation-action-adapter-'));
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  writeFileSync(resolve(projectRoot, 'brief.md'), '# Capture test brief\n');
+  writeFileSync(
+    resolve(projectRoot, 'slides', '010-intro', 'slide.html'),
+    createCaptureFailureSlideHtml()
+  );
+
+  const adapter = createPresentationActionAdapter();
+  const result = await adapter.invoke('capture_screenshots', {
+    target: {
+      kind: 'project',
+      projectRootAbs: projectRoot,
+    },
+    outputPaths: {
+      outputDirAbs: resolve(projectRoot, 'outputs', 'capture-test'),
+    },
+  });
+
+  assert.equal(result.status, 'fail');
 });

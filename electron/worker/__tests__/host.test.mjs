@@ -140,21 +140,29 @@ test('electron worker host creates a project and runs actions without runtime by
   assert(actionListResponse.data.actions.some((action) => action.id === 'export_presentation'));
   assert(actionListResponse.data.actions.some((action) => action.id === 'validate_presentation'));
 
-  const buildCheckResponse = await host.handleRequest({
+  const validateResponse = await host.handleRequest({
+    channel: 'action:invoke',
+    payload: {
+      actionId: 'validate_presentation',
+      args: {},
+    },
+  });
+  assert.equal(validateResponse.ok, true);
+  assert.equal(validateResponse.data.status, 'pass');
+
+  const legacyBuildCheckResponse = await host.handleRequest({
     channel: 'build:check',
     payload: {},
   });
-  assert.equal(buildCheckResponse.ok, true);
-  assert.equal(buildCheckResponse.data.status, 'pass');
+  assert.equal(legacyBuildCheckResponse.ok, false);
+  assert.match(legacyBuildCheckResponse.error?.message || '', /unsupported worker request channel/i);
 
-  const reviewAvailabilityResponse = await host.handleRequest({
+  const legacyReviewAvailabilityResponse = await host.handleRequest({
     channel: 'review:getAvailability',
     payload: {},
   });
-  assert.equal(reviewAvailabilityResponse.ok, true);
-  assert.equal(typeof reviewAvailabilityResponse.data.fixValidationIssues, 'boolean');
-  assert.equal(typeof reviewAvailabilityResponse.data.reviewNarrative, 'boolean');
-  assert.equal(typeof reviewAvailabilityResponse.data.reviewVisual, 'boolean');
+  assert.equal(legacyReviewAvailabilityResponse.ok, false);
+  assert.match(legacyReviewAvailabilityResponse.error?.message || '', /unsupported worker request channel/i);
 });
 
 test('electron worker host relays terminal events from the shared core', async (t) => {
@@ -234,7 +242,10 @@ test('electron worker host returns onboarding preview HTML instead of raw slide 
   });
 
   assert.equal(previewResponse.ok, true);
-  assert.match(previewResponse.data.html, /Presentation in progress/i);
+  assert.match(previewResponse.data.html, /Draft preview/i);
+  assert.match(previewResponse.data.html, /Your slides will appear here/i);
+  assert.doesNotMatch(previewResponse.data.html, /Use the terminal on the left/i);
+  assert.doesNotMatch(previewResponse.data.html, /Slides left/i);
   assert.doesNotMatch(previewResponse.data.html, /\[\[TODO_/i);
 });
 

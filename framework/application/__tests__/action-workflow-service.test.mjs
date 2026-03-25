@@ -112,13 +112,14 @@ function createWorkflowContext(projectRoot, overrides = {}) {
 }
 
 test('action workflow service exposes canonical workflow definitions for all product actions', async () => {
-  const { listActionWorkflowDefinitions } = await import('../action-workflow-service.mjs');
+  const { listActionWorkflowDefinitions } = await import('../action-service.mjs');
 
   const definitions = listActionWorkflowDefinitions();
   assert.deepEqual(
     definitions.map((definition) => definition.actionId),
     [
       'export_presentation',
+      'export_presentation_artifacts',
       'validate_presentation',
       'capture_screenshots',
       'fix_validation_issues',
@@ -132,6 +133,9 @@ test('action workflow service exposes canonical workflow definitions for all pro
   const validate = definitions.find((definition) => definition.actionId === 'validate_presentation');
   assert.equal(validate.workflowId, 'presentation-validate');
   assert.deepEqual(validate.allowedTriggers, ['electron', 'hook', 'agent', 'cli']);
+
+  const exportArtifacts = definitions.find((definition) => definition.actionId === 'export_presentation_artifacts');
+  assert.equal(exportArtifacts.workflowId, 'presentation-export-artifacts');
 
   const fixValidationIssues = definitions.find((definition) => definition.actionId === 'fix_validation_issues');
   assert.equal(fixValidationIssues.workflowId, 'presentation-fix-validation-issues');
@@ -152,7 +156,7 @@ test('action workflow service exposes canonical workflow definitions for all pro
 test('fix validation issues workflow prepares canonical project truth before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -219,7 +223,7 @@ test('fix validation issues workflow prepares canonical project truth before inv
 test('fix validation issues workflow skips agent execution when the refreshed validation has no failures', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -256,7 +260,7 @@ test('fix validation issues workflow skips agent execution when the refreshed va
 test('fix validation issues workflow refreshes deterministic failures before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -308,7 +312,7 @@ test('fix validation issues workflow refreshes deterministic failures before inv
 test('visual review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -358,7 +362,7 @@ test('visual review workflow exports a fresh PDF before invoking the agent adapt
 test('narrative review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -408,7 +412,7 @@ test('narrative review workflow exports a fresh PDF before invoking the agent ad
 test('narrative review workflow blocks when brief.md is missing', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -447,7 +451,7 @@ test('narrative review workflow blocks when brief.md is missing', async (t) => {
 test('visual review workflow blocks when outline.md is missing', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -485,7 +489,7 @@ test('visual review workflow blocks when outline.md is missing', async (t) => {
 test('visual review workflow blocks when the reviewer bank is incomplete', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -527,7 +531,7 @@ test('visual review workflow blocks when the reviewer bank is incomplete', async
 test('apply visual review workflow blocks when the canonical review JSON is missing or invalid', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -576,7 +580,7 @@ test('apply visual review workflow blocks when the canonical review JSON is miss
 test('apply visual review workflow uses the canonical review JSON path as the full implementation brief and returns started', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -639,7 +643,7 @@ test('apply visual review workflow uses the canonical review JSON path as the fu
 test('apply narrative review workflow uses the canonical review JSON path as the full implementation brief and returns started', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
-    import('../action-workflow-service.mjs'),
+    import('../action-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();

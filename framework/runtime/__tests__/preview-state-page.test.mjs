@@ -57,11 +57,18 @@ test('renderPresentationFailureHtml returns onboarding HTML for scaffolded proje
   );
 
   assert.equal(preview.kind, 'onboarding');
-  assert.match(preview.html, /Presentation in progress/i);
-  assert.match(preview.html, /Ask the assistant to turn your idea into the first presentation brief/i);
+  assert.match(preview.html, /Draft preview/i);
+  assert.match(preview.html, /Your slides will appear here/i);
+  assert.match(preview.html, /Use the terminal to turn your idea into the first brief/i);
+  assert.doesNotMatch(preview.html, /Use the terminal on the left/i);
+  assert.doesNotMatch(preview.html, /is still taking shape/i);
+  assert.doesNotMatch(preview.html, /<ul class="checklist">/i);
+  assert.doesNotMatch(preview.html, /Slides left/i);
+  assert.doesNotMatch(preview.html, /Next step/i);
+  assert.doesNotMatch(preview.html, /Waiting for your first prompt/i);
 });
 
-test('renderPresentationFailureHtml returns policy-error HTML for authoring violations', async (t) => {
+test('renderPresentationFailureHtml returns a minimal blocked-preview HTML for authoring violations', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
@@ -74,6 +81,9 @@ test('renderPresentationFailureHtml returns policy-error HTML for authoring viol
   );
 
   assert.equal(preview.kind, 'policy_error');
-  assert.match(preview.html, /This presentation needs a quick fix/i);
+  assert.match(preview.html, /Preview blocked/i);
+  assert.match(preview.html, /Preview unavailable/i);
+  assert.match(preview.html, /Fix the issue in the shell/i);
   assert.match(preview.html, /Inline styles are not allowed/i);
+  assert.doesNotMatch(preview.html, /<pre>/i);
 });

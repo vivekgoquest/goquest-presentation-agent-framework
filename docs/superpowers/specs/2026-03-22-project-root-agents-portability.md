@@ -148,9 +148,9 @@ contract themselves:
 - `project-agent/project-dot-claude/rules/file-boundaries.md`
 - `project-agent/project-dot-claude/rules/authoring-rules.md`
 - `project-agent/project-dot-claude/skills/new-deck/SKILL.md`
-- `project-agent/project-dot-claude/skills/revise-deck/SKILL.md`
-- `project-agent/project-dot-claude/skills/review-deck/SKILL.md`
-- `project-agent/project-dot-claude/skills/fix-warnings/SKILL.md`
+- `project-agent/project-dot-claude/skills/fix-validation-issues/SKILL.md`
+- `project-agent/project-dot-claude/skills/review-visual-presentation/SKILL.md`
+- `project-agent/project-dot-claude/skills/review-narrative-presentation/SKILL.md`
 
 The goal is not to delete all helpful guidance. The goal is to make the project
 contract authoritative and the Claude layer derivative.

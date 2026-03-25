@@ -45,7 +45,7 @@ function renderSlidesHostHtml(html, viewport = FALLBACK_VIEWPORT) {
       display: grid;
       place-items: center;
       overflow: hidden;
-      padding: 16px;
+      padding: 4px;
     }
 
     #electron-preview-stage {
@@ -53,9 +53,10 @@ function renderSlidesHostHtml(html, viewport = FALLBACK_VIEWPORT) {
       width: ${width}px;
       height: ${height}px;
       border: 0;
+      border-radius: 10px;
       background: transparent;
       zoom: var(--electron-preview-scale);
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+      box-shadow: 0 14px 38px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.05);
     }
   </style>
 </head>

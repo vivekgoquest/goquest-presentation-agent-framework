@@ -1,6 +1,7 @@
 import os from 'os';
 import { spawn as spawnProcess } from 'node:child_process';
-import { resolve } from 'path';
+import { statSync } from 'node:fs';
+import { basename, dirname, resolve } from 'path';
 import { spawn as spawnPty } from 'node-pty';
 import {
   createTerminalClearEvent,
@@ -12,26 +13,107 @@ import {
   toTerminalSocketMessage,
 } from './terminal-events.mjs';
 
+// -----------------------------------------------------------------------------
+// Terminal Defaults and Backend Selection
+// -----------------------------------------------------------------------------
+
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
 const BACKLOG_LIMIT = 120000;
 const VALID_MODES = new Set(['shell']);
 const PTY_BRIDGE_PATH = resolve(import.meta.dirname, 'pty-bridge.py');
 
-function resolveShell() {
-  if (process.platform === 'win32') {
-    return process.env.COMSPEC || 'powershell.exe';
-  }
-
-  return process.env.SHELL || '/bin/bash';
+function isLoginShellPreferred(shellPath = '') {
+  const shellName = basename(String(shellPath || '')).toLowerCase();
+  return new Set(['bash', 'zsh', 'sh', 'ksh', 'fish']).has(shellName);
 }
 
-function resolveShellArgs() {
-  if (process.platform === 'win32') {
-    return [];
+export function resolveShellLaunchOptions(options = {}) {
+  const platform = options.platform || process.platform;
+  const baseEnv = {
+    ...process.env,
+    ...(options.env || {}),
+  };
+
+  if (platform === 'win32') {
+    return {
+      shell: baseEnv.COMSPEC || 'powershell.exe',
+      shellArgs: [],
+      loginShell: false,
+      env: {
+        ...baseEnv,
+        BASH_SILENCE_DEPRECATION_WARNING: '1',
+        TERM: baseEnv.TERM || 'xterm-256color',
+      },
+    };
   }
 
-  return ['-i'];
+  const shell = baseEnv.SHELL || '/bin/bash';
+  const loginShell = isLoginShellPreferred(shell);
+
+  return {
+    shell,
+    shellArgs: loginShell ? ['-l'] : ['-i'],
+    loginShell,
+    env: {
+      ...baseEnv,
+      BASH_SILENCE_DEPRECATION_WARNING: '1',
+      TERM: baseEnv.TERM || 'xterm-256color',
+    },
+  };
+}
+
+const OSC_7_SEQUENCE = /\u001b]7;([^\u0007\u001b]*)(?:\u0007|\u001b\\)/g;
+const OSC_133_SEQUENCE = /\u001b]133;([A-D])(?:;(\d+))?(?:\u0007|\u001b\\)/g;
+
+export function extractTerminalCwdFromOutput(value = '') {
+  const text = String(value || '');
+  let match;
+  let cwd = '';
+
+  while ((match = OSC_7_SEQUENCE.exec(text))) {
+    try {
+      const uri = String(match[1] || '').trim();
+      if (!uri) {
+        continue;
+      }
+      const nextUrl = new URL(uri);
+      cwd = decodeURIComponent(nextUrl.pathname || '');
+    } catch {
+      // ignore malformed OSC 7 payloads
+    }
+  }
+
+  return cwd;
+}
+
+export function extractShellIntegrationSignalsFromOutput(value = '') {
+  const text = String(value || '');
+  const signals = [];
+  let match;
+
+  while ((match = OSC_133_SEQUENCE.exec(text))) {
+    const marker = String(match[1] || '').trim();
+    const exitCode = match[2] ? Number.parseInt(match[2], 10) : null;
+    switch (marker) {
+      case 'A':
+        signals.push({ kind: 'prompt_start', exitCode: null });
+        break;
+      case 'B':
+        signals.push({ kind: 'command_start', exitCode: null });
+        break;
+      case 'C':
+        signals.push({ kind: 'command_executing', exitCode: null });
+        break;
+      case 'D':
+        signals.push({ kind: 'command_finish', exitCode: Number.isFinite(exitCode) ? exitCode : null });
+        break;
+      default:
+        break;
+    }
+  }
+
+  return signals;
 }
 
 function trimBacklog(backlog) {
@@ -43,6 +125,10 @@ function trimBacklog(backlog) {
 function shellEscape(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
+
+// -----------------------------------------------------------------------------
+// Backend Adapters
+// -----------------------------------------------------------------------------
 
 function createNodePtyBackend(options) {
   const {
@@ -74,7 +160,9 @@ function createNodePtyBackend(options) {
   });
 
   if (typeof onReady === 'function') {
-    onReady({ pid: ptyProcess.pid || null });
+    queueMicrotask(() => {
+      onReady({ pid: ptyProcess.pid || null });
+    });
   }
 
   return {
@@ -219,16 +307,20 @@ function createPythonPtyBackend(options) {
   };
 }
 
+// -----------------------------------------------------------------------------
+// Session Orchestration
+// -----------------------------------------------------------------------------
+
 export function createTerminalCoreSession(options = {}) {
   const frameworkRoot = options.frameworkRoot || options.cwd || process.cwd();
-  const env = {
-    ...process.env,
-    BASH_SILENCE_DEPRECATION_WARNING: '1',
-    TERM: process.env.TERM || 'xterm-256color',
-  };
+  const launchOptions = resolveShellLaunchOptions();
 
-  let shell = resolveShell();
-  let shellArgs = resolveShellArgs();
+  let env = {
+    ...launchOptions.env,
+  };
+  let shell = launchOptions.shell;
+  let shellArgs = [...launchOptions.shellArgs];
+  let loginShell = Boolean(launchOptions.loginShell);
   let backend = null;
   let backlog = '';
   let cols = DEFAULT_COLS;
@@ -243,6 +335,14 @@ export function createTerminalCoreSession(options = {}) {
   let terminalState = 'idle';
   let lastStopMode = null;
   let lastExit = null;
+  let shellIntegration = {
+    supported: false,
+    commandState: 'idle',
+    lastCommandStartedAt: null,
+    lastCommandCompletedAt: null,
+    lastCommandExitCode: null,
+    lastPromptAt: null,
+  };
 
   const clients = new Set();
   const listeners = new Set();
@@ -280,6 +380,56 @@ export function createTerminalCoreSession(options = {}) {
     emitEvent(createTerminalClearEvent());
   }
 
+  function updateActiveCwdFromOutput(chunk) {
+    const nextCwd = extractTerminalCwdFromOutput(chunk);
+    if (!nextCwd || nextCwd === activeCwd) {
+      return false;
+    }
+
+    activeCwd = nextCwd;
+    emitMeta();
+    return true;
+  }
+
+  function updateShellIntegrationFromOutput(chunk) {
+    const signals = extractShellIntegrationSignalsFromOutput(chunk);
+    if (signals.length === 0) {
+      return false;
+    }
+
+    let changed = false;
+    for (const signal of signals) {
+      shellIntegration.supported = true;
+      switch (signal.kind) {
+        case 'prompt_start':
+          shellIntegration.lastPromptAt = new Date().toISOString();
+          changed = true;
+          break;
+        case 'command_start':
+        case 'command_executing':
+          shellIntegration.commandState = 'running';
+          shellIntegration.lastCommandStartedAt = new Date().toISOString();
+          shellIntegration.lastCommandCompletedAt = null;
+          shellIntegration.lastCommandExitCode = null;
+          changed = true;
+          break;
+        case 'command_finish':
+          shellIntegration.commandState = signal.exitCode === 0 ? 'succeeded' : 'failed';
+          shellIntegration.lastCommandCompletedAt = new Date().toISOString();
+          shellIntegration.lastCommandExitCode = signal.exitCode;
+          changed = true;
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (changed) {
+      emitMeta();
+    }
+    return changed;
+  }
+
   function writeSystemOutput(chunk) {
     if (typeof chunk !== 'string') {
       throw new Error('Terminal system output must be a string.');
@@ -291,7 +441,9 @@ export function createTerminalCoreSession(options = {}) {
 
     lastOutputAt = Date.now();
     appendBacklog(chunk);
-    emitEvent(createTerminalOutputEvent(chunk));
+    emitEvent(createTerminalOutputEvent(chunk, 'system'));
+    updateActiveCwdFromOutput(chunk);
+    updateShellIntegrationFromOutput(chunk);
     return getMeta();
   }
 
@@ -322,6 +474,7 @@ export function createTerminalCoreSession(options = {}) {
     return {
       cwd: activeCwd,
       shell,
+      loginShell,
       pid: shellPid,
       alive: Boolean(backend),
       cols,
@@ -336,6 +489,9 @@ export function createTerminalCoreSession(options = {}) {
       projectRoot: projectRoot || '',
       lastStopMode: lastStopMode || null,
       lastExit,
+      shellIntegration: {
+        ...shellIntegration,
+      },
     };
   }
 
@@ -382,6 +538,8 @@ export function createTerminalCoreSession(options = {}) {
     terminalState = 'running';
     appendBacklog(data);
     emitEvent(createTerminalOutputEvent(data));
+    updateActiveCwdFromOutput(data);
+    updateShellIntegrationFromOutput(data);
   }
 
   function handleBackendExit(sessionId, { code, signal }) {
@@ -416,8 +574,13 @@ export function createTerminalCoreSession(options = {}) {
   }
 
   function startBackend(mode, cwd) {
-    shell = resolveShell();
-    shellArgs = resolveShellArgs();
+    const nextLaunchOptions = resolveShellLaunchOptions();
+    env = {
+      ...nextLaunchOptions.env,
+    };
+    shell = nextLaunchOptions.shell;
+    shellArgs = [...nextLaunchOptions.shellArgs];
+    loginShell = Boolean(nextLaunchOptions.loginShell);
     sessionMode = mode;
     activeCwd = cwd;
 
@@ -461,6 +624,14 @@ export function createTerminalCoreSession(options = {}) {
     lastOutputAt = null;
     lastExit = null;
     lastStopMode = null;
+    shellIntegration = {
+      supported: false,
+      commandState: 'idle',
+      lastCommandStartedAt: null,
+      lastCommandCompletedAt: null,
+      lastCommandExitCode: null,
+      lastPromptAt: null,
+    };
     terminalState = 'starting';
     launchCommand = launchDetails.launchCommand;
     backend = startBackend(mode, launchDetails.cwd);
@@ -519,7 +690,18 @@ export function createTerminalCoreSession(options = {}) {
   }
 
   function revealPath(targetPath) {
-    const nextPath = resolve(projectRoot || frameworkRoot, targetPath);
+    const requestedPath = resolve(projectRoot || frameworkRoot, targetPath);
+    let nextPath = requestedPath;
+
+    try {
+      const stats = statSync(requestedPath);
+      if (stats.isFile()) {
+        nextPath = dirname(requestedPath);
+      }
+    } catch {
+      nextPath = requestedPath;
+    }
+
     if (!backend) {
       startSession('shell');
     }

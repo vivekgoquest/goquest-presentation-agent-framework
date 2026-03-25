@@ -1,5 +1,5 @@
 import { parsePresentationTargetCliArgs } from './deck-paths.js';
-import { validatePresentation } from './services/check-service.mjs';
+import { validatePresentation } from './services/presentation-ops-service.mjs';
 
 const args = process.argv.slice(2);
 

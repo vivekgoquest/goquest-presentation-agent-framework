@@ -3,7 +3,7 @@
  */
 
 import { parsePresentationTargetCliArgs } from './deck-paths.js';
-import { exportDeckPdf } from './services/export-service.mjs';
+import { exportDeckPdf } from './services/presentation-ops-service.mjs';
 
 let parsed;
 try {

@@ -27,7 +27,7 @@ Keep the product reliable across:
 
 ## Product contracts
 
-- Interactive UX is Electron-only (`npm run start` / `npm run desktop:start`).
+- Interactive UX is Electron-only (`npm run start`).
 - Runtime CLI targets are project-only (`--project /abs/path`).
 - Legacy `--deck`, `--example`, browser operator UI, and `/workspaces` routes are removed.
 - CSS ownership stays `content < theme < canvas`.
@@ -44,7 +44,7 @@ Keep the repo split into four domains:
 
 1. Electron shell (`electron/`)
 - owns UI/UX only
-- may render product actions such as Build, Export, and Review
+- may render product actions such as Export, Validate, and Review
 - must call named actions through the application layer
 - must not import project-agent skills, prompt text, or runtime service implementations directly
 

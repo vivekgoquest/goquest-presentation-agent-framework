@@ -16,6 +16,10 @@ import {
 } from './deck-source.js';
 import { RUNTIME_CHROME_SELECTORS } from './runtime-chrome-contract.mjs';
 
+// -----------------------------------------------------------------------------
+// Policy Constants and Parsing Primitives
+// -----------------------------------------------------------------------------
+
 const INLINE_STYLE_RE = /\sstyle\s*=/i;
 const STYLE_BLOCK_RE = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
 const IMPORTANT_RE = /!important\b/i;
@@ -143,6 +147,10 @@ function isRuntimeChromeSelector(selector) {
 function selectorTouchesThemePrimitive(selector) {
   return THEME_PRIMITIVE_RE.test(` ${normalizeSelector(selector)}`);
 }
+
+// -----------------------------------------------------------------------------
+// Shared Validation Helpers
+// -----------------------------------------------------------------------------
 
 function formatFailures(sourceName, failures) {
   const details = failures.map((msg) => `- ${msg}`).join('\n');
@@ -457,6 +465,10 @@ function validateOutlineSource(markdown, sourceName = 'outline.md') {
   }
 }
 
+// -----------------------------------------------------------------------------
+// File-Level Validators
+// -----------------------------------------------------------------------------
+
 function validateThemeSource(css, paths, sourceName = 'theme.css') {
   const failures = [];
 
@@ -641,6 +653,10 @@ export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'sli
     formatFailures(sourceName, failures);
   }
 }
+
+// -----------------------------------------------------------------------------
+// Workspace Validation
+// -----------------------------------------------------------------------------
 
 export function validateSlideDeckWorkspace(paths) {
   const failures = [];

@@ -10,9 +10,9 @@ test('project-mode agent launcher runs inside the project root and does not wide
   const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-agent-launcher-'));
   const spawns = [];
   writeFileSync(resolve(projectRoot, 'AGENTS.md'), '# project contract\n');
-  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'review-deck'), { recursive: true });
+  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues'), { recursive: true });
   writeFileSync(resolve(projectRoot, '.claude', 'CLAUDE.md'), '# contract\n');
-  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'review-deck', 'SKILL.md'), '# skill\n');
+  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues', 'SKILL.md'), '# skill\n');
 
   const launcher = createProjectAgentLauncher({
     frameworkRoot: '/framework-root',
@@ -44,7 +44,7 @@ test('project-mode agent launcher runs inside the project root and does not wide
     },
   });
 
-  const result = await launcher.invoke('review_presentation', {
+  const result = await launcher.invoke('fix_validation_issues', {
     target: { projectRootAbs: projectRoot },
     meta: { projectRoot },
     terminalService: { writeSystemOutput() {} },
@@ -65,7 +65,7 @@ test('project-mode agent launcher runs inside the project root and does not wide
   const prompt = spawns[0].args.at(-1);
   const projectAgentsIndex = prompt.indexOf(resolve(projectRoot, 'AGENTS.md'));
   const adapterIndex = prompt.indexOf(resolve(projectRoot, '.claude', 'CLAUDE.md'));
-  const skillIndex = prompt.indexOf(resolve(projectRoot, '.claude', 'skills', 'review-deck', 'SKILL.md'));
+  const skillIndex = prompt.indexOf(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues', 'SKILL.md'));
   assert.notEqual(projectAgentsIndex, -1);
   assert.notEqual(adapterIndex, -1);
   assert.notEqual(skillIndex, -1);
@@ -76,9 +76,9 @@ test('project-mode agent launcher runs inside the project root and does not wide
 test('project-mode agent launcher falls back to the Claude adapter when legacy projects do not have AGENTS.md yet', async () => {
   const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-agent-launcher-legacy-'));
   const spawns = [];
-  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'review-deck'), { recursive: true });
+  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues'), { recursive: true });
   writeFileSync(resolve(projectRoot, '.claude', 'CLAUDE.md'), '# contract\n');
-  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'review-deck', 'SKILL.md'), '# skill\n');
+  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues', 'SKILL.md'), '# skill\n');
 
   const launcher = createProjectAgentLauncher({
     frameworkRoot: '/framework-root',
@@ -110,7 +110,7 @@ test('project-mode agent launcher falls back to the Claude adapter when legacy p
     },
   });
 
-  const result = await launcher.invoke('review_presentation', {
+  const result = await launcher.invoke('fix_validation_issues', {
     target: { projectRootAbs: projectRoot },
     meta: { projectRoot },
     terminalService: { writeSystemOutput() {} },
@@ -129,9 +129,9 @@ test('project-mode agent launcher appends application-prepared workflow context 
   const projectRoot = mkdtempSync(resolve(tmpdir(), 'pf-agent-launcher-workflow-'));
   const spawns = [];
   writeFileSync(resolve(projectRoot, 'AGENTS.md'), '# project contract\n');
-  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'fix-warnings'), { recursive: true });
+  mkdirSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues'), { recursive: true });
   writeFileSync(resolve(projectRoot, '.claude', 'CLAUDE.md'), '# contract\n');
-  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'fix-warnings', 'SKILL.md'), '# skill\n');
+  writeFileSync(resolve(projectRoot, '.claude', 'skills', 'fix-validation-issues', 'SKILL.md'), '# skill\n');
 
   const launcher = createProjectAgentLauncher({
     frameworkRoot: '/framework-root',
