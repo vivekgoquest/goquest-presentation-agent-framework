@@ -159,6 +159,21 @@ function formatFailures(sourceName, failures) {
   );
 }
 
+function createPolicyFinding(sourceName, layer, message, slideId = null) {
+  return {
+    layer,
+    message,
+    slideId,
+    sourceName,
+  };
+}
+
+function throwFindings(sourceName, findings) {
+  if (findings.length > 0) {
+    formatFailures(sourceName, findings.map((finding) => finding.message));
+  }
+}
+
 function getNonEmptyStyleBlockCount(html) {
   let count = 0;
   for (const match of html.matchAll(STYLE_BLOCK_RE)) {
@@ -357,7 +372,7 @@ function findRuleByExactSelector(rules, selector) {
   );
 }
 
-function validateEffectiveCanvasSource(paths, sourceName = 'framework/canvas/canvas.css') {
+function collectEffectiveCanvasFailures(paths) {
   const failures = [];
   const canvasCssAbs = resolveProjectFrameworkAssetAbs(paths, 'canvas/canvas.css');
   const css = readFileSync(canvasCssAbs, 'utf-8');
@@ -396,9 +411,17 @@ function validateEffectiveCanvasSource(paths, sourceName = 'framework/canvas/can
     }
   }
 
-  if (failures.length > 0) {
-    formatFailures(sourceName, failures);
-  }
+  return failures;
+}
+
+function validateEffectiveCanvasSource(paths, sourceName = 'framework/canvas/canvas.css') {
+  throwFindings(sourceName, collectCanvasPolicyFindings(paths, { sourceName }));
+}
+
+export function collectCanvasPolicyFindings(paths, options = {}) {
+  const sourceName = options.sourceName || 'framework/canvas/canvas.css';
+  return collectEffectiveCanvasFailures(paths)
+    .map((message) => createPolicyFinding(sourceName, 'canvas', message));
 }
 
 function validateSlideFolderEntries(slideEntry) {
@@ -469,7 +492,7 @@ function validateOutlineSource(markdown, sourceName = 'outline.md') {
 // File-Level Validators
 // -----------------------------------------------------------------------------
 
-function validateThemeSource(css, paths, sourceName = 'theme.css') {
+function collectThemeSourceFailures(css, paths, sourceName = 'theme.css') {
   const failures = [];
 
   if (!THEME_LAYER_RE.test(css)) {
@@ -505,9 +528,22 @@ function validateThemeSource(css, paths, sourceName = 'theme.css') {
     owningRootAbs: paths.sourceDirAbs,
   }));
 
-  if (failures.length > 0) {
-    formatFailures(sourceName, failures);
+  return failures;
+}
+
+function validateThemeSource(css, paths, sourceName = 'theme.css') {
+  throwFindings(sourceName, collectThemeSourceFailures(css, paths, sourceName)
+    .map((message) => createPolicyFinding(sourceName, 'theme', message)));
+}
+
+export function collectThemePolicyFindings(paths, options = {}) {
+  const sourceName = options.sourceName || paths.buildDisplayPath(paths.themeCssAbs);
+  if (!existsSync(paths.themeCssAbs)) {
+    return [createPolicyFinding(sourceName, 'theme', `Add theme.css in ${paths.sourceDirRel}.`)];
   }
+
+  return collectThemeSourceFailures(readFileSync(paths.themeCssAbs, 'utf-8'), paths, sourceName)
+    .map((message) => createPolicyFinding(sourceName, 'theme', message));
 }
 
 export function validateDeckSource(html, sourceName = 'virtual deck') {
@@ -544,7 +580,7 @@ export function validateDeckSource(html, sourceName = 'virtual deck') {
   }
 }
 
-export function validateSlideHtmlSource(html, slideEntry, paths, sourceName = 'slide.html') {
+function collectSlideHtmlSourceFailures(html, slideEntry, paths, sourceName = 'slide.html') {
   const failures = [];
   const normalized = stripHtmlComments(html);
   const rootMatches = [...normalized.matchAll(SLIDE_ROOT_RE)]
@@ -582,12 +618,18 @@ export function validateSlideHtmlSource(html, slideEntry, paths, sourceName = 's
     owningRootAbs: paths.sourceDirAbs,
   }));
 
-  if (failures.length > 0) {
-    formatFailures(sourceName || `slide ${slideEntry.slideId}`, failures);
-  }
+  return failures;
 }
 
-export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'slide.css') {
+export function validateSlideHtmlSource(html, slideEntry, paths, sourceName = 'slide.html') {
+  throwFindings(
+    sourceName || `slide ${slideEntry.slideId}`,
+    collectSlideHtmlSourceFailures(html, slideEntry, paths, sourceName)
+      .map((message) => createPolicyFinding(sourceName, 'content', message, slideEntry.slideId))
+  );
+}
+
+function collectSlideCssSourceFailures(css, slideEntry, paths, sourceName = 'slide.css') {
   const failures = [];
   const scopePrefix = `#${slideEntry.slideId}`;
   const customRootClassSelectors = getSlideRootClassList(readFileSync(slideEntry.slideHtmlAbs, 'utf-8'))
@@ -649,9 +691,61 @@ export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'sli
     owningRootAbs: paths.sourceDirAbs,
   }));
 
-  if (failures.length > 0) {
-    formatFailures(sourceName, failures);
+  return failures;
+}
+
+export function validateSlideCssSource(css, slideEntry, paths, sourceName = 'slide.css') {
+  throwFindings(
+    sourceName,
+    collectSlideCssSourceFailures(css, slideEntry, paths, sourceName)
+      .map((message) => createPolicyFinding(sourceName, 'content', message, slideEntry.slideId))
+  );
+}
+
+export function collectBoundaryPolicyFindings(paths, options = {}) {
+  const findings = [];
+  const entries = listSlideSourceEntries(paths);
+  const requestedSlideId = options.slideId || '';
+
+  for (const entry of entries) {
+    if (!entry.isValidName) {
+      if (!requestedSlideId) {
+        findings.push(createPolicyFinding(
+          entry.slideDirRel,
+          'boundaries',
+          `Rename "${entry.slideDirRel}" to use the pattern NNN-slide-id with lowercase letters, numbers, and hyphens.`
+        ));
+      }
+      continue;
+    }
+
+    if (requestedSlideId && entry.slideId !== requestedSlideId) {
+      continue;
+    }
+
+    findings.push(
+      ...validateSlideFolderEntries(entry).map((message) => createPolicyFinding(entry.slideDirRel, 'boundaries', message, entry.slideId))
+    );
+
+    if (!existsSync(entry.slideHtmlAbs)) {
+      findings.push(createPolicyFinding(entry.slideHtmlRel, 'boundaries', `Add slide.html inside ${entry.slideDirRel}.`, entry.slideId));
+      continue;
+    }
+
+    findings.push(
+      ...collectSlideHtmlSourceFailures(readFileSync(entry.slideHtmlAbs, 'utf-8'), entry, paths, entry.slideHtmlRel)
+        .map((message) => createPolicyFinding(entry.slideHtmlRel, 'content', message, entry.slideId))
+    );
+
+    if (existsSync(entry.slideCssAbs)) {
+      findings.push(
+        ...collectSlideCssSourceFailures(readFileSync(entry.slideCssAbs, 'utf-8'), entry, paths, entry.slideCssRel)
+          .map((message) => createPolicyFinding(entry.slideCssRel, 'content', message, entry.slideId))
+      );
+    }
   }
+
+  return findings;
 }
 
 // -----------------------------------------------------------------------------

@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 import { getProjectPaths } from '../deck-paths.js';
-import { validateSlideDeckWorkspace } from '../deck-policy.js';
+import {
+  collectCanvasPolicyFindings,
+  validateSlideDeckWorkspace,
+} from '../deck-policy.js';
 
 function createTempProjectRoot() {
   return mkdtempSync(resolve(tmpdir(), 'pf-deck-policy-'));
@@ -183,4 +186,29 @@ test('deck policy rejects slide-local css that targets the slide root through a 
     () => validateSlideDeckWorkspace(getProjectPaths(projectRoot)),
     /hero-surface|slide root|root class/i
   );
+});
+
+test('deck policy exposes canvas findings without relying on thrown workspace validation errors', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: true });
+  fillBrief(projectRoot, 'Canvas Findings');
+
+  const canvasCssPath = resolve(projectRoot, '.presentation', 'framework', 'base', 'canvas', 'canvas.css');
+  writeFileSync(
+    canvasCssPath,
+    readFileSync(canvasCssPath, 'utf-8').replace('--slide-max-w: 1200px;', '--slide-max-w: 960px;')
+  );
+
+  const findings = collectCanvasPolicyFindings(getProjectPaths(projectRoot));
+
+  assert.deepEqual(findings, [
+    {
+      layer: 'canvas',
+      message: 'Keep structural canvas token "--slide-max-w" fixed at "1200px" in the effective framework canvas.',
+      slideId: null,
+      sourceName: 'framework/canvas/canvas.css',
+    },
+  ]);
 });
