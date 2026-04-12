@@ -6,7 +6,8 @@ import {
   getProjectPaths,
 } from './deck-paths.js';
 import { ensurePresentationPackageFiles } from './presentation-package.js';
-import { readRenderState } from './presentation-runtime-state.js';
+import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
+import { derivePackageStatus, toLegacyProjectStatus } from './status-service.js';
 import { validateSlideDeckWorkspace } from './deck-policy.js';
 import { listSlideSourceEntries } from './deck-source.js';
 
@@ -31,6 +32,33 @@ function getValidationError(paths) {
   } catch (err) {
     return err?.message || 'Deck policy violation.';
   }
+}
+
+function resolveEvidenceFacet(renderState) {
+  return renderState ? 'current' : 'missing';
+}
+
+function resolveDeliveryFacet({
+  finalizedOutputsReady,
+  blockerCount,
+  renderState,
+  artifacts,
+}) {
+  if (blockerCount > 0) {
+    return 'finalize_blocked';
+  }
+
+  if (!finalizedOutputsReady) {
+    return 'not_finalized';
+  }
+
+  const finalizedFingerprint = artifacts?.finalized?.exists ? String(artifacts?.sourceFingerprint || '').trim() : '';
+  const renderFingerprint = String(renderState?.sourceFingerprint || '').trim();
+  if (finalizedFingerprint && renderFingerprint && finalizedFingerprint !== renderFingerprint) {
+    return 'finalized_stale';
+  }
+
+  return 'finalized_current';
 }
 
 export function classifyPolicyErrorMessage(message = '') {
@@ -61,6 +89,7 @@ export function getProjectState(projectRootInput) {
   const paths = getProjectPaths(target.projectRootAbs);
   const { manifest } = ensurePresentationPackageFiles(paths.projectRootAbs);
   const renderState = readRenderState(paths.projectRootAbs);
+  const artifacts = readArtifacts(paths.projectRootAbs);
   const outputs = getPresentationOutputPaths(target);
   const slideEntries = listSlideSourceEntries(paths).filter((entry) => entry.isValidName);
 
@@ -94,19 +123,30 @@ export function getProjectState(projectRootInput) {
   const pdfReady = existsSync(outputs.pdfAbs);
   const reportReady = existsSync(outputs.reportAbs);
   const summaryReady = existsSync(outputs.summaryAbs);
+  const finalizedOutputsReady = pdfReady && reportReady && summaryReady;
   const validationError = getValidationError(paths);
   const policyCategory = validationError ? classifyPolicyErrorMessage(validationError) : null;
-
-  let status = 'ready_to_finalize';
-  if (!briefComplete || !outlineComplete) {
-    status = 'onboarding';
-  } else if (remainingSlides.length > 0 || policyCategory === 'incomplete_slide') {
-    status = 'in_progress';
-  } else if (policyCategory === 'authoring_violation') {
-    status = 'policy_error';
-  } else if (pdfReady && reportReady && summaryReady) {
-    status = 'finalized';
-  }
+  const sourceComplete = briefComplete
+    && outlineComplete
+    && remainingSlides.length === 0
+    && policyCategory !== 'incomplete_slide';
+  const blockerCount = policyCategory === 'authoring_violation' ? 1 : 0;
+  const delivery = resolveDeliveryFacet({
+    finalizedOutputsReady,
+    blockerCount,
+    renderState,
+    artifacts,
+  });
+  const evidence = resolveEvidenceFacet(renderState);
+  const packageStatus = derivePackageStatus({
+    sourceComplete,
+    blockerCount,
+    delivery,
+    evidence,
+    blockers: validationError ? [validationError] : [],
+  });
+  const workflow = packageStatus.workflow;
+  const status = toLegacyProjectStatus(packageStatus);
 
   let nextStep = 'Run finalize to generate the deck outputs.';
   if (!briefComplete) {
@@ -115,8 +155,10 @@ export function getProjectState(projectRootInput) {
     nextStep = 'Complete outline.md before continuing the long-deck build.';
   } else if (remainingSlides.length > 0) {
     nextStep = `Finish the remaining slide sources: ${remainingSlides.map((slide) => slide.slideDir).join(', ')}.`;
-  } else if (policyCategory === 'authoring_violation') {
+  } else if (workflow === 'blocked') {
     nextStep = 'Fix the current policy violation before preview, export, or finalize.';
+  } else if (packageStatus.facets.delivery === 'finalized_stale') {
+    nextStep = 'Run finalize again to refresh the canonical outputs for the latest source.';
   }
 
   return {
@@ -124,7 +166,12 @@ export function getProjectState(projectRootInput) {
     projectRoot: paths.projectRootAbs,
     title: paths.title,
     slug: paths.slug,
+    workflow,
     status,
+    facets: packageStatus.facets,
+    statusSummary: packageStatus.summary,
+    nextBoundary: packageStatus.nextBoundary,
+    nextFocus: packageStatus.nextFocus,
     briefComplete,
     outlineRequired,
     outlineComplete,
@@ -137,7 +184,7 @@ export function getProjectState(projectRootInput) {
     packageStateAvailable: Boolean(manifest),
     runtimeEvidenceAvailable: Boolean(renderState),
     lastRenderStatus: renderState?.status || 'unknown',
-    lastCheckedAt: renderState?.lastCheckedAt || '',
+    lastCheckedAt: renderState?.lastCheckedAt || renderState?.generatedAt || '',
     lastPolicyError: validationError || '',
     policyCategory,
     nextStep,
