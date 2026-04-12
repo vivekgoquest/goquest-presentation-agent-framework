@@ -40,6 +40,7 @@ test('project paths expose finalized and export output roots without last-good r
   assert.equal(paths.renderStateRel, '.presentation/runtime/render-state.json');
   assert.equal(paths.artifactsRel, '.presentation/runtime/artifacts.json');
   assert.equal('lastGoodRel' in paths, false);
+  assert.equal('lastGoodAbs' in paths, false);
 
   const outputPaths = getProjectOutputPaths(projectRoot);
   assert.equal(outputPaths.finalizedOutputDirRel, 'outputs/finalized');

@@ -28,6 +28,7 @@ test('getProjectPaths exposes canonical presentation package files', async (t) =
   assert.equal(paths.finalizedOutputDirRel, 'outputs/finalized');
   assert.equal(paths.exportsOutputDirRel, 'outputs/exports');
   assert.equal('lastGoodRel' in paths, false);
+  assert.equal('lastGoodAbs' in paths, false);
 });
 
 test('generatePresentationPackageManifest derives presentation structure from source files', async (t) => {

@@ -14,7 +14,6 @@ import {
 import { renderPresentationHtml } from '../deck-assemble.js';
 import {
   writeArtifacts,
-  writeLastGood,
   writeRenderState,
 } from '../presentation-runtime-state.js';
 import { generatePDF } from '../pdf-export.js';
@@ -426,6 +425,7 @@ export async function validatePresentation(targetInput, options = {}) {
   const status = failures.length > 0 ? 'fail' : 'pass';
 
   writeRenderState(targetPaths.projectRootAbs, {
+    producer: 'validate',
     status,
     slideIds: report.slideIds,
     previewKind: 'slides',
@@ -464,10 +464,15 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
   });
   writeFileSync(outputPath, pdfBuffer);
   writeArtifacts(projectPaths.projectRootAbs, {
-    format: 'pdf',
-    outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
-    pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
-    slides: [],
+    generatedAt: new Date().toISOString(),
+    latestExport: {
+      exists: true,
+      format: 'pdf',
+      outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
+      pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
+      slides: [],
+      artifacts: [{ path: toProjectArtifactPath(projectPaths, outputPath) }],
+    },
   });
 
   return {
@@ -509,10 +514,15 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     });
     const projectPaths = getPresentationPaths(target);
     writeArtifacts(projectPaths.projectRootAbs, {
-      format,
-      outputDir: toProjectArtifactPath(projectPaths, outputDir),
-      pdf: { path: toProjectArtifactPath(projectPaths, result.outputPath) },
-      slides: [],
+      generatedAt: new Date().toISOString(),
+      latestExport: {
+        exists: true,
+        format,
+        outputDir: toProjectArtifactPath(projectPaths, outputDir),
+        pdf: { path: toProjectArtifactPath(projectPaths, result.outputPath) },
+        slides: [],
+        artifacts: [{ path: toProjectArtifactPath(projectPaths, result.outputPath) }],
+      },
     });
     return {
       format,
@@ -534,15 +544,22 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     captureFullPage: false,
   });
   const projectPaths = getPresentationPaths(target);
+  const slideArtifacts = report.slides
+    .filter((slide) => slide.screenshotPath)
+    .map((slide) => ({
+      id: slide.id,
+      path: toProjectArtifactPath(projectPaths, slide.screenshotPath),
+    }));
+
   writeArtifacts(projectPaths.projectRootAbs, {
-    format,
-    outputDir: toProjectArtifactPath(projectPaths, outputDir),
-    slides: report.slides
-      .filter((slide) => slide.screenshotPath)
-      .map((slide) => ({
-        id: slide.id,
-        path: toProjectArtifactPath(projectPaths, slide.screenshotPath),
-      })),
+    generatedAt: new Date().toISOString(),
+    latestExport: {
+      exists: true,
+      format,
+      outputDir: toProjectArtifactPath(projectPaths, outputDir),
+      slides: slideArtifacts,
+      artifacts: slideArtifacts,
+    },
   });
 
   return {
@@ -616,21 +633,26 @@ export async function finalizePresentation(targetInput, options = {}) {
   writeFileSync(outputPaths.summaryAbs, summary);
 
   writeArtifacts(sourcePaths.projectRootAbs, {
-    outputDir: outputPaths.outputDirRel,
-    pdf: { path: outputPaths.pdfRel },
-    fullPage: { path: outputPaths.fullPageRel },
-    report: report ? { path: outputPaths.reportRel } : null,
-    summary: { path: outputPaths.summaryRel },
-    slides: report
-      ? report.slides
-        .filter((slide) => slide.screenshotPath)
-        .map((slide) => ({
-          id: slide.id,
-          path: toProjectArtifactPath(sourcePaths, slide.screenshotPath),
-        }))
-      : [],
+    generatedAt: new Date().toISOString(),
+    finalized: {
+      exists: status === 'pass',
+      outputDir: outputPaths.outputDirRel,
+      pdf: { path: outputPaths.pdfRel },
+      fullPage: { path: outputPaths.fullPageRel },
+      report: report ? { path: outputPaths.reportRel } : null,
+      summary: { path: outputPaths.summaryRel },
+      slides: report
+        ? report.slides
+          .filter((slide) => slide.screenshotPath)
+          .map((slide) => ({
+            id: slide.id,
+            path: toProjectArtifactPath(sourcePaths, slide.screenshotPath),
+          }))
+        : [],
+    },
   });
   writeRenderState(sourcePaths.projectRootAbs, {
+    producer: 'finalize',
     status,
     slideIds: report?.slideIds || [],
     previewKind: 'slides',
@@ -640,21 +662,6 @@ export async function finalizePresentation(targetInput, options = {}) {
     issues,
     lastCheckedAt: new Date().toISOString(),
   });
-  if (status === 'pass') {
-    writeLastGood(sourcePaths.projectRootAbs, {
-      status,
-      approvedAt: new Date().toISOString(),
-      slideIds: report?.slideIds || [],
-      artifacts: {
-        pdf: outputPaths.pdfRel,
-        slides: report
-          ? report.slides
-            .filter((slide) => slide.screenshotPath)
-            .map((slide) => toProjectArtifactPath(sourcePaths, slide.screenshotPath))
-          : [],
-      },
-    });
-  }
 
   return {
     status,

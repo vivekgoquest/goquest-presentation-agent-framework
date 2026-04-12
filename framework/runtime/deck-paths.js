@@ -12,7 +12,6 @@ export const PROJECT_PACKAGE_MANIFEST_FILENAME = 'package.generated.json';
 export const PROJECT_RUNTIME_DIRNAME = 'runtime';
 export const PROJECT_RENDER_STATE_FILENAME = 'render-state.json';
 export const PROJECT_ARTIFACTS_FILENAME = 'artifacts.json';
-export const PROJECT_LAST_GOOD_FILENAME = 'last-good.json';
 export const PROJECT_FRAMEWORK_DIRNAME = 'framework';
 export const PROJECT_FRAMEWORK_BASE_DIRNAME = 'base';
 export const PROJECT_FRAMEWORK_OVERRIDES_DIRNAME = 'overrides';
@@ -142,7 +141,6 @@ export function getProjectSystemPaths(projectRootInput) {
   const runtimeDirAbs = resolve(systemDirAbs, PROJECT_RUNTIME_DIRNAME);
   const renderStateAbs = resolve(runtimeDirAbs, PROJECT_RENDER_STATE_FILENAME);
   const artifactsAbs = resolve(runtimeDirAbs, PROJECT_ARTIFACTS_FILENAME);
-  const lastGoodAbs = resolve(runtimeDirAbs, PROJECT_LAST_GOOD_FILENAME);
   const frameworkDirAbs = resolve(systemDirAbs, PROJECT_FRAMEWORK_DIRNAME);
   const frameworkBaseAbs = resolve(frameworkDirAbs, PROJECT_FRAMEWORK_BASE_DIRNAME);
   const frameworkOverridesAbs = resolve(frameworkDirAbs, PROJECT_FRAMEWORK_OVERRIDES_DIRNAME);
@@ -156,7 +154,6 @@ export function getProjectSystemPaths(projectRootInput) {
     runtimeDirAbs,
     renderStateAbs,
     artifactsAbs,
-    lastGoodAbs,
     frameworkDirAbs,
     frameworkBaseAbs,
     frameworkOverridesAbs,
@@ -280,7 +277,6 @@ export function getProjectPaths(projectRootInput) {
     renderStateAbs: systemPaths.renderStateAbs,
     artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_ARTIFACTS_FILENAME}`,
     artifactsAbs: systemPaths.artifactsAbs,
-    lastGoodAbs: systemPaths.lastGoodAbs,
     frameworkDirRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_FRAMEWORK_DIRNAME}`,
     frameworkDirAbs: systemPaths.frameworkDirAbs,
     frameworkBaseRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_FRAMEWORK_DIRNAME}/${PROJECT_FRAMEWORK_BASE_DIRNAME}`,

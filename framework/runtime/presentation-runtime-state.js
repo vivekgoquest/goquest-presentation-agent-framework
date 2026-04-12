@@ -14,9 +14,25 @@ function readJson(absPath) {
   return JSON.parse(readFileSync(absPath, 'utf8'));
 }
 
+function normalizePathRecord(value) {
+  if (!value) {
+    return null;
+  }
+
+  return typeof value === 'string' ? { path: value } : value;
+}
+
+function normalizeArtifactList(entries = []) {
+  return entries.map((entry) => (typeof entry === 'string' ? { path: entry } : entry));
+}
+
 export function createInitialRenderState() {
   return {
     schemaVersion: 1,
+    kind: 'render-state',
+    sourceFingerprint: '',
+    generatedAt: null,
+    producer: '',
     status: 'pending',
     slideIds: [],
     previewKind: 'slides',
@@ -32,7 +48,29 @@ export function createInitialRenderState() {
 export function createInitialArtifacts() {
   return {
     schemaVersion: 1,
-    outputDir: 'outputs',
+    kind: 'artifacts',
+    sourceFingerprint: '',
+    generatedAt: null,
+    finalized: {
+      exists: false,
+      outputDir: '',
+      pdf: null,
+      fullPage: null,
+      report: null,
+      summary: null,
+      slides: [],
+    },
+    latestExport: {
+      exists: false,
+      format: '',
+      outputDir: '',
+      pdf: null,
+      slides: [],
+      artifacts: [],
+    },
+
+    // Backward-compatible aliases for consumers still reading the pre-split shape.
+    outputDir: '',
     pdf: null,
     fullPage: null,
     report: null,
@@ -41,25 +79,87 @@ export function createInitialArtifacts() {
   };
 }
 
-export function createInitialLastGood() {
+function normalizeArtifacts(payload = {}) {
+  const base = createInitialArtifacts();
+  const hasLegacyFinalizedFields = Boolean(payload.report || payload.summary || payload.fullPage);
+  const hasLegacyExportFields = typeof payload.format === 'string'
+    || (Boolean(payload.outputDir) && !hasLegacyFinalizedFields);
+
+  const finalizedInput = payload.finalized || (hasLegacyFinalizedFields
+    ? {
+      exists: true,
+      outputDir: payload.outputDir || '',
+      pdf: payload.pdf || null,
+      fullPage: payload.fullPage || null,
+      report: payload.report || null,
+      summary: payload.summary || null,
+      slides: payload.slides || [],
+    }
+    : {});
+
+  const latestExportInput = payload.latestExport || (hasLegacyExportFields
+    ? {
+      exists: true,
+      format: payload.format || '',
+      outputDir: payload.outputDir || '',
+      pdf: payload.pdf || null,
+      slides: payload.slides || [],
+      artifacts: payload.artifacts || [],
+    }
+    : {});
+
+  const finalized = {
+    ...base.finalized,
+    ...finalizedInput,
+    exists: Boolean(finalizedInput.exists),
+    outputDir: finalizedInput.outputDir || '',
+    pdf: normalizePathRecord(finalizedInput.pdf),
+    fullPage: normalizePathRecord(finalizedInput.fullPage),
+    report: normalizePathRecord(finalizedInput.report),
+    summary: normalizePathRecord(finalizedInput.summary),
+    slides: normalizeArtifactList(finalizedInput.slides || []),
+  };
+
+  const latestExport = {
+    ...base.latestExport,
+    ...latestExportInput,
+    exists: Boolean(latestExportInput.exists),
+    format: latestExportInput.format || '',
+    outputDir: latestExportInput.outputDir || '',
+    pdf: normalizePathRecord(latestExportInput.pdf),
+    slides: normalizeArtifactList(latestExportInput.slides || []),
+    artifacts: normalizeArtifactList(latestExportInput.artifacts || []),
+  };
+
+  const preferredAliasSource = finalized.exists ? finalized : latestExport;
+
   return {
-    schemaVersion: 1,
-    status: 'pending',
-    approvedAt: null,
-    slideIds: [],
-    artifacts: {
-      pdf: null,
-      slides: [],
-    },
-    gitCommit: '',
+    ...base,
+    ...payload,
+    kind: 'artifacts',
+    sourceFingerprint: payload.sourceFingerprint || base.sourceFingerprint,
+    generatedAt: payload.generatedAt || base.generatedAt,
+    finalized,
+    latestExport,
+    outputDir: preferredAliasSource.outputDir || '',
+    pdf: finalized.pdf || latestExport.pdf,
+    fullPage: finalized.fullPage,
+    report: finalized.report,
+    summary: finalized.summary,
+    slides: finalized.slides.length > 0 ? finalized.slides : latestExport.slides,
   };
 }
 
 export function writeRenderState(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
+  const base = createInitialRenderState();
   const renderState = {
-    schemaVersion: 1,
+    ...base,
     ...payload,
+    kind: 'render-state',
+    sourceFingerprint: payload.sourceFingerprint || base.sourceFingerprint,
+    generatedAt: payload.generatedAt || payload.lastCheckedAt || base.generatedAt,
+    producer: payload.producer || base.producer,
   };
   writeJson(paths.renderStateAbs, renderState);
   return renderState;
@@ -67,32 +167,9 @@ export function writeRenderState(projectRootInput, payload = {}) {
 
 export function writeArtifacts(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
-  const artifacts = {
-    schemaVersion: 1,
-    ...payload,
-  };
-
-  if (typeof artifacts.pdf === 'string') {
-    artifacts.pdf = { path: artifacts.pdf };
-  }
-  if (Array.isArray(artifacts.slides)) {
-    artifacts.slides = artifacts.slides.map((slide) => (
-      typeof slide === 'string' ? { path: slide } : slide
-    ));
-  }
-
+  const artifacts = normalizeArtifacts(payload);
   writeJson(paths.artifactsAbs, artifacts);
   return artifacts;
-}
-
-export function writeLastGood(projectRootInput, payload = {}) {
-  const paths = getProjectPaths(projectRootInput);
-  const lastGood = {
-    schemaVersion: 1,
-    ...payload,
-  };
-  writeJson(paths.lastGoodAbs, lastGood);
-  return lastGood;
 }
 
 export function ensurePresentationRuntimeStateFiles(projectRootInput) {
@@ -103,14 +180,10 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   if (!existsSync(paths.artifactsAbs)) {
     writeJson(paths.artifactsAbs, createInitialArtifacts());
   }
-  if (!existsSync(paths.lastGoodAbs)) {
-    writeJson(paths.lastGoodAbs, createInitialLastGood());
-  }
 
   return {
     renderState: readJson(paths.renderStateAbs),
     artifacts: readJson(paths.artifactsAbs),
-    lastGood: readJson(paths.lastGoodAbs),
   };
 }
 
@@ -122,9 +195,4 @@ export function readRenderState(projectRootInput) {
 export function readArtifacts(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
   return readJson(paths.artifactsAbs);
-}
-
-export function readLastGood(projectRootInput) {
-  const paths = getProjectPaths(projectRootInput);
-  return readJson(paths.lastGoodAbs);
 }

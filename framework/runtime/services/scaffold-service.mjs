@@ -201,8 +201,6 @@ function createPendingProjectPaths(projectRootInput) {
     renderStateAbs: systemPaths.renderStateAbs,
     artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/artifacts.json`,
     artifactsAbs: systemPaths.artifactsAbs,
-    lastGoodRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/last-good.json`,
-    lastGoodAbs: systemPaths.lastGoodAbs,
     metadataRel: `${PROJECT_SYSTEM_DIRNAME}/project.json`,
     metadataAbs: systemPaths.metadataAbs,
     frameworkDirAbs: systemPaths.frameworkDirAbs,
@@ -301,7 +299,6 @@ function scaffoldIntoPaths(paths, options = {}) {
   createdFiles.push(paths.runtimeDirRel);
   createdFiles.push(paths.renderStateRel);
   createdFiles.push(paths.artifactsRel);
-  createdFiles.push(paths.lastGoodRel);
   createdFiles.push(PROJECT_LOCAL_FRAMEWORK_CLI_REL);
   if (copyFramework) {
     createdFiles.push(paths.frameworkBaseRel);

@@ -86,7 +86,7 @@ test('application scaffold creates a linked project scaffold with the required a
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
   assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'presentation-hook-runner.mjs')), false);
   assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'git-checkpoint.mjs')), false);
 
@@ -149,7 +149,9 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   assert.ok(capture.slideCount >= 1);
   assert.ok(existsSync(resolve(captureDir, 'report.json')));
   const initialArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
-  assert.deepEqual(initialArtifacts.slides, []);
+  assert.equal(initialArtifacts.kind, 'artifacts');
+  assert.equal(initialArtifacts.finalized.exists, false);
+  assert.equal(initialArtifacts.latestExport.exists, false);
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check');
   const check = await validatePresentation({ projectRoot }, { outputDir: checkDir });
@@ -167,17 +169,23 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   assert.ok(existsSync(exportPath));
   assert.equal(readFileSync(exportPath).subarray(0, 4).toString(), '%PDF');
   const exportedArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
-  assert.equal(exportedArtifacts.pdf.path, 'outputs/service-export.pdf');
+  assert.equal(exportedArtifacts.latestExport.exists, true);
+  assert.equal(exportedArtifacts.latestExport.format, 'pdf');
+  assert.equal(exportedArtifacts.latestExport.outputDir, 'outputs');
+  assert.equal(exportedArtifacts.latestExport.pdf.path, 'outputs/service-export.pdf');
+  assert.equal(exportedArtifacts.finalized.exists, false);
 
   const finalized = await finalizePresentation({ projectRoot });
   assert.equal(finalized.status, 'pass');
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')));
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'report.json')));
   assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'summary.md')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
-  const lastGood = readJson(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json'));
-  assert.equal(lastGood.status, 'pass');
-  assert.equal(lastGood.artifacts.pdf, 'outputs/finalized/deck.pdf');
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
+  const finalizedArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.equal(finalizedArtifacts.finalized.exists, true);
+  assert.equal(finalizedArtifacts.finalized.outputDir, 'outputs/finalized');
+  assert.equal(finalizedArtifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
+  assert.equal(finalizedArtifacts.finalized.summary.path, 'outputs/finalized/summary.md');
 });
 
 test('assembled deck keeps export in Electron and out of the deck html', async (t) => {
@@ -241,7 +249,10 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.ok(existsSync(pngResult.outputPaths[0]));
   assert.equal(existsSync(resolve(pngOutputDir, 'report.json')), false);
   const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
-  assert.deepEqual(runtimeArtifacts.slides.map((slide) => slide.id), ['intro']);
+  assert.equal(runtimeArtifacts.latestExport.exists, true);
+  assert.equal(runtimeArtifacts.latestExport.format, 'png');
+  assert.deepEqual(runtimeArtifacts.latestExport.slides.map((slide) => slide.id), ['intro']);
+  assert.equal(runtimeArtifacts.finalized.exists, false);
 });
 
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
@@ -312,7 +323,7 @@ test('runtime commands regenerate missing package files for legacy projects', as
 
   const finalized = await finalizePresentation({ projectRoot });
   assert.equal(finalized.status, 'pass');
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
 });
 
 test('rendered contract checks fail when a copied framework canvas breaks the stage contract', async (t) => {
