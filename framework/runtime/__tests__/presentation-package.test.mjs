@@ -45,8 +45,9 @@ test('generatePresentationPackageManifest derives presentation structure from so
 
   const manifest = generatePresentationPackageManifest(projectRoot);
   assert.deepEqual(manifest.slides.map((slide) => slide.id), ['intro', 'close']);
-  assert.equal(manifest.brief.path, 'brief.md');
-  assert.equal(manifest.theme.path, 'theme.css');
+  assert.equal(manifest.source.brief.path, 'brief.md');
+  assert.equal(manifest.source.theme.path, 'theme.css');
+  assert.equal('outputs' in manifest, false);
 });
 
 test('scaffold writes initial intent and generated package files', async (t) => {
@@ -86,6 +87,27 @@ test('renderPresentationHtml regenerates missing package files for legacy projec
   assert.equal(preview.slideIds.length, 2);
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'intent.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'package.generated.json')));
+});
+
+test('presentation-package legacy helpers delegate structural manifest compute and record behavior', async (t) => {
+  const [{ createProjectScaffold }, packageHelpers, structuralCompiler] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../presentation-package.js'),
+    import('../structural-compiler.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+
+  const generated = packageHelpers.generatePresentationPackageManifest(projectRoot);
+  const computed = structuralCompiler.computeStructuralManifest(projectRoot);
+  assert.deepEqual(generated, computed);
+
+  const written = packageHelpers.writePresentationPackageManifest(projectRoot);
+  const recorded = structuralCompiler.recordStructuralManifest(projectRoot);
+  assert.deepEqual(written, recorded);
 });
 
 test('ensurePresentationPackageFiles does not rewrite an unchanged package manifest', async (t) => {
