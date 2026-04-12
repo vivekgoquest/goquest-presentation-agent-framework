@@ -87,6 +87,13 @@ function runFinalizeCliDetailed(projectRoot) {
   });
 }
 
+function runExportCliDetailed(projectRoot, ...extraArgs) {
+  return spawnSync('node', ['framework/runtime/export-pdf.mjs', '--project', projectRoot, ...extraArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
 function parseFinalizeCliJson(stdout) {
   const match = String(stdout || '').match(/(\{[\s\S]*"status"[\s\S]*\})\s*$/);
   if (!match) {
@@ -94,6 +101,28 @@ function parseFinalizeCliJson(stdout) {
   }
   return JSON.parse(match[1]);
 }
+
+test('export CLI writes ad hoc PDF artifacts under outputs/exports and does not finalize the package', async (t) => {
+  const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const exportResult = runExportCliDetailed(projectRoot);
+  assert.equal(exportResult.status, 0, exportResult.stderr);
+
+  const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.equal(artifacts.finalized.exists, false);
+  assert.equal(artifacts.latestExport.exists, true);
+  assert.equal(artifacts.latestExport.format, 'pdf');
+  assert.match(artifacts.latestExport.outputDir, /^outputs\/exports\//);
+  assert.match(artifacts.latestExport.pdf.path, /^outputs\/exports\//);
+  assert.equal(existsSync(resolve(projectRoot, artifacts.latestExport.pdf.path)), true);
+  assert.equal(readFileSync(resolve(projectRoot, artifacts.latestExport.pdf.path)).subarray(0, 4).toString(), '%PDF');
+});
 
 test('finalize keeps finalized outputs canonical and preserves latest export evidence as a separate lane', async (t) => {
   const [
@@ -141,6 +170,41 @@ test('finalize keeps finalized outputs canonical and preserves latest export evi
   assert.ok(renderState.sourceFingerprint);
   assert.equal(renderState.sourceFingerprint, artifacts.sourceFingerprint);
   assert.equal(renderState.producer, 'finalize');
+});
+
+test('export refreshes latest export evidence without clearing existing finalized outputs', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation },
+  ] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../../runtime/services/presentation-ops-service.mjs'),
+  ]);
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const finalizeResult = runFinalizeCliDetailed(projectRoot);
+  assert.equal(finalizeResult.status, 0, finalizeResult.stderr);
+
+  await exportPresentation(
+    { projectRoot },
+    {
+      format: 'png',
+      slideIds: ['intro'],
+      outputDir: resolve(projectRoot, 'outputs', 'exports', 'post-finalize-review'),
+    }
+  );
+
+  const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.equal(artifacts.finalized.exists, true);
+  assert.equal(artifacts.finalized.outputDir, 'outputs/finalized');
+  assert.equal(artifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
+  assert.equal(artifacts.latestExport.exists, true);
+  assert.equal(artifacts.latestExport.format, 'png');
+  assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/post-finalize-review');
 });
 
 test('presentation stop hook regenerates package state and checkpoints a clean project', async (t) => {

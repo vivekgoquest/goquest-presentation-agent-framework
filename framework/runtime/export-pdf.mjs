@@ -14,7 +14,9 @@ try {
 }
 
 try {
-  const result = await exportDeckPdf(parsed.target, parsed.rest[0]);
+  const result = await exportDeckPdf(parsed.target, parsed.rest[0], {
+    cwd: parsed.target.projectRootAbs,
+  });
   console.log(`\nPDF saved: ${result.outputPath}`);
 } catch (err) {
   console.error('Export failed:', err);

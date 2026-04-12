@@ -378,6 +378,21 @@ function toProjectArtifactPath(projectPaths, pathValue) {
   }
 }
 
+function getDefaultPdfExportOutputPath(target) {
+  const outputPaths = getPresentationOutputPaths(target);
+  return resolve(outputPaths.exportsOutputDirAbs, 'pdf', getSuggestedPdfName(target));
+}
+
+function writeLatestExportArtifacts(projectRootInput, projectPaths, latestExport, options = {}) {
+  const previousArtifacts = readArtifacts(projectRootInput);
+  return writeArtifacts(projectRootInput, {
+    generatedAt: options.generatedAt || new Date().toISOString(),
+    sourceFingerprint: options.sourceFingerprint || computeSourceFingerprint(projectPaths.projectRootAbs),
+    finalized: previousArtifacts?.finalized,
+    latestExport,
+  });
+}
+
 function collectFingerprintFiles(projectRootAbs, relativePath, files) {
   const targetAbs = resolve(projectRootAbs, relativePath);
   const stats = statSync(targetAbs, { throwIfNoEntry: false });
@@ -510,8 +525,10 @@ export async function validatePresentation(targetInput, options = {}) {
 export async function exportDeckPdf(targetInput, outputFile = null, options = {}) {
   const target = createPresentationTarget(targetInput);
   const cwd = options.cwd || process.cwd();
-  const outputPath = resolve(cwd, outputFile || getSuggestedPdfName(target));
   const projectPaths = getPresentationPaths(target);
+  const outputPath = outputFile
+    ? resolve(cwd, outputFile)
+    : getDefaultPdfExportOutputPath(target);
   const shouldRecordArtifacts = options.recordArtifacts !== false;
 
   mkdirSync(dirname(outputPath), { recursive: true });
@@ -522,16 +539,13 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
   writeFileSync(outputPath, pdfBuffer);
 
   if (shouldRecordArtifacts) {
-    writeArtifacts(projectPaths.projectRootAbs, {
-      generatedAt: new Date().toISOString(),
-      latestExport: {
-        exists: true,
-        format: 'pdf',
-        outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
-        pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
-        slides: [],
-        artifacts: [{ path: toProjectArtifactPath(projectPaths, outputPath) }],
-      },
+    writeLatestExportArtifacts(projectPaths.projectRootAbs, projectPaths, {
+      exists: true,
+      format: 'pdf',
+      outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
+      pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
+      slides: [],
+      artifacts: [{ path: toProjectArtifactPath(projectPaths, outputPath) }],
     });
   }
 
@@ -569,20 +583,18 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     const outputPath = resolve(outputDir, request.outputFile || getSuggestedPdfName(target));
     const result = await exportDeckPdf(target, outputPath, {
       ...options,
+      recordArtifacts: false,
       slideIds,
       pdfOptions: request.pdfOptions || options.pdfOptions || {},
     });
     const projectPaths = getPresentationPaths(target);
-    writeArtifacts(projectPaths.projectRootAbs, {
-      generatedAt: new Date().toISOString(),
-      latestExport: {
-        exists: true,
-        format,
-        outputDir: toProjectArtifactPath(projectPaths, outputDir),
-        pdf: { path: toProjectArtifactPath(projectPaths, result.outputPath) },
-        slides: [],
-        artifacts: [{ path: toProjectArtifactPath(projectPaths, result.outputPath) }],
-      },
+    writeLatestExportArtifacts(projectPaths.projectRootAbs, projectPaths, {
+      exists: true,
+      format,
+      outputDir: toProjectArtifactPath(projectPaths, outputDir),
+      pdf: { path: toProjectArtifactPath(projectPaths, result.outputPath) },
+      slides: [],
+      artifacts: [{ path: toProjectArtifactPath(projectPaths, result.outputPath) }],
     });
     return {
       format,
@@ -611,15 +623,12 @@ export async function exportPresentation(targetInput, request = {}, options = {}
       path: toProjectArtifactPath(projectPaths, slide.screenshotPath),
     }));
 
-  writeArtifacts(projectPaths.projectRootAbs, {
-    generatedAt: new Date().toISOString(),
-    latestExport: {
-      exists: true,
-      format,
-      outputDir: toProjectArtifactPath(projectPaths, outputDir),
-      slides: slideArtifacts,
-      artifacts: slideArtifacts,
-    },
+  writeLatestExportArtifacts(projectPaths.projectRootAbs, projectPaths, {
+    exists: true,
+    format,
+    outputDir: toProjectArtifactPath(projectPaths, outputDir),
+    slides: slideArtifacts,
+    artifacts: slideArtifacts,
   });
 
   return {
