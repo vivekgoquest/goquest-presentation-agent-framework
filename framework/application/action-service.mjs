@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { listSlideSourceEntries } from '../runtime/deck-source.js';
 import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { readPresentationIntent, validatePresentationIntent } from '../runtime/presentation-intent.js';
-import { readArtifacts, readLastGood, readRenderState } from '../runtime/presentation-runtime-state.js';
+import { readArtifacts, readRenderState } from '../runtime/presentation-runtime-state.js';
 import { exportDeckPdf } from '../runtime/services/presentation-ops-service.mjs';
 
 // -----------------------------------------------------------------------------
@@ -488,7 +488,6 @@ function buildProjectTruth(projectRoot) {
   const intentIssues = validatePresentationIntent(intent, manifest);
   const renderState = readRenderState(projectRoot);
   const artifacts = readArtifacts(projectRoot);
-  const lastGood = readLastGood(projectRoot);
   const slideEntries = listSlideSourceEntries(paths).filter((entry) => entry.isValidName);
 
   return {
@@ -498,7 +497,6 @@ function buildProjectTruth(projectRoot) {
     intentIssues,
     renderState,
     artifacts,
-    lastGood,
     slideEntries,
   };
 }
@@ -542,7 +540,7 @@ function createTransientCheckOutputDir() {
 // -----------------------------------------------------------------------------
 
 function buildProjectTruthPrompt(definition, truth, options = {}) {
-  const { paths, manifest, renderState, artifacts, lastGood, slideEntries } = truth;
+  const { paths, manifest, renderState, artifacts, slideEntries } = truth;
   const lines = [
     'Canonical workflow context prepared by the application layer.',
     `Action id: ${definition.actionId}`,
@@ -555,14 +553,17 @@ function buildProjectTruthPrompt(definition, truth, options = {}) {
     `- ${paths.intentRel}`,
     `- ${paths.renderStateRel}`,
     `- ${paths.artifactsRel}`,
-    `- ${paths.lastGoodRel}`,
+    '',
+    'Canonical output roots:',
+    `- ${paths.finalizedOutputDirRel}`,
+    `- ${paths.exportsOutputDirRel}`,
     '',
     `Slides discovered: ${manifest.counts?.slidesTotal || 0}`,
     `Valid slide folders: ${slideEntries.map((entry) => entry.dirName).join(', ') || 'none'}`,
     `Current render status: ${renderState?.status || 'pending'}`,
     `Current validation failures: ${Array.isArray(renderState?.failures) ? renderState.failures.length : 0}`,
     `Current PDF artifact: ${artifacts?.pdf?.path || 'none'}`,
-    `Last good checkpoint: ${lastGood?.status || 'pending'}`,
+    `Current finalized summary artifact: ${artifacts?.summary?.path || 'none'}`,
   ];
 
   if (options.preflight) {
@@ -859,7 +860,8 @@ async function invokeAgentWorkflow(definition, base, adapters, options = {}) {
       intentPath: truth.paths.intentRel,
       renderStatePath: truth.paths.renderStateRel,
       artifactsPath: truth.paths.artifactsRel,
-      lastGoodPath: truth.paths.lastGoodRel,
+      finalizedOutputDirPath: truth.paths.finalizedOutputDirRel,
+      exportsOutputDirPath: truth.paths.exportsOutputDirRel,
     },
     prompt: '',
   };

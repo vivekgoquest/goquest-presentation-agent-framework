@@ -171,13 +171,13 @@ test('runtime services operate on a real scaffolded project', async (t) => {
 
   const finalized = await finalizePresentation({ projectRoot });
   assert.equal(finalized.status, 'pass');
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'deck.pdf')));
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'report.json')));
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'summary.md')));
+  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')));
+  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'report.json')));
+  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'summary.md')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')));
   const lastGood = readJson(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json'));
   assert.equal(lastGood.status, 'pass');
-  assert.equal(lastGood.artifacts.pdf, 'outputs/deck.pdf');
+  assert.equal(lastGood.artifacts.pdf, 'outputs/finalized/deck.pdf');
 });
 
 test('assembled deck keeps export in Electron and out of the deck html', async (t) => {

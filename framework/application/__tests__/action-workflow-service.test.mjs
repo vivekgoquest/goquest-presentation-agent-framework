@@ -217,7 +217,8 @@ test('fix validation issues workflow prepares canonical project truth before inv
   assert.match(agentCalls[0].workflow.prompt, /package\.generated\.json/);
   assert.match(agentCalls[0].workflow.prompt, /render-state\.json/);
   assert.match(agentCalls[0].workflow.prompt, /artifacts\.json/);
-  assert.match(agentCalls[0].workflow.prompt, /last-good\.json/);
+  assert.match(agentCalls[0].workflow.prompt, /outputs\/finalized/);
+  assert.doesNotMatch(agentCalls[0].workflow.prompt, /last-good|Last good checkpoint/i);
 });
 
 test('fix validation issues workflow skips agent execution when the refreshed validation has no failures', async (t) => {

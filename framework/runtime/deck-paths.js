@@ -360,22 +360,49 @@ export function parsePresentationTargetCliArgs(argv, options = {}) {
 
 export function getProjectOutputPaths(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
+  const finalizedOutputDirRel = paths.finalizedOutputDirRel;
+  const finalizedOutputDirAbs = paths.finalizedOutputDirAbs;
+  const finalizedPdfRel = `${finalizedOutputDirRel}/deck.pdf`;
+  const finalizedPdfAbs = resolve(finalizedOutputDirAbs, 'deck.pdf');
+  const finalizedReportRel = `${finalizedOutputDirRel}/report.json`;
+  const finalizedReportAbs = resolve(finalizedOutputDirAbs, 'report.json');
+  const finalizedFullPageRel = `${finalizedOutputDirRel}/full-page.png`;
+  const finalizedFullPageAbs = resolve(finalizedOutputDirAbs, 'full-page.png');
+  const finalizedSlidesDirRel = `${finalizedOutputDirRel}/slides`;
+  const finalizedSlidesDirAbs = resolve(finalizedOutputDirAbs, 'slides');
+  const finalizedSummaryRel = `${finalizedOutputDirRel}/summary.md`;
+  const finalizedSummaryAbs = resolve(finalizedOutputDirAbs, 'summary.md');
+
   return {
     slug: paths.slug,
-    finalizedOutputDirRel: paths.finalizedOutputDirRel,
-    finalizedOutputDirAbs: paths.finalizedOutputDirAbs,
-    finalizedPdfRel: `${paths.finalizedOutputDirRel}/deck.pdf`,
-    finalizedPdfAbs: resolve(paths.finalizedOutputDirAbs, 'deck.pdf'),
-    finalizedReportRel: `${paths.finalizedOutputDirRel}/report.json`,
-    finalizedReportAbs: resolve(paths.finalizedOutputDirAbs, 'report.json'),
-    finalizedFullPageRel: `${paths.finalizedOutputDirRel}/full-page.png`,
-    finalizedFullPageAbs: resolve(paths.finalizedOutputDirAbs, 'full-page.png'),
-    finalizedSlidesDirRel: `${paths.finalizedOutputDirRel}/slides`,
-    finalizedSlidesDirAbs: resolve(paths.finalizedOutputDirAbs, 'slides'),
-    finalizedSummaryRel: `${paths.finalizedOutputDirRel}/summary.md`,
-    finalizedSummaryAbs: resolve(paths.finalizedOutputDirAbs, 'summary.md'),
+    finalizedOutputDirRel,
+    finalizedOutputDirAbs,
+    finalizedPdfRel,
+    finalizedPdfAbs,
+    finalizedReportRel,
+    finalizedReportAbs,
+    finalizedFullPageRel,
+    finalizedFullPageAbs,
+    finalizedSlidesDirRel,
+    finalizedSlidesDirAbs,
+    finalizedSummaryRel,
+    finalizedSummaryAbs,
     exportsOutputDirRel: paths.exportsOutputDirRel,
     exportsOutputDirAbs: paths.exportsOutputDirAbs,
+
+    // Backward-compatible aliases for consumers still expecting the pre-finalized names.
+    outputDirRel: finalizedOutputDirRel,
+    outputDirAbs: finalizedOutputDirAbs,
+    pdfRel: finalizedPdfRel,
+    pdfAbs: finalizedPdfAbs,
+    reportRel: finalizedReportRel,
+    reportAbs: finalizedReportAbs,
+    fullPageRel: finalizedFullPageRel,
+    fullPageAbs: finalizedFullPageAbs,
+    slidesDirRel: finalizedSlidesDirRel,
+    slidesDirAbs: finalizedSlidesDirAbs,
+    summaryRel: finalizedSummaryRel,
+    summaryAbs: finalizedSummaryAbs,
   };
 }
 
