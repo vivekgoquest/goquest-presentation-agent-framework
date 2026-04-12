@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -143,27 +144,40 @@ export function parsePresentationCliArgs(argv = []) {
   };
 }
 
+function formatTextValue(value, pretty = false) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return JSON.stringify(value, null, pretty ? 2 : 0);
+}
+
 function renderTextEnvelope(payload) {
   const lines = [];
   if (payload.command) {
     lines.push(payload.command);
   }
   if (payload.summary) {
-    lines.push(payload.summary);
+    lines.push(formatTextValue(payload.summary, true));
   }
   if (payload.workflow) {
-    lines.push(`workflow: ${payload.workflow}`);
+    lines.push(`workflow: ${formatTextValue(payload.workflow)}`);
   }
   if (payload.facets) {
-    lines.push(`facets: ${JSON.stringify(payload.facets)}`);
+    lines.push(`facets: ${formatTextValue(payload.facets)}`);
   }
   if (payload.outputs) {
-    lines.push(`outputs: ${JSON.stringify(payload.outputs)}`);
+    lines.push(`outputs: ${formatTextValue(payload.outputs)}`);
   }
   if (Array.isArray(payload.issues) && payload.issues.length > 0) {
     lines.push('issues:');
     for (const issue of payload.issues) {
-      lines.push(`- ${issue.code || issue}`);
+      const renderedIssue = issue && typeof issue === 'object' && issue.code
+        ? issue.code
+        : formatTextValue(issue);
+      lines.push(`- ${renderedIssue}`);
     }
   }
   if (Array.isArray(payload.nextFocus) && payload.nextFocus.length > 0) {
@@ -370,6 +384,56 @@ async function runFinalizeCommand(parsed, command) {
   return finalizeResult(payload, parsed.format, result.status === 'pass' ? EXIT_CODE_OK : EXIT_CODE_VIOLATIONS);
 }
 
+function buildExportScope(target, projectRoot) {
+  return {
+    kind: 'export',
+    format: target,
+    projectRoot,
+  };
+}
+
+function validateExportOutputDir(paths, outputDir) {
+  const outputDirAbs = resolve(paths.projectRootAbs, outputDir);
+
+  try {
+    toRelativeWithin(paths.projectRootAbs, outputDirAbs);
+  } catch {
+    throw new CliError(`Export output directories must stay within the project root: ${paths.projectRootAbs}.`, {
+      extra: {
+        scope: { kind: 'export-output-dir', outputDir },
+      },
+    });
+  }
+
+  return outputDir;
+}
+
+function getMissingSlideSelections(manifest, slideIds) {
+  const availableSlideIds = new Set(manifest.slides.map((slide) => slide.id));
+  return slideIds.filter((slideId) => !availableSlideIds.has(slideId));
+}
+
+function toExportRequestCliError(error, scope) {
+  if (error instanceof CliError) {
+    return error;
+  }
+
+  const message = error?.message || '';
+  if (
+    message === 'Export format must be either "pdf" or "png".'
+    || message === 'Select at least one slide to export.'
+    || message === 'Choose a destination folder before exporting.'
+    || message.startsWith('Unknown slide selections: ')
+  ) {
+    return new CliError(message, {
+      status: 'invalid-request',
+      extra: { scope },
+    });
+  }
+
+  return null;
+}
+
 function buildDefaultExportRequest(parsed) {
   const target = parsed.positionals[0] || '';
   if (!['pdf', 'screenshots'].includes(target)) {
@@ -390,13 +454,25 @@ function buildDefaultExportRequest(parsed) {
     throw new CliError('No slides are available to export.', {
       status: 'unavailable',
       extra: {
-        scope: { kind: 'export', target },
+        scope: buildExportScope(target, paths.projectRootAbs),
+      },
+    });
+  }
+
+  const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
+  if (missingSlideIds.length > 0) {
+    throw new CliError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
+      status: 'invalid-request',
+      extra: {
+        scope: buildExportScope(target, paths.projectRootAbs),
       },
     });
   }
 
   const format = target === 'pdf' ? 'pdf' : 'png';
-  const outputDir = parsed.outputDir || `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
+  const outputDir = parsed.outputDir
+    ? validateExportOutputDir(paths, parsed.outputDir)
+    : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
 
   return {
     target,
@@ -412,15 +488,34 @@ function buildDefaultExportRequest(parsed) {
 
 async function runExportCommand(parsed, command) {
   const { target, paths, request } = buildDefaultExportRequest(parsed);
-  const result = await exportPresentation(
-    { projectRoot: parsed.projectRoot },
-    request,
-    { cwd: paths.projectRootAbs }
-  );
+  const scope = buildExportScope(target, paths.projectRootAbs);
 
-  const outputDir = toRelativeWithin(paths.projectRootAbs, result.outputDir);
-  const artifacts = (result.outputPaths || [])
-    .map((outputPath) => toRelativeWithin(paths.projectRootAbs, outputPath));
+  let result;
+  try {
+    result = await exportPresentation(
+      { projectRoot: parsed.projectRoot },
+      request,
+      { cwd: paths.projectRootAbs }
+    );
+  } catch (error) {
+    const cliError = toExportRequestCliError(error, scope);
+    if (cliError) {
+      throw cliError;
+    }
+    throw error;
+  }
+
+  let outputDir;
+  let artifacts;
+  try {
+    outputDir = toRelativeWithin(paths.projectRootAbs, result.outputDir);
+    artifacts = (result.outputPaths || [])
+      .map((outputPath) => toRelativeWithin(paths.projectRootAbs, outputPath));
+  } catch {
+    throw new CliError(`Export outputs must stay within the project root: ${paths.projectRootAbs}.`, {
+      extra: { scope },
+    });
+  }
 
   const payload = {
     command,
@@ -432,11 +527,7 @@ async function runExportCommand(parsed, command) {
     },
     evidenceUpdated: [paths.artifactsRel],
     issues: [],
-    scope: {
-      kind: 'export',
-      format: target,
-      projectRoot: paths.projectRootAbs,
-    },
+    scope,
   };
 
   return finalizeResult(payload, parsed.format, EXIT_CODE_OK);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -133,4 +133,62 @@ test('presentation-cli finalize status is exposed through the finalize family', 
   assert.ok(json.workflow);
   assert.ok(json.facets);
   assert.deepEqual(json.scope, { kind: 'finalize', projectRoot });
+});
+
+test('presentation-cli inspect text renders structured summaries instead of object placeholders', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const result = runCli(['inspect', 'package', '--project', projectRoot, '--format', 'text']);
+
+  assert.equal(result.exitCode, 0);
+  assert.doesNotMatch(result.stdout, /\[object Object\]/);
+  assert.match(result.stdout, /"slidesTotal": 1/);
+});
+
+test('presentation-cli export rejects out-of-project output directories before exporting', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const outsideRoot = createTempProjectRoot();
+  const outputDir = resolve(outsideRoot, 'exports');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+  t.after(() => rmSync(outsideRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const result = runCli(['export', 'pdf', '--project', projectRoot, '--output-dir', outputDir, '--format', 'json']);
+
+  assert.equal(result.exitCode, 3);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.status, 'unsupported');
+  assert.match(json.summary, /must stay within the project root/i);
+  assert.equal(existsSync(outputDir), false);
+});
+
+test('presentation-cli export maps invalid slide selections to a structured cli failure', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const outputDir = resolve(projectRoot, 'outputs', 'exports', 'manual');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const result = runCli([
+    'export',
+    'pdf',
+    '--project',
+    projectRoot,
+    '--slide',
+    'missing-slide',
+    '--output-dir',
+    outputDir,
+    '--format',
+    'json',
+  ]);
+
+  assert.equal(result.exitCode, 3);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.status, 'invalid-request');
+  assert.match(json.summary, /Unknown slide selections: missing-slide/);
+  assert.equal(existsSync(outputDir), false);
 });
