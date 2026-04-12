@@ -16,6 +16,12 @@ try {
     status: result.status,
     deck: result.deck,
     source: result.source,
+    outputs: result.outputs || {
+      pdf: result.pdf,
+      report: result.report,
+      slides: result.screenshots,
+      summary: result.summary,
+    },
     pdf: result.pdf,
     report: result.report,
     screenshots: result.screenshots,

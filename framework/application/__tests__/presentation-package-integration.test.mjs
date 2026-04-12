@@ -80,6 +80,69 @@ function runStopHookDetailed(projectRoot) {
   });
 }
 
+function runFinalizeCliDetailed(projectRoot) {
+  return spawnSync('node', ['framework/runtime/finalize-deck.mjs', '--project', projectRoot], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
+function parseFinalizeCliJson(stdout) {
+  const match = String(stdout || '').match(/(\{[\s\S]*"status"[\s\S]*\})\s*$/);
+  if (!match) {
+    throw new Error(`Could not find finalize JSON output in:\n${stdout}`);
+  }
+  return JSON.parse(match[1]);
+}
+
+test('finalize keeps finalized outputs canonical and preserves latest export evidence as a separate lane', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation },
+  ] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../../runtime/services/presentation-ops-service.mjs'),
+  ]);
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  await exportPresentation(
+    { projectRoot },
+    {
+      format: 'png',
+      slideIds: ['intro'],
+      outputDir: resolve(projectRoot, 'outputs', 'exports', 'review-pass'),
+    }
+  );
+
+  const finalizeResult = runFinalizeCliDetailed(projectRoot);
+  assert.equal(finalizeResult.status, 0, finalizeResult.stderr);
+
+  const json = parseFinalizeCliJson(finalizeResult.stdout);
+  assert.equal(json.status, 'pass');
+  assert.equal(json.outputs.pdf, 'outputs/finalized/deck.pdf');
+  assert.equal(json.outputs.outputDir, 'outputs/finalized');
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
+
+  const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
+
+  assert.equal(artifacts.finalized.exists, true);
+  assert.equal(artifacts.finalized.outputDir, 'outputs/finalized');
+  assert.equal(artifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
+  assert.equal(artifacts.latestExport.exists, true);
+  assert.equal(artifacts.latestExport.format, 'png');
+  assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/review-pass');
+  assert.deepEqual(artifacts.latestExport.slides.map((slide) => slide.id), ['intro']);
+  assert.ok(renderState.sourceFingerprint);
+  assert.equal(renderState.sourceFingerprint, artifacts.sourceFingerprint);
+  assert.equal(renderState.producer, 'finalize');
+});
+
 test('presentation stop hook regenerates package state and checkpoints a clean project', async (t) => {
   const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
   const projectRoot = createTempProjectRoot();

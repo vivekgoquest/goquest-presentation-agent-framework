@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import {
@@ -13,6 +14,7 @@ import {
 } from '../deck-paths.js';
 import { renderPresentationHtml } from '../deck-assemble.js';
 import {
+  readArtifacts,
   writeArtifacts,
   writeRenderState,
 } from '../presentation-runtime-state.js';
@@ -376,6 +378,60 @@ function toProjectArtifactPath(projectPaths, pathValue) {
   }
 }
 
+function collectFingerprintFiles(projectRootAbs, relativePath, files) {
+  const targetAbs = resolve(projectRootAbs, relativePath);
+  const stats = statSync(targetAbs, { throwIfNoEntry: false });
+  if (!stats) {
+    return;
+  }
+
+  if (stats.isDirectory()) {
+    const entries = readdirSync(targetAbs, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const childRel = `${relativePath}/${entry.name}`;
+      if (entry.isDirectory()) {
+        collectFingerprintFiles(projectRootAbs, childRel, files);
+      } else if (entry.isFile()) {
+        files.push(childRel);
+      }
+    }
+    return;
+  }
+
+  if (stats.isFile()) {
+    files.push(relativePath);
+  }
+}
+
+function computeSourceFingerprint(projectRootAbs) {
+  const hash = createHash('sha256');
+  const files = [];
+  const roots = [
+    'brief.md',
+    'outline.md',
+    'theme.css',
+    'assets',
+    'slides',
+    '.presentation/intent.json',
+    '.presentation/framework/base',
+    '.presentation/framework/overrides',
+  ];
+
+  for (const relativePath of roots) {
+    collectFingerprintFiles(projectRootAbs, relativePath, files);
+  }
+
+  files.sort();
+  for (const relativePath of files) {
+    hash.update(`${relativePath}\n`);
+    hash.update(readFileSync(resolve(projectRootAbs, relativePath)));
+    hash.update('\n');
+  }
+
+  return `sha256:${hash.digest('hex')}`;
+}
+
 function buildFinalizeSummary({ target, sourcePaths, outputPaths, status, issues, report }) {
   const unresolved = issues.length > 0
     ? issues.map((issue) => `- ${issue}`).join('\n')
@@ -456,6 +512,7 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
   const cwd = options.cwd || process.cwd();
   const outputPath = resolve(cwd, outputFile || getSuggestedPdfName(target));
   const projectPaths = getPresentationPaths(target);
+  const shouldRecordArtifacts = options.recordArtifacts !== false;
 
   mkdirSync(dirname(outputPath), { recursive: true });
   const pdfBuffer = await generatePDF(target, {
@@ -463,17 +520,20 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
     slideIds: options.slideIds || options.pdfOptions?.slideIds || [],
   });
   writeFileSync(outputPath, pdfBuffer);
-  writeArtifacts(projectPaths.projectRootAbs, {
-    generatedAt: new Date().toISOString(),
-    latestExport: {
-      exists: true,
-      format: 'pdf',
-      outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
-      pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
-      slides: [],
-      artifacts: [{ path: toProjectArtifactPath(projectPaths, outputPath) }],
-    },
-  });
+
+  if (shouldRecordArtifacts) {
+    writeArtifacts(projectPaths.projectRootAbs, {
+      generatedAt: new Date().toISOString(),
+      latestExport: {
+        exists: true,
+        format: 'pdf',
+        outputDir: toProjectArtifactPath(projectPaths, dirname(outputPath)),
+        pdf: { path: toProjectArtifactPath(projectPaths, outputPath) },
+        slides: [],
+        artifacts: [{ path: toProjectArtifactPath(projectPaths, outputPath) }],
+      },
+    });
+  }
 
   return {
     target,
@@ -581,20 +641,21 @@ export async function finalizePresentation(targetInput, options = {}) {
   const target = createPresentationTarget(targetInput);
   const sourcePaths = getPresentationPaths(target);
   const outputPaths = getPresentationOutputPaths(target);
+  const previousArtifacts = readArtifacts(sourcePaths.projectRootAbs);
 
-  rmSync(outputPaths.outputDirAbs, { recursive: true, force: true });
-  mkdirSync(outputPaths.slidesDirAbs, { recursive: true });
+  rmSync(outputPaths.finalizedOutputDirAbs, { recursive: true, force: true });
+  mkdirSync(outputPaths.finalizedSlidesDirAbs, { recursive: true });
 
   let status = 'pass';
   let issues = [];
   let report = null;
 
   try {
-    report = await capturePresentation(target, outputPaths.outputDirAbs, {
+    report = await capturePresentation(target, outputPaths.finalizedOutputDirAbs, {
       slidesDirName: options.slidesDirName || 'slides',
     });
     issues = summarizeIssues(report);
-    await exportDeckPdf(target, outputPaths.pdfAbs);
+    await exportDeckPdf(target, outputPaths.finalizedPdfAbs, { recordArtifacts: false });
 
     if (issues.length > 0) {
       status = 'fail';
@@ -604,6 +665,9 @@ export async function finalizePresentation(targetInput, options = {}) {
     issues = [err.message];
   }
 
+  const generatedAt = new Date().toISOString();
+  const sourceFingerprint = computeSourceFingerprint(sourcePaths.projectRootAbs);
+  const failures = report ? buildFailures(report) : issues;
   const summary = buildFinalizeSummary({
     target,
     sourcePaths,
@@ -621,26 +685,28 @@ export async function finalizePresentation(targetInput, options = {}) {
     report.overflowSlides = report.consistency.slidesWithOverflow;
     report.episodeCount = report.consistency.allEpisodeRefs.length;
     report.artifacts = {
-      pdf: outputPaths.pdfRel,
-      report: outputPaths.reportRel,
-      fullPage: outputPaths.fullPageRel,
-      slidesDir: outputPaths.slidesDirRel,
-      summary: outputPaths.summaryRel,
+      pdf: outputPaths.finalizedPdfRel,
+      report: outputPaths.finalizedReportRel,
+      fullPage: outputPaths.finalizedFullPageRel,
+      slidesDir: outputPaths.finalizedSlidesDirRel,
+      summary: outputPaths.finalizedSummaryRel,
     };
-    writeFileSync(outputPaths.reportAbs, JSON.stringify(report, null, 2));
+    writeFileSync(outputPaths.finalizedReportAbs, JSON.stringify(report, null, 2));
   }
 
-  writeFileSync(outputPaths.summaryAbs, summary);
+  writeFileSync(outputPaths.finalizedSummaryAbs, summary);
 
   writeArtifacts(sourcePaths.projectRootAbs, {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
+    sourceFingerprint,
+    latestExport: previousArtifacts?.latestExport,
     finalized: {
       exists: status === 'pass',
-      outputDir: outputPaths.outputDirRel,
-      pdf: { path: outputPaths.pdfRel },
-      fullPage: { path: outputPaths.fullPageRel },
-      report: report ? { path: outputPaths.reportRel } : null,
-      summary: { path: outputPaths.summaryRel },
+      outputDir: outputPaths.finalizedOutputDirRel,
+      pdf: { path: outputPaths.finalizedPdfRel },
+      fullPage: { path: outputPaths.finalizedFullPageRel },
+      report: report ? { path: outputPaths.finalizedReportRel } : null,
+      summary: { path: outputPaths.finalizedSummaryRel },
       slides: report
         ? report.slides
           .filter((slide) => slide.screenshotPath)
@@ -652,6 +718,8 @@ export async function finalizePresentation(targetInput, options = {}) {
     },
   });
   writeRenderState(sourcePaths.projectRootAbs, {
+    generatedAt,
+    sourceFingerprint,
     producer: 'finalize',
     status,
     slideIds: report?.slideIds || [],
@@ -659,18 +727,27 @@ export async function finalizePresentation(targetInput, options = {}) {
     canvasContract: report?.consistency?.canvasContract || null,
     consoleErrorCount: report?.consoleErrors?.length || 0,
     overflowSlides: report?.consistency?.slidesWithOverflow || [],
+    failures,
     issues,
-    lastCheckedAt: new Date().toISOString(),
+    lastCheckedAt: generatedAt,
   });
 
   return {
     status,
     deck: sourcePaths.slug,
     source: sourcePaths.sourceDirDisplay,
-    pdf: outputPaths.pdfRel,
-    report: outputPaths.reportRel,
-    screenshots: outputPaths.slidesDirRel,
-    summary: outputPaths.summaryRel,
+    outputs: {
+      outputDir: outputPaths.finalizedOutputDirRel,
+      pdf: outputPaths.finalizedPdfRel,
+      report: outputPaths.finalizedReportRel,
+      fullPage: outputPaths.finalizedFullPageRel,
+      slides: outputPaths.finalizedSlidesDirRel,
+      summary: outputPaths.finalizedSummaryRel,
+    },
+    pdf: outputPaths.finalizedPdfRel,
+    report: outputPaths.finalizedReportRel,
+    screenshots: outputPaths.finalizedSlidesDirRel,
+    summary: outputPaths.finalizedSummaryRel,
     issues,
   };
 }
