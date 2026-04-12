@@ -44,7 +44,12 @@ export function validatePresentationIntent(intent, manifest) {
     return ['Presentation intent "slideIntent" must be an object keyed by slide id.'];
   }
 
-  const knownSlideIds = new Set((manifest?.slides || []).map((slide) => slide.id));
+  const manifestSlides = Array.isArray(manifest?.slides) ? manifest.slides : [];
+  const knownSlideIds = new Set(
+    manifestSlides
+      .map((slide) => slide?.id)
+      .filter((slideId) => typeof slideId === 'string' && slideId.length > 0),
+  );
   for (const slideId of Object.keys(slideIntent)) {
     if (!knownSlideIds.has(slideId)) {
       issues.push(`Presentation intent references unknown slide id "${slideId}".`);

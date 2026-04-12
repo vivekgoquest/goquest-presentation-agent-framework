@@ -55,3 +55,20 @@ test('recordStructuralManifest writes package.generated.json only when content c
   assert.equal(after, before);
   assert.deepEqual(JSON.parse(readFileSync(manifestPath, 'utf8')), second);
 });
+
+test('validatePresentationIntent rejects slide ids not present in the structural manifest', async () => {
+  const { validatePresentationIntent } = await import('../presentation-intent.js');
+
+  const issues = validatePresentationIntent(
+    {
+      slideIntent: {
+        missing: {},
+      },
+    },
+    {
+      slides: [{ id: 'intro' }],
+    },
+  );
+
+  assert.deepEqual(issues, ['Presentation intent references unknown slide id "missing".']);
+});
