@@ -1,14 +1,14 @@
 import {
   capturePresentation,
   exportPresentation,
-  finalizePresentation,
   validatePresentation,
 } from '../runtime/services/presentation-ops-service.mjs';
+import { runPresentationCli } from '../runtime/presentation-cli.mjs';
 
 function toActionMessage(actionId, result = {}) {
   switch (actionId) {
     case 'export_presentation':
-      return 'Presentation export completed.';
+      return 'Presentation finalize completed.';
     case 'export_presentation_artifacts':
       return result.format === 'png'
         ? 'PNG export completed.'
@@ -26,21 +26,45 @@ function toActionMessage(actionId, result = {}) {
   }
 }
 
+function resolveProjectRoot(target) {
+  return target?.projectRootAbs || target?.projectRoot || '';
+}
+
+async function runPresentationCoreCommand(argv) {
+  const result = await runPresentationCli([...argv, '--format', 'json']);
+  if (result.exitCode > 1) {
+    throw new Error(result.payload?.summary || 'Presentation core command failed.');
+  }
+  return result.payload;
+}
+
 export function createPresentationActionAdapter() {
   return {
     async invoke(actionId, context = {}) {
       const target = context.target;
       const outputPaths = context.outputPaths || {};
       const args = context.args || {};
+      const projectRoot = resolveProjectRoot(target);
 
       switch (actionId) {
         case 'export_presentation': {
-          const result = await finalizePresentation(target, args.options || {});
+          const result = await runPresentationCoreCommand([
+            'finalize',
+            'run',
+            '--project',
+            projectRoot,
+          ]);
+          const outputs = result.outputs || {};
           return {
             ...result,
             status: result.status || 'pass',
             message: toActionMessage(actionId, result),
-            detail: result.pdf || result.summary || result.report || '',
+            detail: outputs.pdf || outputs.summary || outputs.report || '',
+            outputs,
+            pdf: outputs.pdf || '',
+            report: outputs.report || '',
+            screenshots: outputs.slides || '',
+            summary: outputs.summary || '',
           };
         }
         case 'export_presentation_artifacts': {

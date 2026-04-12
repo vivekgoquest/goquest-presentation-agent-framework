@@ -94,10 +94,17 @@ function runExportCliDetailed(projectRoot, ...extraArgs) {
   });
 }
 
-function parseFinalizeCliJson(stdout) {
+function runCheckCliDetailed(projectRoot, ...extraArgs) {
+  return spawnSync('node', ['framework/runtime/check-deck.mjs', '--project', projectRoot, ...extraArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
+function parseTrailingCliJson(stdout) {
   const match = String(stdout || '').match(/(\{[\s\S]*"status"[\s\S]*\})\s*$/);
   if (!match) {
-    throw new Error(`Could not find finalize JSON output in:\n${stdout}`);
+    throw new Error(`Could not find JSON output in:\n${stdout}`);
   }
   return JSON.parse(match[1]);
 }
@@ -150,7 +157,7 @@ test('finalize keeps finalized outputs canonical and preserves latest export evi
   const finalizeResult = runFinalizeCliDetailed(projectRoot);
   assert.equal(finalizeResult.status, 0, finalizeResult.stderr);
 
-  const json = parseFinalizeCliJson(finalizeResult.stdout);
+  const json = parseTrailingCliJson(finalizeResult.stdout);
   assert.equal(json.status, 'pass');
   assert.equal(json.outputs.pdf, 'outputs/finalized/deck.pdf');
   assert.equal(json.outputs.outputDir, 'outputs/finalized');
@@ -205,6 +212,61 @@ test('export refreshes latest export evidence without clearing existing finalize
   assert.equal(artifacts.latestExport.exists, true);
   assert.equal(artifacts.latestExport.format, 'png');
   assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/post-finalize-review');
+});
+
+test('legacy finalize action delegates to the new finalize semantics', async (t) => {
+  const [{ createProjectScaffold }, { createPresentationActionAdapter }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../presentation-action-adapter.mjs'),
+  ]);
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const adapter = createPresentationActionAdapter();
+  const result = await adapter.invoke('export_presentation', {
+    target: {
+      kind: 'project',
+      projectRootAbs: projectRoot,
+    },
+  });
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.message, 'Presentation finalize completed.');
+  assert.equal(result.outputs.outputDir, 'outputs/finalized');
+  assert.equal(result.outputs.pdf, 'outputs/finalized/deck.pdf');
+  assert.match(result.detail, /outputs\/finalized\/deck\.pdf$/);
+});
+
+test('legacy check entrypoint delegates to audit-compatible behavior', async (t) => {
+  const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+  writeFileSync(
+    resolve(projectRoot, 'theme.css'),
+    [
+      '@layer theme {',
+      '  :root {',
+      '    --slide-max-w: 960px;',
+      '  }',
+      '}',
+      '',
+    ].join('\n')
+  );
+
+  const result = runCheckCliDetailed(projectRoot);
+
+  assert.equal(result.status, 1);
+  const json = parseTrailingCliJson(result.stdout);
+  assert.equal(json.command, `presentation audit all --project ${projectRoot} --format json`);
+  assert.equal(json.status, 'fail');
+  assert.equal(json.family, 'all');
+  assert.ok(json.issues.length > 0);
 });
 
 test('presentation stop hook regenerates package state and checkpoints a clean project', async (t) => {

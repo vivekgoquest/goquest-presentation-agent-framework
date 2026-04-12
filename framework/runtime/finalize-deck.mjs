@@ -1,5 +1,5 @@
 import { parsePresentationTargetCliArgs } from './deck-paths.js';
-import { finalizePresentation } from './services/presentation-ops-service.mjs';
+import { runPresentationCli } from './presentation-cli.mjs';
 
 let parsed;
 try {
@@ -9,30 +9,13 @@ try {
   process.exit(1);
 }
 
-try {
-  const result = await finalizePresentation(parsed.target);
-
-  console.log(JSON.stringify({
-    status: result.status,
-    deck: result.deck,
-    source: result.source,
-    outputs: result.outputs || {
-      pdf: result.pdf,
-      report: result.report,
-      slides: result.screenshots,
-      summary: result.summary,
-    },
-    pdf: result.pdf,
-    report: result.report,
-    screenshots: result.screenshots,
-    summary: result.summary,
-    issues: result.issues,
-  }, null, 2));
-
-  if (result.status !== 'pass') {
-    process.exit(1);
-  }
-} catch (err) {
-  console.error(err.message);
-  process.exit(1);
-}
+const result = await runPresentationCli([
+  'finalize',
+  'run',
+  '--project',
+  parsed.target.projectRootAbs,
+  '--format',
+  'json',
+]);
+process.stdout.write(result.stdout);
+process.exit(result.exitCode);

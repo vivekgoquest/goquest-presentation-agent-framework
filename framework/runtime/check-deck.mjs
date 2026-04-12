@@ -1,5 +1,5 @@
 import { parsePresentationTargetCliArgs } from './deck-paths.js';
-import { validatePresentation } from './services/presentation-ops-service.mjs';
+import { runPresentationCli } from './presentation-cli.mjs';
 
 const args = process.argv.slice(2);
 
@@ -11,28 +11,27 @@ try {
   process.exit(1);
 }
 
-try {
-  const result = await validatePresentation(parsed.target, {
-    outputDir: parsed.rest[0],
-  });
+const projectRoot = parsed.target.projectRootAbs;
+const auditResult = await runPresentationCli([
+  'audit',
+  'all',
+  '--project',
+  projectRoot,
+  '--format',
+  'json',
+]);
 
-  console.log('\n--- CHECK ---');
-  console.log(JSON.stringify({
-    workspace: result.workspace,
-    outputDir: result.outputDir,
-    slideCount: result.slideCount,
-    consoleErrors: result.consoleErrors,
-    overflowSlides: result.overflowSlides,
-    failures: result.failures.length,
-    status: result.status,
-  }, null, 2));
-
-  if (result.failures.length > 0) {
-    console.error('\nCheck failed:');
-    result.failures.forEach((message) => console.error(`- ${message}`));
-    process.exit(1);
-  }
-} catch (err) {
-  console.error('Check failed:', err.message);
-  process.exit(1);
+if (auditResult.exitCode !== 0) {
+  process.stdout.write(auditResult.stdout);
+  process.exit(auditResult.exitCode);
 }
+
+const statusResult = await runPresentationCli([
+  'status',
+  '--project',
+  projectRoot,
+  '--format',
+  'json',
+]);
+process.stdout.write(statusResult.stdout);
+process.exit(statusResult.exitCode);
