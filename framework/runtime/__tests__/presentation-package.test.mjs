@@ -25,7 +25,9 @@ test('getProjectPaths exposes canonical presentation package files', async (t) =
   assert.equal(paths.runtimeDirRel, '.presentation/runtime');
   assert.equal(paths.renderStateRel, '.presentation/runtime/render-state.json');
   assert.equal(paths.artifactsRel, '.presentation/runtime/artifacts.json');
-  assert.equal(paths.lastGoodRel, '.presentation/runtime/last-good.json');
+  assert.equal(paths.finalizedOutputDirRel, 'outputs/finalized');
+  assert.equal(paths.exportsOutputDirRel, 'outputs/exports');
+  assert.equal('lastGoodRel' in paths, false);
 });
 
 test('generatePresentationPackageManifest derives presentation structure from source files', async (t) => {
