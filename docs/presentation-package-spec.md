@@ -2,22 +2,24 @@
 
 ## Purpose
 
-This document defines the canonical structure of a scaffolded presentation project.
+This document defines the canonical user-facing structure of a scaffolded presentation project.
 
-The goal is to separate five concerns cleanly:
+The rebuilt core separates six concerns cleanly:
 
 1. authored source
-2. editable authoring intent
-3. deterministic generated package structure
+2. authored intent
+3. deterministic generated structure
 4. deterministic runtime evidence
-5. git-backed history
+5. delivery outputs
+6. git-backed agent-internal history
 
 This package model exists so:
 
-- humans can edit the deck naturally
-- agents do not need to remember structural bookkeeping
-- runtime can prove what actually renders
-- the product can distinguish current authoring state from last known-good visual state
+- humans can edit the presentation naturally
+- agents do not need to hand-maintain structural bookkeeping
+- runtime can record what was most recently observed
+- delivery outputs are clearly separated from evidence
+- git remains the history lane for agent work
 
 ## Core Principle
 
@@ -32,12 +34,33 @@ The system should author:
 - package structure
 - runtime evidence
 - artifact inventory
-- validation truth
+- delivery outputs produced by explicit commands
 
 Git should record:
 
 - evolution over time
-- checkpoints between meaningful states
+- agent milestones
+- diffs between meaningful states
+
+The package should not maintain a separate history file alongside git.
+
+## Operational Surface
+
+The package’s canonical command families are:
+
+- `presentation inspect ...`
+- `presentation status ...`
+- `presentation audit ...`
+- `presentation finalize ...`
+- `presentation export ...`
+
+Use them this way:
+
+- `inspect` for inventory and package facts
+- `status` for interpreted workflow state
+- `audit` for deterministic diagnostics
+- `finalize` for canonical delivery outputs under `outputs/finalized/`
+- `export` for ad hoc artifacts under `outputs/exports/<run-id>/`
 
 ## Package Layout
 
@@ -54,14 +77,22 @@ Git should record:
     020-problem/
       slide.html
   assets/
+
   outputs/
-    deck.pdf
-    full-page.png
-    report.json
-    summary.md
-    slides/
-      slide-intro.png
-      slide-problem.png
+    finalized/
+      deck.pdf
+      full-page.png
+      report.json
+      summary.md
+      slides/
+        slide-intro.png
+        slide-problem.png
+    exports/
+      <run-id>/
+        pdf/
+          my-presentation.pdf
+        screenshots/
+          slide-intro.png
 
   .presentation/
     project.json
@@ -70,8 +101,6 @@ Git should record:
     runtime/
       render-state.json
       artifacts.json
-      last-good.json
-    framework-cli.mjs
     framework/
       base/
       overrides/
@@ -103,7 +132,7 @@ They define the deck as humans and agents intentionally author it.
 
 This is stable package identity and framework linkage. It should stay boring.
 
-It holds:
+It holds package-level facts such as:
 
 - project identity
 - framework linkage mode
@@ -116,7 +145,7 @@ This file is system-owned and should not be edited during normal authoring.
 
 `/.presentation/intent.json`
 
-This is the only structured package file the agent should be allowed to author directly.
+This is the structured package file the agent may author directly.
 
 It is for meaning that deterministic code cannot infer from the filesystem, such as:
 
@@ -136,48 +165,65 @@ This is not structural truth. It is authoring intent.
 
 This is the authoritative structural manifest for the package.
 
-It should be regenerated from source by deterministic code and never hand-edited.
+It is regenerated from source by deterministic code and should never be hand-edited.
 
-It should answer:
+It answers questions like:
 
 - what slides exist
 - what order they are in
 - which source files define them
-- which optional files/assets exist
-- whether brief/outline/theme are present and complete enough to proceed
+- which optional files and assets exist
+- whether brief, outline, and theme are present and complete enough to proceed
 
 ### Deterministic runtime evidence
 
 `/.presentation/runtime/render-state.json`
 
-Current runtime truth about:
+Current remembered runtime truth about the latest explicit render-backed judgment, including:
 
-- preview kind
-- quality/policy/canvas state
 - source fingerprint
-- last checked timestamp
+- producer
+- status
+- slide ids
+- canvas contract result
+- console/runtime issues
+- overflow state
 
 `/.presentation/runtime/artifacts.json`
 
-Current artifact inventory for:
+Current remembered artifact inventory, split into:
 
-- PDF
-- full-page PNG
-- per-slide PNGs
-- report
-- summary
+- canonical finalized outputs
+- latest ad hoc export inventory
 
-`/.presentation/runtime/last-good.json`
+These files are evidence, not source.
+They may be missing or stale relative to current authored state.
 
-The last known-good visual/runtime checkpoint. This should link:
+### Delivery outputs
 
-- source fingerprint
-- render fingerprint
-- slide ids
-- artifact paths
-- git commit
+`/outputs/finalized/`
 
-### Git-backed history
+This is the canonical delivery boundary produced by `presentation finalize`.
+
+Typical contents:
+
+- `outputs/finalized/deck.pdf`
+- `outputs/finalized/full-page.png`
+- `outputs/finalized/report.json`
+- `outputs/finalized/summary.md`
+- `outputs/finalized/slides/*.png`
+
+`/outputs/exports/<run-id>/`
+
+This is the ad hoc export area produced by `presentation export`.
+
+Typical contents:
+
+- selected-slide PDFs
+- screenshot sets
+- other non-canonical delivery artifacts
+
+### Git-backed agent-internal history
 
 `/.git/`
 
@@ -186,14 +232,14 @@ Git is the history lane for the package.
 It should be treated as:
 
 - evolution log
-- checkpoint history
-- delta source between states
+- milestone history
+- diff/navigation substrate
 
-Git should not be treated as:
+It should not be treated as:
 
 - the current structural manifest
-- the current runtime truth
-- the only place render evidence lives
+- the current runtime evidence record
+- the delivery output directory
 
 ## Ownership Matrix
 
@@ -212,27 +258,25 @@ Git should not be treated as:
 
 - `.presentation/package.generated.json`
 
-Editing source may cause this file to change, but the stop hook or runtime regeneration should write it.
+Editing source may cause this file to change, but deterministic package operations should write it.
 
-### Agent can only read
+### Agent can read, but should not author
 
 - `.presentation/project.json`
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
 
 ### Runtime can write
 
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
-- `outputs/*`
+- `outputs/finalized/**`
+- `outputs/exports/**`
 
 ### System-only / protected
 
-- `.presentation/framework-cli.mjs`
 - `.presentation/framework/`
 - shared framework internals
 - canvas internals
@@ -253,8 +297,7 @@ Editing source may cause this file to change, but the stop hook or runtime regen
   "frameworkSource": "/abs/path/to/framework",
   "frameworkSourceVersion": "1.0.0",
   "frameworkCopiedAt": null,
-  "canvasPolicy": "protected",
-  "historyPolicy": "checkpointed"
+  "canvasPolicy": "protected"
 }
 ```
 
@@ -287,22 +330,30 @@ Editing source may cause this file to change, but the stop hook or runtime regen
 ```json
 {
   "schemaVersion": 1,
-  "projectSlug": "my-presentation",
-  "title": "My Presentation",
-  "brief": {
-    "path": "brief.md",
-    "exists": true,
-    "complete": true
+  "project": {
+    "slug": "my-presentation",
+    "title": "My Presentation"
   },
-  "outline": {
-    "path": "outline.md",
-    "exists": false,
-    "required": false,
-    "complete": false
-  },
-  "theme": {
-    "path": "theme.css",
-    "exists": true
+  "source": {
+    "brief": {
+      "path": "brief.md",
+      "exists": true,
+      "complete": true
+    },
+    "outline": {
+      "path": "outline.md",
+      "exists": false,
+      "required": false,
+      "complete": true
+    },
+    "theme": {
+      "path": "theme.css",
+      "exists": true
+    },
+    "sharedAssets": {
+      "dir": "assets",
+      "exists": true
+    }
   },
   "slides": [
     {
@@ -317,13 +368,6 @@ Editing source may cause this file to change, but the stop hook or runtime regen
       "hasAssetsDir": false
     }
   ],
-  "sharedAssets": {
-    "dir": "assets",
-    "exists": true
-  },
-  "outputs": {
-    "dir": "outputs"
-  },
   "counts": {
     "slidesTotal": 1
   }
@@ -335,24 +379,22 @@ Editing source may cause this file to change, but the stop hook or runtime regen
 ```json
 {
   "schemaVersion": 1,
+  "kind": "render-state",
+  "sourceFingerprint": "sha256:...",
+  "generatedAt": "2026-04-12T12:34:56.000Z",
+  "producer": "finalize",
   "status": "pass",
-  "previewKind": "slides",
   "slideIds": ["intro", "problem", "close"],
+  "previewKind": "slides",
   "canvasContract": {
-    "status": "pass",
+    "valid": true,
     "violations": []
   },
-  "policy": {
-    "status": "pass",
-    "warnings": [],
-    "errors": []
-  },
-  "quality": {
-    "status": "pass",
-    "warnings": []
-  },
-  "lastCheckedAt": "2026-03-22T15:40:00.000Z",
-  "sourceFingerprint": "sha256:..."
+  "consoleErrorCount": 0,
+  "overflowSlides": [],
+  "failures": [],
+  "issues": [],
+  "lastCheckedAt": "2026-04-12T12:34:56.000Z"
 }
 ```
 
@@ -361,88 +403,78 @@ Editing source may cause this file to change, but the stop hook or runtime regen
 ```json
 {
   "schemaVersion": 1,
-  "pdf": {
-    "path": "outputs/deck.pdf",
+  "kind": "artifacts",
+  "sourceFingerprint": "sha256:...",
+  "generatedAt": "2026-04-12T12:35:10.000Z",
+  "finalized": {
     "exists": true,
-    "generatedAt": "2026-03-22T15:41:00.000Z"
+    "outputDir": "outputs/finalized",
+    "pdf": {
+      "path": "outputs/finalized/deck.pdf"
+    },
+    "fullPage": {
+      "path": "outputs/finalized/full-page.png"
+    },
+    "report": {
+      "path": "outputs/finalized/report.json"
+    },
+    "summary": {
+      "path": "outputs/finalized/summary.md"
+    },
+    "slides": [
+      {
+        "id": "intro",
+        "path": "outputs/finalized/slides/slide-intro.png"
+      }
+    ]
   },
-  "fullPage": {
-    "path": "outputs/full-page.png",
-    "exists": true
-  },
-  "slides": [
-    {
-      "id": "intro",
-      "path": "outputs/slides/slide-intro.png",
-      "exists": true
-    }
-  ],
-  "report": {
-    "path": "outputs/report.json",
-    "exists": true
-  },
-  "summary": {
-    "path": "outputs/summary.md",
-    "exists": true
+  "latestExport": {
+    "exists": true,
+    "format": "pdf",
+    "outputDir": "outputs/exports/2026-04-12T12-40-00Z/pdf",
+    "pdf": {
+      "path": "outputs/exports/2026-04-12T12-40-00Z/pdf/my-presentation.pdf"
+    },
+    "slides": [],
+    "artifacts": [
+      {
+        "path": "outputs/exports/2026-04-12T12-40-00Z/pdf/my-presentation.pdf"
+      }
+    ]
   }
 }
 ```
 
-### `runtime/last-good.json`
+## Package Workflow Model
 
-```json
-{
-  "schemaVersion": 1,
-  "status": "pass",
-  "sourceFingerprint": "sha256:...",
-  "renderStateFingerprint": "sha256:...",
-  "approvedAt": "2026-03-22T15:41:00.000Z",
-  "slideIds": ["intro", "problem", "close"],
-  "artifacts": {
-    "pdf": "outputs/deck.pdf",
-    "slides": [
-      "outputs/slides/slide-intro.png",
-      "outputs/slides/slide-problem.png",
-      "outputs/slides/slide-close.png"
-    ]
-  },
-  "gitCommit": "abc123def456"
-}
-```
+A typical package loop now looks like this:
 
-## Stop-Hook Pipeline
+1. author source and intent
+2. run `presentation inspect ...` to orient
+3. run `presentation status ...` to understand workflow state
+4. run `presentation audit ...` to get deterministic diagnostics
+5. run `presentation finalize ...` to produce canonical delivery outputs
+6. run `presentation export ...` for non-canonical artifact requests
+7. use git directly for history, rollback, and milestone navigation
 
-At each stop turn, the hook pipeline should run in this order:
-
-1. regenerate `.presentation/package.generated.json`
-2. validate source against generated package structure
-3. validate `intent.json` references against package structure
-4. run deck policy, canvas contract, quality, and render checks
-5. update runtime evidence files
-6. optionally checkpoint to git when the state is clean
-
-The hook should not ask the agent to remember or hand-maintain the structural manifest.
-
-The hook should enforce agreement between:
-
-- source truth
-- generated package truth
-- runtime/render truth
+Hooks or adapters may surface diagnostics, but the package meaning lives in these package-level operations.
 
 ## What This Solves
 
-This package model removes three recurring failure modes:
+This package model removes recurring failure modes:
 
 1. agents forgetting to update structural bookkeeping
-2. runtime truth being spread across transient checks and logs
-3. user-visible state having no durable linkage to the source and commit that produced it
+2. runtime evidence being mixed with delivery outputs
+3. delivery artifacts being confused with source
+4. history semantics being spread across package files instead of git
 
 With this model:
 
 - source stays editable
 - structure stays deterministic
-- runtime proof stays explicit
-- history stays auditable
+- evidence stays explicit
+- delivery outputs stay legible
+- git remains the history substrate
 
 ## Status
 
@@ -452,13 +484,11 @@ Implemented now:
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
-- deterministic regeneration during preview/check/finalize flows
-- package-oriented stop hook through `.claude/hooks/check-presentation-package.mjs`
-  delegating to application-owned workflow services
+- split delivery output layout under `outputs/finalized/` and `outputs/exports/`
+- package-oriented CLI families for inspect, status, audit, finalize, and export
 
 Still evolving:
 
-- richer runtime fingerprints in `last-good.json`
-- broader Electron-facing query summaries over package/runtime evidence
-- any future migration tooling beyond the current automatic regeneration-on-use behavior
+- broader inspect/status subcommands over the same package model
+- richer deterministic explanation layers for audits and status
+- any future migration tooling beyond the current regeneration-on-use behavior
