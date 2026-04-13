@@ -286,9 +286,10 @@ Editing source may cause this file to change, but deterministic package operatio
 
 ### `project.json`
 
+Illustrative example:
+
 ```json
 {
-  "schemaVersion": 1,
   "projectMode": "project-folder",
   "projectName": "My Presentation",
   "projectSlug": "my-presentation",
@@ -300,6 +301,10 @@ Editing source may cause this file to change, but deterministic package operatio
   "canvasPolicy": "protected"
 }
 ```
+
+Implementation note:
+- current scaffolded `project.json` still includes a legacy `historyPolicy` field for compatibility
+- in the rebuilt core, git is the real history substrate and callers should not treat that field as a user-facing workflow concept
 
 ### `intent.json`
 

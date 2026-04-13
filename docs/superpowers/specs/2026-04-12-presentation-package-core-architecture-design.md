@@ -1,9 +1,14 @@
 # Presentation Package Core Architecture Design
 
 **Date**: 2026-04-12  
-**Status**: Working architecture discussion  
+**Status**: Living architecture record spanning the original design discussion and later implementation updates  
 **Scope**: Package-only core design, intentionally ignoring the Electron shell for now  
 **Update policy**: This document is a living design record and should be updated as the architecture discussion evolves.
+
+Historical note:
+- early sections capture the original discussion-phase framing before implementation started
+- later sections include implementation-grounded observations and rebuilt-core clarifications
+- when early discussion sections and later current-state sections differ, the later current-state sections are authoritative
 
 ---
 
@@ -374,9 +379,10 @@ while avoiding:
 
 ---
 
-## 8. Constraints We Are Intentionally Keeping
+## 8. Constraints Kept During the Initial Design Discussion
 
-The following are active design constraints for this architecture work:
+Historical snapshot:
+these were the active constraints at the start of the architecture discussion, before implementation work began.
 
 - no code modifications yet
 - no implementation planning yet
