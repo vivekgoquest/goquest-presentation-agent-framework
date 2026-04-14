@@ -158,6 +158,37 @@ test('presentation core exportPresentation rejects out-of-project output directo
   assert.equal(exportCalls, 0);
 });
 
+test('presentation core exportPresentation rejects unsafe absolute output files before invoking the exporter', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const outsideRoot = createTempProjectRoot();
+  const outputDir = resolve(projectRoot, 'outputs', 'exports', 'manual');
+  const outputFile = resolve(outsideRoot, 'deck.pdf');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+  t.after(() => rmSync(outsideRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  let exportCalls = 0;
+  const core = createPresentationCore({
+    async exportPresentation() {
+      exportCalls += 1;
+      return {};
+    },
+  });
+
+  await assert.rejects(
+    () => core.exportPresentation(projectRoot, { target: 'pdf', outputDir, outputFile }),
+    (error) => {
+      assert.ok(error instanceof PresentationCoreError);
+      assert.equal(error.status, 'unsupported');
+      assert.match(error.message, /must stay within the requested output directory/i);
+      return true;
+    }
+  );
+
+  assert.equal(exportCalls, 0);
+});
+
 test('presentation CLI delegates inspect package through the core facade', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));

@@ -141,6 +141,23 @@ function toProjectRelativeOutputDir(paths, outputDir, scope) {
   }
 }
 
+function toProjectRelativeOutputFile(paths, outputDir, outputFile, scope) {
+  const requestedOutputFile = String(outputFile || '').trim();
+  if (!requestedOutputFile) {
+    return '';
+  }
+
+  const outputDirAbs = resolve(paths.projectRootAbs, outputDir);
+
+  try {
+    return toRelativeWithin(outputDirAbs, resolve(outputDirAbs, requestedOutputFile));
+  } catch {
+    throw createCoreError(`Export output files must stay within the requested output directory: ${outputDirAbs}.`, {
+      extra: { scope },
+    });
+  }
+}
+
 function toExportRequestCoreError(error, scope) {
   if (error instanceof PresentationCoreError) {
     return error;
@@ -315,6 +332,7 @@ export function createPresentationCore(deps = {}) {
       const outputDir = options.outputDir
         ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
         : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
+      const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
 
       let result;
       try {
@@ -324,7 +342,7 @@ export function createPresentationCore(deps = {}) {
             format,
             slideIds,
             outputDir,
-            outputFile: options.outputFile || '',
+            outputFile,
           },
           { cwd: paths.projectRootAbs }
         );
