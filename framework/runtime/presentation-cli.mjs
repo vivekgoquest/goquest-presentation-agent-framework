@@ -1,11 +1,6 @@
-import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import {
-  getProjectPaths,
-  toRelativeWithin,
-} from './deck-paths.js';
-import { createPresentationCore } from './presentation-core.mjs';
+import { createPresentationCore, PresentationCoreError } from './presentation-core.mjs';
 
 const EXIT_CODE_OK = 0;
 const EXIT_CODE_VIOLATIONS = 1;
@@ -34,10 +29,6 @@ function formatCommand(argv) {
 
 function pluralize(count, noun) {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-function timestampSegment() {
-  return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
 function parseFlagValue(argv, index, flagName) {
@@ -241,16 +232,9 @@ function buildStatusEnvelope(command, status, scopeKind = 'package') {
 }
 
 async function runInspectCommand(parsed, command, core) {
-  const target = parsed.positionals[0] || 'package';
-  if (target !== 'package') {
-    throw new CliError(`Unsupported inspect target "${target}". Only "package" is available in Task 9.`, {
-      extra: {
-        scope: { kind: 'inspect-target', target },
-      },
-    });
-  }
-
-  const inspection = await core.inspectPackage(parsed.projectRoot);
+  const inspection = await core.inspectPackage(parsed.projectRoot, {
+    target: parsed.positionals[0] || 'package',
+  });
   return finalizeResult(buildInspectPackageEnvelope(command, inspection), parsed.format, EXIT_CODE_OK);
 }
 
@@ -281,17 +265,8 @@ function summarizeAuditResult(result) {
 }
 
 async function runAuditCommand(parsed, command, core) {
-  const family = parsed.positionals[0] || 'all';
-  if (!['theme', 'canvas', 'boundaries', 'all'].includes(family)) {
-    throw new CliError(`Unsupported audit family "${family}".`, {
-      extra: {
-        scope: { kind: 'audit-family', family },
-      },
-    });
-  }
-
   const result = await core.runAudit(parsed.projectRoot, {
-    family,
+    family: parsed.positionals[0] || 'all',
     slideId: parsed.slideIds[0] || null,
     path: parsed.pathValue || null,
     deck: parsed.deck,
@@ -325,20 +300,12 @@ async function runAuditCommand(parsed, command, core) {
 }
 
 async function runFinalizeCommand(parsed, command, core) {
-  const target = parsed.positionals[0] || '';
+  const target = parsed.positionals[0] || 'run';
   if (target === 'status') {
     return runStatusCommand({ ...parsed, positionals: ['finalize'] }, command, core, 'finalize');
   }
-  if (target && target !== 'run') {
-    throw new CliError(`Unsupported finalize target "${target}".`, {
-      extra: {
-        scope: { kind: 'finalize-target', target },
-      },
-    });
-  }
 
-  const paths = getProjectPaths(parsed.projectRoot);
-  const result = await core.finalize(parsed.projectRoot);
+  const result = await core.finalize(parsed.projectRoot, { target });
   const payload = {
     command,
     status: result.status,
@@ -346,160 +313,32 @@ async function runFinalizeCommand(parsed, command, core) {
       ? 'Canonical delivery outputs were produced.'
       : 'Finalize completed with blocking issues.',
     outputs: result.outputs,
-    evidenceUpdated: [
-      paths.renderStateRel,
-      paths.artifactsRel,
-    ],
+    evidenceUpdated: result.evidenceUpdated || [],
     issues: result.issues || [],
   };
 
   return finalizeResult(payload, parsed.format, result.status === 'pass' ? EXIT_CODE_OK : EXIT_CODE_VIOLATIONS);
 }
 
-function buildExportScope(target, projectRoot) {
-  return {
-    kind: 'export',
-    format: target,
-    projectRoot,
-  };
-}
-
-function validateExportOutputDir(paths, outputDir) {
-  const outputDirAbs = resolve(paths.projectRootAbs, outputDir);
-
-  try {
-    toRelativeWithin(paths.projectRootAbs, outputDirAbs);
-  } catch {
-    throw new CliError(`Export output directories must stay within the project root: ${paths.projectRootAbs}.`, {
-      extra: {
-        scope: { kind: 'export-output-dir', outputDir },
-      },
-    });
-  }
-
-  return outputDir;
-}
-
-function getMissingSlideSelections(manifest, slideIds) {
-  const availableSlideIds = new Set(manifest.slides.map((slide) => slide.id));
-  return slideIds.filter((slideId) => !availableSlideIds.has(slideId));
-}
-
-function toExportRequestCliError(error, scope) {
-  if (error instanceof CliError) {
-    return error;
-  }
-
-  const message = error?.message || '';
-  if (
-    message === 'Export format must be either "pdf" or "png".'
-    || message === 'Select at least one slide to export.'
-    || message === 'Choose a destination folder before exporting.'
-    || message.startsWith('Unknown slide selections: ')
-  ) {
-    return new CliError(message, {
-      status: 'invalid-request',
-      extra: { scope },
-    });
-  }
-
-  return null;
-}
-
-async function buildDefaultExportRequest(parsed, core) {
-  const target = parsed.positionals[0] || '';
-  if (!['pdf', 'screenshots'].includes(target)) {
-    throw new CliError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
-      extra: {
-        scope: { kind: 'export-target', target: target || null },
-      },
-    });
-  }
-
-  const paths = getProjectPaths(parsed.projectRoot);
-  const inspection = await core.inspectPackage(parsed.projectRoot);
-  const manifest = inspection.manifest;
-  const slideIds = parsed.slideIds.length > 0
-    ? parsed.slideIds
-    : manifest.slides.map((slide) => slide.id);
-
-  if (slideIds.length === 0) {
-    throw new CliError('No slides are available to export.', {
-      status: 'unavailable',
-      extra: {
-        scope: buildExportScope(target, paths.projectRootAbs),
-      },
-    });
-  }
-
-  const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
-  if (missingSlideIds.length > 0) {
-    throw new CliError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
-      status: 'invalid-request',
-      extra: {
-        scope: buildExportScope(target, paths.projectRootAbs),
-      },
-    });
-  }
-
-  const format = target === 'pdf' ? 'pdf' : 'png';
-  const outputDir = parsed.outputDir
-    ? validateExportOutputDir(paths, parsed.outputDir)
-    : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
-
-  return {
-    target,
-    paths,
-    request: {
-      format,
-      slideIds,
-      outputDir,
-      outputFile: parsed.outputFile || '',
-    },
-  };
-}
-
 async function runExportCommand(parsed, command, core) {
-  const { target, paths, request } = await buildDefaultExportRequest(parsed, core);
-  const scope = buildExportScope(target, paths.projectRootAbs);
-
-  let result;
-  try {
-    result = await core.exportPresentation(parsed.projectRoot, {
-      ...request,
-      cwd: paths.projectRootAbs,
-    });
-  } catch (error) {
-    const cliError = toExportRequestCliError(error, scope);
-    if (cliError) {
-      throw cliError;
-    }
-    throw error;
-  }
-
-  let outputDir;
-  let artifacts;
-  try {
-    outputDir = toRelativeWithin(paths.projectRootAbs, result.outputDir);
-    artifacts = (result.outputPaths || [])
-      .map((outputPath) => toRelativeWithin(paths.projectRootAbs, outputPath));
-  } catch {
-    throw new CliError(`Export outputs must stay within the project root: ${paths.projectRootAbs}.`, {
-      extra: { scope },
-    });
-  }
+  const result = await core.exportPresentation(parsed.projectRoot, {
+    target: parsed.positionals[0] || '',
+    slideIds: parsed.slideIds,
+    outputDir: parsed.outputDir,
+    outputFile: parsed.outputFile,
+  });
 
   const payload = {
     command,
-    status: 'pass',
+    status: result.status || 'pass',
     summary: 'Requested export artifacts were produced.',
     outputs: {
-      outputDir,
-      artifacts,
+      outputDir: result.outputDir,
+      artifacts: result.artifacts || [],
     },
-    evidenceUpdated: [paths.artifactsRel],
-    issues: [],
-    scope,
+    evidenceUpdated: result.evidenceUpdated || [],
+    issues: result.issues || [],
+    scope: result.scope,
   };
 
   return finalizeResult(payload, parsed.format, EXIT_CODE_OK);
@@ -530,7 +369,7 @@ async function dispatchPresentationCli(argv = process.argv.slice(2), options = {
         throw new CliError(`Unknown command family "${parsed.family}".`);
     }
   } catch (error) {
-    if (error instanceof CliError) {
+    if (error instanceof CliError || error instanceof PresentationCoreError) {
       return finalizeResult(
         {
           command,
@@ -539,7 +378,7 @@ async function dispatchPresentationCli(argv = process.argv.slice(2), options = {
           ...error.extra,
         },
         'json',
-        error.exitCode
+        error instanceof CliError ? error.exitCode : EXIT_CODE_UNSUPPORTED
       );
     }
 
