@@ -44,6 +44,58 @@ Git should record:
 
 The package should not maintain a separate history file alongside git.
 
+## Mutation Boundary
+
+The rebuilt core enforces a hard authorship boundary.
+
+### Only the agent may mutate authored content
+
+After project creation/scaffolding, only the agent may change authored presentation content such as:
+
+- `brief.md`
+- `theme.css`
+- `slides/<NNN-id>/slide.html`
+- optional `slides/<NNN-id>/slide.css`
+- author-managed assets under `assets/` and `slides/<NNN-id>/assets/`
+
+Validators, audits, status checks, export flows, finalize flows, hooks, and shells may inspect this content, render it, diagnose it, and report issues against it, but they must not silently repair or rewrite it.
+
+### What the system may mutate
+
+The headless core may still create or update system-owned files such as:
+
+- `.presentation/package.generated.json`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
+- canonical delivery outputs under `outputs/finalized/`
+- ad hoc export outputs under `outputs/exports/`
+
+These are generated structure, runtime evidence, and delivery artifacts. They are not authored presentation content.
+
+### Intent boundary
+
+`/.presentation/intent.json` is authorable intent, but it is not allowed to define structural truth such as slide existence, slide ids, or slide order.
+
+In normal authoring, the agent owns meaningful intent edits. The core may bootstrap an initial `intent.json` when scaffolding a project or regenerating missing system files, but that bootstrap behavior does not weaken the authored-content rule above.
+
+### Validator and shell rule
+
+Validators and reviewers may:
+
+- inspect source
+- classify issues
+- produce deterministic findings
+- block workflows
+- route feedback into agent workflows
+
+They may not:
+
+- patch authored content directly
+- auto-fix authored content
+- bypass the agent by mutating source from the shell
+
+A shell should show state and invoke operations. It should not become a second authoring authority.
+
 ## Operational Surface
 
 The package’s canonical command families are:

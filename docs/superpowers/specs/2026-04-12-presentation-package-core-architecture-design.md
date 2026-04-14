@@ -71,7 +71,141 @@ So:
 - the system may inspect and judge
 - the agent must interpret and mutate
 
-### 2.3 Checks should feed the agent's working loop
+### 2.3 Authorship and mutation boundary spec
+
+This is a hard architectural rule for the rebuilt core.
+
+#### 2.3.1 Sole mutator rule
+
+Only an agent may make meaningful mutations to authored presentation content after project creation.
+
+That includes:
+- `brief.md`
+- `theme.css`
+- `slides/<NNN-id>/slide.html`
+- optional `slides/<NNN-id>/slide.css`
+- author-managed assets under `assets/` and `slides/<NNN-id>/assets/`
+
+The package core may inspect, compile, validate, export, finalize, and explain. It may not silently rewrite authored presentation content.
+
+#### 2.3.2 What the core may mutate
+
+The core is still allowed to create or refresh deterministic package-owned files and delivery artifacts such as:
+- `.presentation/package.generated.json`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
+- canonical outputs under `outputs/finalized/`
+- ad hoc exports under `outputs/exports/`
+
+These are generated structure, runtime evidence, and outputs. They are not authored presentation content.
+
+#### 2.3.3 Intent nuance
+
+`/.presentation/intent.json` is authorable intent, but it is subordinate to structural truth.
+
+That means:
+- it may annotate known structural entities
+- it may not define slide existence, slide ids, or ordering
+- the agent should own meaningful intent edits during normal authoring
+- the core may bootstrap an initial `intent.json` when scaffolding a project or repairing missing package-owned files
+
+That bootstrap exception does not grant the core permission to mutate authored presentation content.
+
+#### 2.3.4 Validator rule
+
+Validators, audits, hooks, and review/judge flows may:
+- inspect source
+- report deterministic issues
+- explain failures
+- block operations
+- route feedback back into the agent loop
+
+They may not:
+- patch authored source directly
+- auto-fix authored source
+- turn shell/UI actions into a second mutation authority
+
+The intended control loop is:
+1. core inspects and judges
+2. core reports deterministic findings
+3. agent interprets and edits authored content
+4. core re-validates the result
+
+#### 2.3.5 Shell boundary implication
+
+A replaceable shell should be able to:
+- read package state through the core
+- invoke core operations
+- display findings, artifacts, and progress
+
+A replaceable shell should not:
+- mutate authored content directly
+- write package truth files directly
+- reconstruct core orchestration on its own
+
+This boundary exists primarily to protect package semantics and agent authorship while allowing rapid UI experimentation.
+
+### 2.4 Core/shell mental model
+
+This is the simplest correct framing for the rebuilt system.
+
+#### Core
+
+The core knows how the presentation system works.
+
+It owns:
+- package semantics
+- structural compilation
+- audits and deterministic findings
+- status meaning
+- preview assembly
+- finalize/export orchestration
+- runtime evidence
+- the rule that only the agent may mutate authored content
+
+#### Shell
+
+The shell knows how to show the system and invoke it.
+
+It owns:
+- windows and panels
+- menus and buttons
+- dialogs and file pickers
+- progress display
+- preview framing
+- terminal embedding
+- host-specific UX flows
+
+It does not own:
+- package meaning
+- workflow semantics
+- issue taxonomy
+- authored-content mutation rules
+- finalize/export meaning
+- runtime evidence meaning
+
+#### Core-first consequence
+
+If a UI experiment can happen by changing only shell files, the architecture is healthy.
+
+If a UI experiment requires touching:
+- orchestration
+- core state semantics
+- audit/finalize/export behavior
+- agent flow semantics
+
+then the core/shell seam is too weak.
+
+#### Non-goal
+
+The rebuilt core is not being designed as a shell-extension platform.
+
+The immediate goal is simpler and stricter:
+- protect package semantics
+- protect the agent authorship boundary
+- allow rapid UI experimentation without modifying core orchestration
+
+### 2.5 Checks should feed the agent's working loop
 
 We want policy/validation/structure checks to be experienced by the agent as part of its ongoing authoring process.
 
@@ -6864,6 +6998,101 @@ That gives the rewrite concrete answers for:
 - what finalize owns
 - what export owns
 - what should be deleted from the older `last-good` model
+
+## 33A. Protected Headless Core Boundary Spec
+
+Now that the package constitution and runtime model are clearer, the next architectural rule is the protected headless core boundary.
+
+This section is intentionally simpler than a general-purpose extension platform design.
+
+The goal is not to create a shell ecosystem.
+The goal is to create a stable, protected headless kernel so UI shells can change rapidly without redefining package behavior.
+
+### 33A.1 Boundary goal
+
+The core should be the only place that knows how the presentation system works.
+
+Shells should be thin viewers/controllers that:
+- read package state through the core
+- invoke core operations through a small programmatic surface
+- render progress, findings, and outputs
+
+Shells should not:
+- mutate authored presentation content directly
+- redefine workflow meaning
+- reconstruct finalize/export/audit orchestration themselves
+- write package truth or runtime evidence files directly
+
+### 33A.2 Non-goals for this phase
+
+This phase is not trying to provide:
+- a third-party shell plugin ecosystem
+- generic capability discovery for arbitrary external clients
+- arbitrary extension hooks into package semantics
+- shell-authored workflow semantics
+
+Those may be revisited later if real use demands them.
+
+### 33A.3 Minimal protected core surface
+
+The protected headless core should expose only a small semantic surface.
+
+#### Read/query surface
+- inspect package
+- get status
+- get preview
+
+#### Operation surface
+- run audit
+- finalize
+- export presentation
+- optionally scaffold project if project creation remains part of the protected core
+
+This surface should be library-first.
+
+CLI remains an adapter for agents.
+Shells should consume the programmatic core directly rather than spawning the CLI.
+
+### 33A.4 Core responsibilities
+
+The core should own:
+- package constitution and path semantics
+- structural compilation and package manifest generation
+- deterministic audits and issue envelopes
+- status derivation
+- preview assembly/document generation
+- finalize/export orchestration
+- runtime evidence and delivery artifact writes
+- authored-content mutation boundaries
+
+### 33A.5 Shell responsibilities
+
+The shell should own:
+- layout and visual presentation
+- menu/button wiring
+- dialogs and host interactions
+- progress rendering
+- preview framing around the core-produced document/session
+- terminal embedding for agent use when needed
+
+### 33A.6 Replaceability test
+
+A shell is replaceable if the following is true:
+- changing shell UX does not require changing core orchestration
+- changing shell UX does not require changing core state semantics
+- changing shell UX does not require changing the authored-content mutation boundary
+
+If those conditions fail, the shell boundary is not yet strong enough.
+
+### 33A.7 Core-first implementation order
+
+Before any new shell work begins, the rehaul should complete a core-only hardening pass that:
+- introduces a small protected programmatic core facade
+- routes existing CLI and application adapters through that facade
+- keeps Electron-specific behavior out of the core facade
+- adds tests that lock the authored-content mutation boundary in place
+
+Only after that core seam is stable should shell experimentation proceed.
 
 ## 34. CLI Contract Spec (First Implementation-Grade Cut)
 
