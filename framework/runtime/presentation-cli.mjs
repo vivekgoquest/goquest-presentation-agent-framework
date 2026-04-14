@@ -5,11 +5,7 @@ import {
   getProjectPaths,
   toRelativeWithin,
 } from './deck-paths.js';
-import { runAuditAll, runBoundaryAudit, runCanvasAudit, runThemeAudit } from './audit-service.js';
-import { computeStructuralManifest } from './structural-compiler.js';
-import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
-import { getProjectState } from './project-state.js';
-import { exportPresentation, finalizePresentation } from './services/presentation-ops-service.mjs';
+import { createPresentationCore } from './presentation-core.mjs';
 
 const EXIT_CODE_OK = 0;
 const EXIT_CODE_VIOLATIONS = 1;
@@ -200,71 +196,51 @@ function unsupported(command, summary, extra = {}) {
   return finalizeResult({ command, status: 'unsupported', summary, ...extra }, 'json', EXIT_CODE_UNSUPPORTED);
 }
 
-function buildInspectPackageEnvelope(command, projectRoot) {
-  const paths = getProjectPaths(projectRoot);
-  const manifest = computeStructuralManifest(projectRoot);
-  const renderState = readRenderState(projectRoot);
-  const artifacts = readArtifacts(projectRoot);
-  const state = getProjectState(projectRoot);
-
+function buildInspectPackageEnvelope(command, inspection) {
   return {
     command,
     status: 'ok',
     scope: {
       kind: 'package',
-      projectRoot: paths.projectRootAbs,
+      projectRoot: inspection.projectRoot,
     },
     summary: {
-      title: paths.title,
-      slug: paths.slug,
-      workflow: state.workflow,
-      slidesTotal: manifest.counts.slidesTotal,
+      title: inspection.title,
+      slug: inspection.slug,
+      workflow: inspection.status.workflow,
+      slidesTotal: inspection.manifest.counts.slidesTotal,
     },
     data: {
-      manifest,
-      renderState,
-      artifacts,
+      manifest: inspection.manifest,
+      renderState: inspection.renderState,
+      artifacts: inspection.artifacts,
     },
-    evidence: [
-      paths.packageManifestRel,
-      paths.renderStateRel,
-      paths.artifactsRel,
-    ],
-    freshness: {
-      relativeToSource: state.facets?.evidence || (renderState ? 'current' : 'missing'),
-    },
-    nextFocus: state.nextFocus || [],
+    evidence: inspection.evidence,
+    freshness: inspection.freshness,
+    nextFocus: inspection.status.nextFocus || [],
   };
 }
 
-function buildStatusEnvelope(command, projectRoot, scopeKind = 'package') {
-  const state = getProjectState(projectRoot);
-  const blockers = state.lastPolicyError ? [state.lastPolicyError] : [];
-
+function buildStatusEnvelope(command, status, scopeKind = 'package') {
   return {
     command,
     status: 'ok',
     scope: {
       kind: scopeKind,
-      projectRoot: state.projectRoot,
+      projectRoot: status.projectRoot,
     },
-    workflow: state.workflow,
-    summary: state.statusSummary,
-    blockers,
-    facets: state.facets,
-    nextBoundary: state.nextBoundary,
-    nextFocus: state.nextFocus,
-    evidence: [
-      '.presentation/runtime/render-state.json',
-      '.presentation/runtime/artifacts.json',
-    ],
-    freshness: {
-      relativeToSource: state.facets?.evidence || 'unknown',
-    },
+    workflow: status.workflow,
+    summary: status.summary,
+    blockers: status.blockers,
+    facets: status.facets,
+    nextBoundary: status.nextBoundary,
+    nextFocus: status.nextFocus,
+    evidence: status.evidence,
+    freshness: status.freshness,
   };
 }
 
-async function runInspectCommand(parsed, command) {
+async function runInspectCommand(parsed, command, core) {
   const target = parsed.positionals[0] || 'package';
   if (target !== 'package') {
     throw new CliError(`Unsupported inspect target "${target}". Only "package" is available in Task 9.`, {
@@ -274,10 +250,11 @@ async function runInspectCommand(parsed, command) {
     });
   }
 
-  return finalizeResult(buildInspectPackageEnvelope(command, parsed.projectRoot), parsed.format, EXIT_CODE_OK);
+  const inspection = await core.inspectPackage(parsed.projectRoot);
+  return finalizeResult(buildInspectPackageEnvelope(command, inspection), parsed.format, EXIT_CODE_OK);
 }
 
-async function runStatusCommand(parsed, command, scopeKind = 'package') {
+async function runStatusCommand(parsed, command, core, scopeKind = 'package') {
   const target = parsed.positionals[0] || 'package';
   if (!['package', 'readiness', 'finalize'].includes(target)) {
     throw new CliError(`Unsupported status target "${target}".`, {
@@ -287,8 +264,9 @@ async function runStatusCommand(parsed, command, scopeKind = 'package') {
     });
   }
 
+  const status = await core.getStatus(parsed.projectRoot);
   return finalizeResult(
-    buildStatusEnvelope(command, parsed.projectRoot, scopeKind === 'package' ? target : scopeKind),
+    buildStatusEnvelope(command, status, scopeKind === 'package' ? target : scopeKind),
     parsed.format,
     EXIT_CODE_OK
   );
@@ -302,26 +280,9 @@ function summarizeAuditResult(result) {
   return `${pluralize(result.issueCount, 'hard violation')} found in the ${result.family} audit.`;
 }
 
-async function runAuditCommand(parsed, command) {
+async function runAuditCommand(parsed, command, core) {
   const family = parsed.positionals[0] || 'all';
-  const auditOptions = {
-    slideId: parsed.slideIds[0] || null,
-    path: parsed.pathValue || null,
-    deck: parsed.deck,
-    severity: parsed.severity || 'error',
-    strict: parsed.strict,
-    render: parsed.render,
-  };
-
-  const familyToRunner = {
-    theme: runThemeAudit,
-    canvas: runCanvasAudit,
-    boundaries: runBoundaryAudit,
-    all: runAuditAll,
-  };
-
-  const runner = familyToRunner[family];
-  if (!runner) {
+  if (!['theme', 'canvas', 'boundaries', 'all'].includes(family)) {
     throw new CliError(`Unsupported audit family "${family}".`, {
       extra: {
         scope: { kind: 'audit-family', family },
@@ -329,12 +290,23 @@ async function runAuditCommand(parsed, command) {
     });
   }
 
-  const result = await runner(parsed.projectRoot, auditOptions);
+  const result = await core.runAudit(parsed.projectRoot, {
+    family,
+    slideId: parsed.slideIds[0] || null,
+    path: parsed.pathValue || null,
+    deck: parsed.deck,
+    severity: parsed.severity || 'error',
+    strict: parsed.strict,
+    render: parsed.render,
+  });
   const payload = {
     command,
     status: result.status,
     family: result.family,
-    scope: result.scope,
+    scope: {
+      projectRoot: result.projectRoot,
+      slideId: result.slideId,
+    },
     summary: summarizeAuditResult(result),
     issueCount: result.issueCount,
     issues: result.issues,
@@ -352,10 +324,10 @@ async function runAuditCommand(parsed, command) {
   return finalizeResult(payload, parsed.format, result.status === 'fail' ? EXIT_CODE_VIOLATIONS : EXIT_CODE_OK);
 }
 
-async function runFinalizeCommand(parsed, command) {
+async function runFinalizeCommand(parsed, command, core) {
   const target = parsed.positionals[0] || '';
   if (target === 'status') {
-    return runStatusCommand({ ...parsed, positionals: ['finalize'] }, command, 'finalize');
+    return runStatusCommand({ ...parsed, positionals: ['finalize'] }, command, core, 'finalize');
   }
   if (target && target !== 'run') {
     throw new CliError(`Unsupported finalize target "${target}".`, {
@@ -366,7 +338,7 @@ async function runFinalizeCommand(parsed, command) {
   }
 
   const paths = getProjectPaths(parsed.projectRoot);
-  const result = await finalizePresentation({ projectRoot: parsed.projectRoot });
+  const result = await core.finalize(parsed.projectRoot);
   const payload = {
     command,
     status: result.status,
@@ -434,7 +406,7 @@ function toExportRequestCliError(error, scope) {
   return null;
 }
 
-function buildDefaultExportRequest(parsed) {
+async function buildDefaultExportRequest(parsed, core) {
   const target = parsed.positionals[0] || '';
   if (!['pdf', 'screenshots'].includes(target)) {
     throw new CliError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
@@ -445,7 +417,8 @@ function buildDefaultExportRequest(parsed) {
   }
 
   const paths = getProjectPaths(parsed.projectRoot);
-  const manifest = computeStructuralManifest(parsed.projectRoot);
+  const inspection = await core.inspectPackage(parsed.projectRoot);
+  const manifest = inspection.manifest;
   const slideIds = parsed.slideIds.length > 0
     ? parsed.slideIds
     : manifest.slides.map((slide) => slide.id);
@@ -486,17 +459,16 @@ function buildDefaultExportRequest(parsed) {
   };
 }
 
-async function runExportCommand(parsed, command) {
-  const { target, paths, request } = buildDefaultExportRequest(parsed);
+async function runExportCommand(parsed, command, core) {
+  const { target, paths, request } = await buildDefaultExportRequest(parsed, core);
   const scope = buildExportScope(target, paths.projectRootAbs);
 
   let result;
   try {
-    result = await exportPresentation(
-      { projectRoot: parsed.projectRoot },
-      request,
-      { cwd: paths.projectRootAbs }
-    );
+    result = await core.exportPresentation(parsed.projectRoot, {
+      ...request,
+      cwd: paths.projectRootAbs,
+    });
   } catch (error) {
     const cliError = toExportRequestCliError(error, scope);
     if (cliError) {
@@ -533,22 +505,23 @@ async function runExportCommand(parsed, command) {
   return finalizeResult(payload, parsed.format, EXIT_CODE_OK);
 }
 
-async function dispatchPresentationCli(argv = process.argv.slice(2)) {
+async function dispatchPresentationCli(argv = process.argv.slice(2), options = {}) {
   const command = formatCommand(argv);
   try {
     const parsed = parsePresentationCliArgs(argv);
+    const core = options.core || createPresentationCore();
 
     switch (parsed.family) {
       case 'inspect':
-        return await runInspectCommand(parsed, command);
+        return await runInspectCommand(parsed, command, core);
       case 'status':
-        return await runStatusCommand(parsed, command);
+        return await runStatusCommand(parsed, command, core);
       case 'audit':
-        return await runAuditCommand(parsed, command);
+        return await runAuditCommand(parsed, command, core);
       case 'finalize':
-        return await runFinalizeCommand(parsed, command);
+        return await runFinalizeCommand(parsed, command, core);
       case 'export':
-        return await runExportCommand(parsed, command);
+        return await runExportCommand(parsed, command, core);
       case 'explain':
         return unsupported(command, 'Explain is not implemented in Task 9.', {
           scope: { kind: 'explain' },
@@ -582,8 +555,8 @@ async function dispatchPresentationCli(argv = process.argv.slice(2)) {
   }
 }
 
-export async function runPresentationCli(argv = process.argv.slice(2)) {
-  return dispatchPresentationCli(argv);
+export async function runPresentationCli(argv = process.argv.slice(2), options = {}) {
+  return dispatchPresentationCli(argv, options);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
