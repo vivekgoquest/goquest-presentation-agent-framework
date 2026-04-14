@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { CANVAS_STAGE } from '../canvas/canvas-contract.mjs';
@@ -53,6 +54,18 @@ const CORE_SYSTEM_WRITE_GLOBS = Object.freeze([
   'outputs/exports/**',
 ]);
 
+const CORE_IMMUTABLE_AUTHORED_ROOT_FILES = Object.freeze([
+  'brief.md',
+  'outline.md',
+  'theme.css',
+  '.presentation/intent.json',
+]);
+
+const CORE_IMMUTABLE_AUTHORED_SLIDE_FILENAMES = Object.freeze([
+  'slide.html',
+  'slide.css',
+]);
+
 const CORE_MUTATION_BOUNDARY = Object.freeze({
   allowAuthoredContentWrites: false,
   protectedZone: PRESENTATION_PACKAGE_WRITE_ZONES.AUTHORED_CONTENT,
@@ -63,6 +76,88 @@ const CORE_MUTATION_BOUNDARY = Object.freeze({
 
 function runInsideCoreMutationBoundary(operation) {
   return withPresentationPackageMutationBoundary(CORE_MUTATION_BOUNDARY, operation);
+}
+
+function snapshotAuthoredContentFile(projectRoot, relativePath, snapshot) {
+  const absolutePath = resolve(projectRoot, relativePath);
+  snapshot.set(relativePath, existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null);
+}
+
+function snapshotAuthoredSlideFiles(projectRoot, relativeDir, snapshot) {
+  const absoluteDir = resolve(projectRoot, relativeDir);
+  if (!existsSync(absoluteDir)) {
+    return;
+  }
+
+  const entries = readdirSync(absoluteDir, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    const childRelativePath = `${relativeDir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      snapshotAuthoredSlideFiles(projectRoot, childRelativePath, snapshot);
+      continue;
+    }
+
+    if (entry.isFile() && CORE_IMMUTABLE_AUTHORED_SLIDE_FILENAMES.includes(entry.name)) {
+      snapshotAuthoredContentFile(projectRoot, childRelativePath, snapshot);
+    }
+  }
+}
+
+function snapshotCoreAuthoredContent(projectRoot) {
+  const snapshot = new Map();
+  for (const relativePath of CORE_IMMUTABLE_AUTHORED_ROOT_FILES) {
+    snapshotAuthoredContentFile(projectRoot, relativePath, snapshot);
+  }
+  snapshotAuthoredSlideFiles(projectRoot, 'slides', snapshot);
+  return snapshot;
+}
+
+function getChangedAuthoredPaths(beforeSnapshot, afterSnapshot) {
+  const changedPaths = [];
+  const allPaths = new Set([...beforeSnapshot.keys(), ...afterSnapshot.keys()]);
+
+  for (const relativePath of [...allPaths].sort((left, right) => left.localeCompare(right))) {
+    if (beforeSnapshot.get(relativePath) !== afterSnapshot.get(relativePath)) {
+      changedPaths.push(relativePath);
+    }
+  }
+
+  return changedPaths;
+}
+
+async function enforceCoreAuthoredContentImmutability(projectRoot, operationName, operation) {
+  const beforeSnapshot = snapshotCoreAuthoredContent(projectRoot);
+  let failure = null;
+  let result;
+
+  try {
+    result = await operation();
+  } catch (error) {
+    failure = error;
+  }
+
+  const changedPaths = getChangedAuthoredPaths(beforeSnapshot, snapshotCoreAuthoredContent(projectRoot));
+  if (changedPaths.length > 0) {
+    throw createCoreError(`Presentation core ${operationName} must not modify authored content: ${changedPaths.join(', ')}.`, {
+      extra: {
+        scope: {
+          kind: 'authored-content',
+          operation: operationName,
+          projectRoot,
+        },
+        changedPaths,
+        failureMessage: failure?.message || null,
+      },
+    });
+  }
+
+  if (failure) {
+    throw failure;
+  }
+
+  return result;
 }
 
 function buildStatusResult(state) {
@@ -368,94 +463,100 @@ export function createPresentationCore(deps = {}) {
 
         const { target: ignoredTarget, ...request } = options;
         const paths = services.getProjectPaths(projectRoot);
-        const result = await services.finalizePresentation({ projectRoot }, request);
 
-        return {
-          kind: 'presentation-finalize',
-          projectRoot: paths.projectRootAbs,
-          status: result.status,
-          outputs: result.outputs,
-          evidenceUpdated: [
-            paths.renderStateRel,
-            paths.artifactsRel,
-          ],
-          issues: result.issues || [],
-        };
+        return await enforceCoreAuthoredContentImmutability(paths.projectRootAbs, 'finalize', async () => {
+          const result = await services.finalizePresentation({ projectRoot }, request);
+
+          return {
+            kind: 'presentation-finalize',
+            projectRoot: paths.projectRootAbs,
+            status: result.status,
+            outputs: result.outputs,
+            evidenceUpdated: [
+              paths.renderStateRel,
+              paths.artifactsRel,
+            ],
+            issues: result.issues || [],
+          };
+        });
       });
     },
 
     async exportPresentation(projectRoot, options = {}) {
       return await runInsideCoreMutationBoundary(async () => {
         const paths = services.getProjectPaths(projectRoot);
-        const target = String(options.target || '').trim().toLowerCase();
-        if (!['pdf', 'screenshots'].includes(target)) {
-          throw createCoreError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
-            extra: {
-              scope: { kind: 'export-target', target: target || null },
-            },
-          });
-        }
 
-        const inspection = await this.inspectPackage(paths.projectRootAbs, { target: 'package' });
-        const manifest = inspection.manifest;
-        const requestedSlideIds = normalizeRequestedSlideIds(options.slideIds);
-        const slideIds = requestedSlideIds.length > 0
-          ? requestedSlideIds
-          : manifest.slides.map((slide) => slide.id);
-        const scope = buildExportScope(target, paths.projectRootAbs);
-
-        if (slideIds.length === 0) {
-          throw createCoreError('No slides are available to export.', {
-            status: 'unavailable',
-            extra: { scope },
-          });
-        }
-
-        const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
-        if (missingSlideIds.length > 0) {
-          throw createCoreError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
-            status: 'invalid-request',
-            extra: { scope },
-          });
-        }
-
-        const format = target === 'pdf' ? 'pdf' : 'png';
-        const outputDir = options.outputDir
-          ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
-          : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
-        const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
-
-        let result;
-        try {
-          result = await services.exportPresentation(
-            { projectRoot: paths.projectRootAbs },
-            {
-              format,
-              slideIds,
-              outputDir,
-              outputFile,
-            },
-            { cwd: paths.projectRootAbs }
-          );
-        } catch (error) {
-          const coreError = toExportRequestCoreError(error, scope);
-          if (coreError) {
-            throw coreError;
+        return await enforceCoreAuthoredContentImmutability(paths.projectRootAbs, 'export', async () => {
+          const target = String(options.target || '').trim().toLowerCase();
+          if (!['pdf', 'screenshots'].includes(target)) {
+            throw createCoreError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
+              extra: {
+                scope: { kind: 'export-target', target: target || null },
+              },
+            });
           }
-          throw error;
-        }
 
-        return {
-          kind: 'presentation-export',
-          projectRoot: paths.projectRootAbs,
-          status: 'pass',
-          scope,
-          outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
-          artifacts: (result.outputPaths || [])
-            .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
-          evidenceUpdated: [paths.artifactsRel],
-          issues: [],
-        };
+          const inspection = await this.inspectPackage(paths.projectRootAbs, { target: 'package' });
+          const manifest = inspection.manifest;
+          const requestedSlideIds = normalizeRequestedSlideIds(options.slideIds);
+          const slideIds = requestedSlideIds.length > 0
+            ? requestedSlideIds
+            : manifest.slides.map((slide) => slide.id);
+          const scope = buildExportScope(target, paths.projectRootAbs);
+
+          if (slideIds.length === 0) {
+            throw createCoreError('No slides are available to export.', {
+              status: 'unavailable',
+              extra: { scope },
+            });
+          }
+
+          const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
+          if (missingSlideIds.length > 0) {
+            throw createCoreError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
+              status: 'invalid-request',
+              extra: { scope },
+            });
+          }
+
+          const format = target === 'pdf' ? 'pdf' : 'png';
+          const outputDir = options.outputDir
+            ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
+            : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
+          const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
+
+          let result;
+          try {
+            result = await services.exportPresentation(
+              { projectRoot: paths.projectRootAbs },
+              {
+                format,
+                slideIds,
+                outputDir,
+                outputFile,
+              },
+              { cwd: paths.projectRootAbs }
+            );
+          } catch (error) {
+            const coreError = toExportRequestCoreError(error, scope);
+            if (coreError) {
+              throw coreError;
+            }
+            throw error;
+          }
+
+          return {
+            kind: 'presentation-export',
+            projectRoot: paths.projectRootAbs,
+            status: 'pass',
+            scope,
+            outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
+            artifacts: (result.outputPaths || [])
+              .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
+            evidenceUpdated: [paths.artifactsRel],
+            issues: [],
+          };
+        });
       });
     },
   };

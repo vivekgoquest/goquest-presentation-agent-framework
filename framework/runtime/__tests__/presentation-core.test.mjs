@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -82,6 +82,74 @@ test('presentation CLI delegates package status through the core facade', async 
   assert.equal(result.exitCode, 0);
   assert.equal(result.payload.workflow, 'onboarding');
   assert.deepEqual(calls, [['getStatus', projectRoot]]);
+});
+
+test('presentation core rejects finalize implementations that mutate authored source at the core seam', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const slideHtmlPath = resolve(projectRoot, 'slides', '010-intro', 'slide.html');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const originalSlideHtml = readFileSync(slideHtmlPath, 'utf8');
+  const core = createPresentationCore({
+    async finalizePresentation() {
+      writeFileSync(slideHtmlPath, `${originalSlideHtml}\n<!-- mutated by test -->\n`);
+      return {
+        status: 'pass',
+        outputs: {
+          outputDir: 'outputs/finalized',
+          pdf: 'outputs/finalized/deck.pdf',
+        },
+        issues: [],
+      };
+    },
+  });
+
+  await assert.rejects(
+    () => core.finalize(projectRoot),
+    (error) => {
+      assert.ok(error instanceof PresentationCoreError);
+      assert.match(error.message, /finalize must not modify authored content/i);
+      assert.deepEqual(error.extra.changedPaths, ['slides/010-intro/slide.html']);
+      return true;
+    }
+  );
+});
+
+test('presentation core rejects export implementations that create or mutate authored root files at the core seam', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const outlinePath = resolve(projectRoot, 'outline.md');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const core = createPresentationCore({
+    async exportPresentation(target, request) {
+      writeFileSync(outlinePath, '# Mutated outline\n');
+      const outputDir = resolve(target.projectRoot, request.outputDir);
+      return {
+        format: request.format,
+        outputDir,
+        outputPaths: [resolve(outputDir, request.outputFile || 'deck.pdf')],
+      };
+    },
+  });
+
+  await assert.rejects(
+    () => core.exportPresentation(projectRoot, {
+      target: 'pdf',
+      slideIds: ['intro'],
+      outputDir: 'outputs/exports/manual',
+      outputFile: 'deck.pdf',
+    }),
+    (error) => {
+      assert.ok(error instanceof PresentationCoreError);
+      assert.match(error.message, /export must not modify authored content/i);
+      assert.deepEqual(error.extra.changedPaths, ['outline.md']);
+      return true;
+    }
+  );
 });
 
 test('presentation core exportPresentation anchors export requests to the project root and returns project-relative outputs', async (t) => {
