@@ -1,6 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CANVAS_STAGE } from '../canvas/canvas-contract.mjs';
 import {
   PROJECT_METADATA_FILENAME,
   PROJECT_PREVIEW_PATH,
@@ -9,12 +8,8 @@ import {
   getPresentationOutputPaths,
   getProjectPaths,
 } from '../runtime/deck-paths.js';
-import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
+import { createPresentationCore } from '../runtime/presentation-core.mjs';
 import { buildProjectTreeNode } from '../runtime/project-tree.js';
-import { getProjectState } from '../runtime/project-state.js';
-import { listSlideSourceEntries } from '../runtime/deck-source.js';
-import { renderPresentationHtml } from '../runtime/deck-assemble.js';
-import { renderPresentationFailureHtml } from '../runtime/preview-state-page.js';
 import { createProjectScaffold } from './project-scaffold-service.mjs';
 
 function assertProjectDirectory(projectRootAbs) {
@@ -43,8 +38,119 @@ function assertSlideCount(value) {
   return slideCount;
 }
 
+function normalizePreviewHtml(html = '') {
+  return String(html || '')
+    .replaceAll('/project-files/', 'presentation://project-files/')
+    .replaceAll('/project-framework/', 'presentation://project-framework/');
+}
+
+function toLegacyProjectStatus(workflow = '') {
+  switch (workflow) {
+    case 'onboarding':
+      return 'onboarding';
+    case 'blocked':
+      return 'policy_error';
+    case 'ready_for_finalize':
+      return 'ready_to_finalize';
+    case 'finalized':
+      return 'finalized';
+    case 'authoring':
+    default:
+      return 'in_progress';
+  }
+}
+
+function buildNextStep(status = {}) {
+  if (status.workflow === 'blocked') {
+    return 'Fix the current policy violation before preview, export, or finalize.';
+  }
+  if (status.facets?.delivery === 'finalized_stale') {
+    return 'Run finalize again to refresh the canonical outputs for the latest source.';
+  }
+  if (status.workflow === 'ready_for_finalize') {
+    return 'Run finalize to generate the deck outputs.';
+  }
+  if (status.workflow === 'finalized') {
+    return 'Review or export the canonical finalized outputs.';
+  }
+
+  const nextFocus = Array.isArray(status.nextFocus) ? status.nextFocus.filter(Boolean) : [];
+  if (nextFocus.length > 0) {
+    return `Continue authoring: ${nextFocus.join(', ')}.`;
+  }
+
+  return 'Continue authoring the presentation package.';
+}
+
+function buildRemainingSlides(manifest = {}, renderState = null) {
+  const slides = Array.isArray(manifest.slides) ? manifest.slides : [];
+  const renderedSlideIds = new Set(Array.isArray(renderState?.slideIds) ? renderState.slideIds : []);
+
+  return slides
+    .filter((slide) => !renderedSlideIds.has(slide.id))
+    .map((slide) => ({
+      slideId: slide.id,
+      relativePath: slide.html || '',
+      slideDir: slide.dir || '',
+    }));
+}
+
+function buildProjectState(inspection = {}, status = {}) {
+  const manifest = inspection.manifest || {};
+  const renderState = inspection.renderState || null;
+  const artifacts = inspection.artifacts || {};
+  const slides = Array.isArray(manifest.slides) ? manifest.slides : [];
+  const remainingSlides = buildRemainingSlides(manifest, renderState);
+  const slidesComplete = Math.max(0, slides.length - remainingSlides.length);
+  const blockers = Array.isArray(status.blockers) ? status.blockers.filter(Boolean) : [];
+  const finalized = artifacts.finalized || {};
+
+  return {
+    kind: 'project',
+    projectRoot: inspection.projectRoot || status.projectRoot || '',
+    title: inspection.title || '',
+    slug: inspection.slug || '',
+    workflow: status.workflow || 'authoring',
+    status: toLegacyProjectStatus(status.workflow),
+    facets: status.facets || {
+      delivery: 'not_finalized',
+      evidence: 'unknown',
+    },
+    statusSummary: status.summary || '',
+    nextBoundary: status.nextBoundary || 'finalize',
+    nextFocus: Array.isArray(status.nextFocus) ? status.nextFocus : [],
+    briefComplete: Boolean(manifest.source?.brief?.complete),
+    outlineRequired: Boolean(manifest.source?.outline?.required),
+    outlineComplete: Boolean(manifest.source?.outline?.complete),
+    slidesTotal: manifest.counts?.slidesTotal ?? slides.length,
+    slidesComplete,
+    remainingSlides,
+    pdfReady: Boolean(finalized.pdf?.path),
+    reportReady: Boolean(finalized.report?.path),
+    summaryReady: Boolean(finalized.summary?.path),
+    packageStateAvailable: Boolean(inspection.manifest),
+    runtimeEvidenceAvailable: Boolean(renderState),
+    lastRenderStatus: renderState?.status || 'unknown',
+    lastCheckedAt: renderState?.lastCheckedAt || renderState?.generatedAt || '',
+    lastPolicyError: blockers[0] || '',
+    policyCategory: blockers.length > 0 ? 'authoring_violation' : null,
+    nextStep: buildNextStep(status),
+  };
+}
+
+function toSlideDescriptor(slide = {}) {
+  const dirName = String(slide.dir || '').split('/').filter(Boolean).at(-1) || slide.id || '';
+  return {
+    id: slide.id,
+    dirName,
+    orderLabel: slide.orderLabel,
+    orderValue: slide.orderValue,
+  };
+}
+
 export function createProjectQueryService(options = {}) {
   const frameworkRoot = options.frameworkRoot || process.cwd();
+  const core = options.core || createPresentationCore();
   const onProjectChanged = typeof options.onProjectChanged === 'function'
     ? options.onProjectChanged
     : () => {};
@@ -74,6 +180,20 @@ export function createProjectQueryService(options = {}) {
       throw new Error('Open a presentation project first.');
     }
     return activeProjectTarget;
+  }
+
+  function inspectActiveProject() {
+    const projectPaths = requireActiveProjectPaths();
+    return core.inspectPackage(projectPaths.projectRootAbs, { target: 'package' });
+  }
+
+  function getProjectStatus(projectRootInput = null) {
+    const projectRootAbs = projectRootInput || requireActiveProjectPaths().projectRootAbs;
+    return core.getStatus(projectRootAbs);
+  }
+
+  function getProjectPreview() {
+    return core.getPreview(requireActiveProjectPaths().projectRootAbs);
   }
 
   function getMeta() {
@@ -112,7 +232,9 @@ export function createProjectQueryService(options = {}) {
       };
     }
 
-    return getProjectState(activeProjectPaths.projectRootAbs);
+    const inspection = inspectActiveProject();
+    const status = getProjectStatus(activeProjectPaths.projectRootAbs);
+    return buildProjectState(inspection, status);
   }
 
   function getFiles() {
@@ -124,25 +246,9 @@ export function createProjectQueryService(options = {}) {
   }
 
   function getSlides() {
-    const projectPaths = requireActiveProjectPaths();
-    const { manifest } = ensurePresentationPackageFiles(projectPaths.projectRootAbs);
-    if (Array.isArray(manifest?.slides)) {
-      return manifest.slides.map((slide) => ({
-        id: slide.id,
-        dirName: slide.dir.split('/').at(-1) || slide.id,
-        orderLabel: slide.orderLabel,
-        orderValue: slide.orderValue,
-      }));
-    }
-
-    return listSlideSourceEntries(projectPaths)
-      .filter((entry) => entry.isValidName)
-      .map((entry) => ({
-        id: entry.slideId,
-        dirName: entry.dirName,
-        orderLabel: entry.orderLabel,
-        orderValue: entry.orderValue,
-      }));
+    const inspection = inspectActiveProject();
+    const slides = Array.isArray(inspection.manifest?.slides) ? inspection.manifest.slides : [];
+    return slides.map((slide) => toSlideDescriptor(slide));
   }
 
   function getOutputPaths() {
@@ -150,33 +256,14 @@ export function createProjectQueryService(options = {}) {
   }
 
   function buildPreviewDocument() {
-    const target = requireActiveProjectTarget();
-    const paths = requireActiveProjectPaths();
-
-    let html;
-    let slideIds;
-    let title;
-    let previewKind = 'slides';
-    let viewport = null;
-
-    try {
-      const assembled = renderPresentationHtml(target);
-      html = assembled.html;
-      slideIds = assembled.slideIds;
-      title = assembled.title;
-      viewport = { ...CANVAS_STAGE.viewport };
-    } catch (error) {
-      const fallback = renderPresentationFailureHtml(target, error);
-      html = fallback.html;
-      slideIds = [];
-      title = paths.title || 'Preview';
-      previewKind = fallback.kind;
-    }
-
-    html = html.replaceAll('/project-files/', 'presentation://project-files/');
-    html = html.replaceAll('/project-framework/', 'presentation://project-framework/');
-
-    return { html, slideIds, title, kind: previewKind, viewport };
+    const preview = getProjectPreview();
+    return {
+      html: normalizePreviewHtml(preview.html),
+      slideIds: Array.isArray(preview.slideIds) ? preview.slideIds : [],
+      title: preview.title || requireActiveProjectPaths().title || 'Preview',
+      kind: preview.kind || 'slides',
+      viewport: preview.viewport || null,
+    };
   }
 
   function getPreviewDocument() {
@@ -247,6 +334,7 @@ export function createProjectQueryService(options = {}) {
     getOutputPaths,
     getPreviewDocument,
     getPreviewMeta,
+    getProjectStatus,
     getSlides,
     getState,
     getTarget: requireActiveProjectTarget,

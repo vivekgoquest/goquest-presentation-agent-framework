@@ -1,9 +1,8 @@
 import {
   capturePresentation,
-  exportPresentation,
   validatePresentation,
 } from '../runtime/services/presentation-ops-service.mjs';
-import { runPresentationCli } from '../runtime/presentation-cli.mjs';
+import { createPresentationCore } from '../runtime/presentation-core.mjs';
 
 function toActionMessage(actionId, result = {}) {
   switch (actionId) {
@@ -30,15 +29,26 @@ function resolveProjectRoot(target) {
   return target?.projectRootAbs || target?.projectRoot || '';
 }
 
-async function runPresentationCoreCommand(argv) {
-  const result = await runPresentationCli([...argv, '--format', 'json']);
-  if (result.exitCode > 1) {
-    throw new Error(result.payload?.summary || 'Presentation core command failed.');
-  }
-  return result.payload;
+function resolveCoreExportTarget(format) {
+  return String(format || '').trim().toLowerCase() === 'png' ? 'screenshots' : 'pdf';
 }
 
-export function createPresentationActionAdapter() {
+function normalizeCoreExportResult(result = {}, requestedFormat) {
+  const format = String(requestedFormat || '').trim().toLowerCase() === 'png' ? 'png' : 'pdf';
+  const outputPaths = Array.isArray(result.artifacts) ? result.artifacts : [];
+
+  return {
+    ...result,
+    format,
+    outputDir: result.outputDir || '',
+    outputPath: outputPaths[0] || '',
+    outputPaths,
+  };
+}
+
+export function createPresentationActionAdapter(options = {}) {
+  const core = options.core || createPresentationCore();
+
   return {
     async invoke(actionId, context = {}) {
       const target = context.target;
@@ -48,12 +58,7 @@ export function createPresentationActionAdapter() {
 
       switch (actionId) {
         case 'export_presentation': {
-          const result = await runPresentationCoreCommand([
-            'finalize',
-            'run',
-            '--project',
-            projectRoot,
-          ]);
+          const result = await core.finalize(projectRoot, { target: 'run' });
           const outputs = result.outputs || {};
           return {
             ...result,
@@ -68,21 +73,23 @@ export function createPresentationActionAdapter() {
           };
         }
         case 'export_presentation_artifacts': {
-          const result = await exportPresentation(target, {
-            format: args.format,
-            slideIds: args.slideIds,
-            outputDir: args.outputDir,
-            outputFile: args.outputFile,
-            pdfOptions: args.options?.pdfOptions || {},
-            captureOptions: args.options?.captureOptions || {},
-          }, args.options || {});
+          const result = normalizeCoreExportResult(
+            await core.exportPresentation(projectRoot, {
+              target: resolveCoreExportTarget(args.format),
+              slideIds: args.slideIds,
+              outputDir: args.outputDir,
+              outputFile: args.outputFile,
+            }),
+            args.format
+          );
+
           return {
             ...result,
-            status: 'pass',
+            status: result.status || 'pass',
             message: toActionMessage(actionId, result),
             detail: result.format === 'png'
               ? `Saved ${result.outputPaths.length} PNG file${result.outputPaths.length === 1 ? '' : 's'} to ${result.outputDir}`
-              : (result.outputPath || ''),
+              : result.outputPath,
           };
         }
         case 'validate_presentation': {

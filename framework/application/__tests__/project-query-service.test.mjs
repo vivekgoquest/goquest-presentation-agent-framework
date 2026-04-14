@@ -94,6 +94,125 @@ test('project query service creates, opens, and previews a project through appli
   );
 });
 
+test('project query service reads package state and preview through the protected core facade', async (t) => {
+  const [{ createProjectQueryService }, { createProjectScaffold }] = await Promise.all([
+    import('../project-query-service.mjs'),
+    import('../project-scaffold-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const coreCalls = [];
+  const service = createProjectQueryService({
+    core: {
+      inspectPackage(projectRootInput, options = {}) {
+        coreCalls.push(['inspectPackage', projectRootInput, options]);
+        return {
+          kind: 'presentation-package',
+          projectRoot: projectRootInput,
+          title: 'Core-backed Query Deck',
+          slug: 'core-backed-query-deck',
+          manifest: {
+            counts: { slidesTotal: 2 },
+            slides: [
+              {
+                id: 'intro',
+                dir: 'slides/010-intro',
+                orderLabel: '010',
+                orderValue: 10,
+              },
+              {
+                id: 'close',
+                dir: 'slides/020-close',
+                orderLabel: '020',
+                orderValue: 20,
+              },
+            ],
+          },
+          renderState: {
+            status: 'pass',
+            lastCheckedAt: '2026-04-14T00:00:00.000Z',
+          },
+          artifacts: {
+            finalized: {
+              exists: false,
+              pdf: null,
+              report: null,
+              summary: null,
+            },
+          },
+          status: {
+            workflow: 'ready_for_finalize',
+            summary: 'Ready to finalize.',
+            blockers: [],
+            facets: {
+              delivery: 'not_finalized',
+              evidence: 'current',
+            },
+            nextBoundary: 'finalize',
+            nextFocus: ['presentation finalize'],
+          },
+        };
+      },
+      getStatus(projectRootInput) {
+        coreCalls.push(['getStatus', projectRootInput]);
+        return {
+          kind: 'presentation-status',
+          projectRoot: projectRootInput,
+          workflow: 'ready_for_finalize',
+          summary: 'Ready to finalize.',
+          blockers: [],
+          facets: {
+            delivery: 'not_finalized',
+            evidence: 'current',
+          },
+          nextBoundary: 'finalize',
+          nextFocus: ['presentation finalize'],
+          evidence: [
+            '.presentation/runtime/render-state.json',
+            '.presentation/runtime/artifacts.json',
+          ],
+          freshness: {
+            relativeToSource: 'current',
+          },
+        };
+      },
+      getPreview(projectRootInput) {
+        coreCalls.push(['getPreview', projectRootInput]);
+        return {
+          kind: 'slides',
+          projectRoot: projectRootInput,
+          title: 'Core-backed Query Deck',
+          slideIds: ['intro', 'close'],
+          html: '<!doctype html><html><body><section id="intro"></section></body></html>',
+          viewport: { width: 1280, height: 720 },
+        };
+      },
+    },
+  });
+
+  service.openProject({ projectRoot });
+  coreCalls.length = 0;
+
+  const state = service.getState();
+  const slides = service.getSlides();
+  const preview = service.getPreviewDocument();
+
+  assert.equal(state.status, 'ready_to_finalize');
+  assert.equal(state.lastRenderStatus, 'pass');
+  assert.equal(state.lastCheckedAt, '2026-04-14T00:00:00.000Z');
+  assert.deepEqual(slides.map((slide) => slide.id), ['intro', 'close']);
+  assert.equal(preview.kind, 'slides');
+  assert.deepEqual(preview.viewport, { width: 1280, height: 720 });
+  assert.ok(coreCalls.some((entry) => entry[0] === 'getStatus' && entry[1] === projectRoot));
+  assert.ok(coreCalls.some((entry) => entry[0] === 'inspectPackage' && entry[1] === projectRoot));
+  assert.ok(coreCalls.some((entry) => entry[0] === 'getPreview' && entry[1] === projectRoot));
+});
+
 test('project query service rejects missing project paths', async () => {
   const { createProjectQueryService } = await import('../project-query-service.mjs');
   const service = createProjectQueryService();

@@ -199,7 +199,7 @@ export function createPresentationCore(deps = {}) {
   };
 
   return {
-    async inspectPackage(projectRoot, options = {}) {
+    inspectPackage(projectRoot, options = {}) {
       const target = String(options.target || 'package').trim().toLowerCase() || 'package';
       if (target !== 'package') {
         throw createCoreError(`Unsupported inspect target "${target}". Only "package" is available in Task 9.`, {
@@ -234,11 +234,11 @@ export function createPresentationCore(deps = {}) {
       };
     },
 
-    async getStatus(projectRoot) {
+    getStatus(projectRoot) {
       return buildStatusResult(services.getProjectState(projectRoot));
     },
 
-    async getPreview(projectRoot) {
+    getPreview(projectRoot) {
       return buildPreviewResult(projectRoot, services);
     },
 

@@ -214,6 +214,50 @@ test('export refreshes latest export evidence without clearing existing finalize
   assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/post-finalize-review');
 });
 
+test('presentation action adapter finalizes through the protected core facade', async () => {
+  const { createPresentationActionAdapter } = await import('../presentation-action-adapter.mjs');
+
+  const coreCalls = [];
+  const adapter = createPresentationActionAdapter({
+    core: {
+      async finalize(projectRoot, options = {}) {
+        coreCalls.push(['finalize', projectRoot, options]);
+        return {
+          kind: 'presentation-finalize',
+          projectRoot,
+          status: 'pass',
+          outputs: {
+            outputDir: 'outputs/finalized',
+            pdf: 'outputs/finalized/deck.pdf',
+            report: 'outputs/finalized/report.json',
+            summary: 'outputs/finalized/summary.md',
+            slides: 'outputs/finalized/slides',
+          },
+          issues: [],
+        };
+      },
+    },
+  });
+
+  const result = await adapter.invoke('export_presentation', {
+    target: {
+      kind: 'project',
+      projectRootAbs: '/tmp/presentation-core-seam',
+    },
+  });
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.message, 'Presentation finalize completed.');
+  assert.equal(result.outputs.outputDir, 'outputs/finalized');
+  assert.equal(result.outputs.pdf, 'outputs/finalized/deck.pdf');
+  assert.match(result.detail, /outputs\/finalized\/deck\.pdf$/);
+  assert.deepEqual(coreCalls, [[
+    'finalize',
+    '/tmp/presentation-core-seam',
+    { target: 'run' },
+  ]]);
+});
+
 test('legacy finalize action delegates to the new finalize semantics', async (t) => {
   const [{ createProjectScaffold }, { createPresentationActionAdapter }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
