@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { getProjectPaths } from './deck-paths.js';
 
+export const PRESENTATION_INTENT_OWNERSHIP = 'authored-content';
+
 export function createInitialPresentationIntent(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
   return {
@@ -25,12 +27,39 @@ export function readPresentationIntent(projectRootInput) {
   return JSON.parse(readFileSync(paths.intentAbs, 'utf8'));
 }
 
-export function writeInitialPresentationIntent(projectRootInput) {
+export function ensurePresentationIntentFile(projectRootInput, options = {}) {
   const paths = getProjectPaths(projectRootInput);
-  const intent = createInitialPresentationIntent(projectRootInput);
+  if (existsSync(paths.intentAbs)) {
+    return {
+      intent: JSON.parse(readFileSync(paths.intentAbs, 'utf8')),
+      exists: true,
+      created: false,
+      ownership: PRESENTATION_INTENT_OWNERSHIP,
+    };
+  }
+
+  const intent = createInitialPresentationIntent(paths.projectRootAbs);
+  if (options.allowCreate === false) {
+    return {
+      intent,
+      exists: false,
+      created: false,
+      ownership: PRESENTATION_INTENT_OWNERSHIP,
+    };
+  }
+
   mkdirSync(dirname(paths.intentAbs), { recursive: true });
   writeFileSync(paths.intentAbs, `${JSON.stringify(intent, null, 2)}\n`);
-  return intent;
+  return {
+    intent,
+    exists: true,
+    created: true,
+    ownership: PRESENTATION_INTENT_OWNERSHIP,
+  };
+}
+
+export function writeInitialPresentationIntent(projectRootInput) {
+  return ensurePresentationIntentFile(projectRootInput, { allowCreate: true }).intent;
 }
 
 export function validatePresentationIntent(intent, manifest) {

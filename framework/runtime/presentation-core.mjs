@@ -9,7 +9,11 @@ import {
 } from './audit-service.js';
 import { getProjectPaths, toRelativeWithin } from './deck-paths.js';
 import { renderPresentationHtml } from './deck-assemble.js';
-import { ensurePresentationPackageFiles } from './presentation-package.js';
+import {
+  ensurePresentationPackageFiles,
+  PRESENTATION_PACKAGE_WRITE_ZONES,
+  withPresentationPackageMutationBoundary,
+} from './presentation-package.js';
 import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
 import { renderPresentationFailureHtml } from './preview-state-page.js';
 import { getProjectState } from './project-state.js';
@@ -31,6 +35,34 @@ export class PresentationCoreError extends Error {
 
 function createCoreError(message, options = {}) {
   return new PresentationCoreError(message, options);
+}
+
+const CORE_AUTHORED_CONTENT_GLOBS = Object.freeze([
+  'brief.md',
+  'outline.md',
+  'theme.css',
+  'slides/**/slide.html',
+  'slides/**/slide.css',
+  '.presentation/intent.json',
+]);
+
+const CORE_SYSTEM_WRITE_GLOBS = Object.freeze([
+  '.presentation/package.generated.json',
+  '.presentation/runtime/*.json',
+  'outputs/finalized/**',
+  'outputs/exports/**',
+]);
+
+const CORE_MUTATION_BOUNDARY = Object.freeze({
+  allowAuthoredContentWrites: false,
+  protectedZone: PRESENTATION_PACKAGE_WRITE_ZONES.AUTHORED_CONTENT,
+  protectedAuthoredContent: CORE_AUTHORED_CONTENT_GLOBS,
+  allowedSystemWrites: CORE_SYSTEM_WRITE_GLOBS,
+  reason: 'Presentation core queries and delivery operations may refresh generated structure and runtime evidence, but they must not author source or intent files.',
+});
+
+function runInsideCoreMutationBoundary(operation) {
+  return withPresentationPackageMutationBoundary(CORE_MUTATION_BOUNDARY, operation);
 }
 
 function buildStatusResult(state) {
@@ -204,215 +236,227 @@ export function createPresentationCore(deps = {}) {
 
   return {
     inspectPackage(projectRoot, options = {}) {
-      const target = String(options.target || 'package').trim().toLowerCase() || 'package';
-      if (target !== 'package') {
-        throw createCoreError(`Unsupported inspect target "${target}". Only "package" is available in Task 9.`, {
-          extra: {
-            scope: { kind: 'inspect-target', target },
+      return runInsideCoreMutationBoundary(() => {
+        const target = String(options.target || 'package').trim().toLowerCase() || 'package';
+        if (target !== 'package') {
+          throw createCoreError(`Unsupported inspect target "${target}". Only "package" is available in Task 9.`, {
+            extra: {
+              scope: { kind: 'inspect-target', target },
+            },
+          });
+        }
+
+        const { paths, manifest } = services.ensurePresentationPackageFiles(projectRoot);
+        const renderState = services.readRenderState(paths.projectRootAbs);
+        const artifacts = services.readArtifacts(paths.projectRootAbs);
+        const status = buildStatusResult(services.getProjectState(paths.projectRootAbs));
+
+        return {
+          kind: 'presentation-package',
+          projectRoot: paths.projectRootAbs,
+          title: paths.title,
+          slug: paths.slug,
+          manifest,
+          renderState,
+          artifacts,
+          status,
+          evidence: [
+            paths.packageManifestRel,
+            paths.renderStateRel,
+            paths.artifactsRel,
+          ],
+          freshness: {
+            relativeToSource: status.freshness.relativeToSource,
           },
-        });
-      }
-
-      const { paths, manifest } = services.ensurePresentationPackageFiles(projectRoot);
-      const renderState = services.readRenderState(paths.projectRootAbs);
-      const artifacts = services.readArtifacts(paths.projectRootAbs);
-      const status = buildStatusResult(services.getProjectState(paths.projectRootAbs));
-
-      return {
-        kind: 'presentation-package',
-        projectRoot: paths.projectRootAbs,
-        title: paths.title,
-        slug: paths.slug,
-        manifest,
-        renderState,
-        artifacts,
-        status,
-        evidence: [
-          paths.packageManifestRel,
-          paths.renderStateRel,
-          paths.artifactsRel,
-        ],
-        freshness: {
-          relativeToSource: status.freshness.relativeToSource,
-        },
-      };
+        };
+      });
     },
 
     getStatus(projectRoot) {
-      return buildStatusResult(services.getProjectState(projectRoot));
+      return runInsideCoreMutationBoundary(() => buildStatusResult(services.getProjectState(projectRoot)));
     },
 
     getPreview(projectRoot) {
-      return buildPreviewResult(projectRoot, services);
+      return runInsideCoreMutationBoundary(() => buildPreviewResult(projectRoot, services));
     },
 
     async runAudit(projectRoot, options = {}) {
-      const family = String(options.family || 'all').trim().toLowerCase() || 'all';
-      const runner = getAuditRunner(family, services);
-      const result = await runner(projectRoot, {
-        slideId: options.slideId || null,
-        path: options.path || null,
-        deck: Boolean(options.deck),
-        severity: options.severity || 'error',
-        strict: Boolean(options.strict),
-        render: Boolean(options.render),
-      });
+      return await runInsideCoreMutationBoundary(async () => {
+        const family = String(options.family || 'all').trim().toLowerCase() || 'all';
+        const runner = getAuditRunner(family, services);
+        const result = await runner(projectRoot, {
+          slideId: options.slideId || null,
+          path: options.path || null,
+          deck: Boolean(options.deck),
+          severity: options.severity || 'error',
+          strict: Boolean(options.strict),
+          render: Boolean(options.render),
+        });
 
-      return {
-        kind: 'presentation-audit',
-        family: result.family,
-        projectRoot: result.scope.projectRoot,
-        slideId: result.scope.slideId ?? null,
-        status: result.status,
-        issueCount: result.issueCount,
-        issues: result.issues,
-        nextFocus: result.nextFocus,
-        families: result.families,
-      };
+        return {
+          kind: 'presentation-audit',
+          family: result.family,
+          projectRoot: result.scope.projectRoot,
+          slideId: result.scope.slideId ?? null,
+          status: result.status,
+          issueCount: result.issueCount,
+          issues: result.issues,
+          nextFocus: result.nextFocus,
+          families: result.families,
+        };
+      });
     },
 
     async validatePresentation(projectRoot, options = {}) {
-      const target = String(options.target || 'run').trim().toLowerCase() || 'run';
-      if (target !== 'run') {
-        throw createCoreError(`Unsupported validate target "${target}".`, {
-          extra: {
-            scope: { kind: 'validate-target', target },
-          },
-        });
-      }
+      return await runInsideCoreMutationBoundary(async () => {
+        const target = String(options.target || 'run').trim().toLowerCase() || 'run';
+        if (target !== 'run') {
+          throw createCoreError(`Unsupported validate target "${target}".`, {
+            extra: {
+              scope: { kind: 'validate-target', target },
+            },
+          });
+        }
 
-      const { target: ignoredTarget, ...request } = options;
-      const paths = services.getProjectPaths(projectRoot);
-      const result = await services.validatePresentation({ projectRoot: paths.projectRootAbs }, request);
+        const { target: ignoredTarget, ...request } = options;
+        const paths = services.getProjectPaths(projectRoot);
+        const result = await services.validatePresentation({ projectRoot: paths.projectRootAbs }, request);
 
-      return {
-        kind: 'presentation-validation',
-        projectRoot: paths.projectRootAbs,
-        ...result,
-        failures: result.failures || [],
-        evidenceUpdated: [paths.renderStateRel],
-      };
+        return {
+          kind: 'presentation-validation',
+          projectRoot: paths.projectRootAbs,
+          ...result,
+          failures: result.failures || [],
+          evidenceUpdated: [paths.renderStateRel],
+        };
+      });
     },
 
     async capturePresentation(projectRoot, options = {}) {
-      const target = String(options.target || 'run').trim().toLowerCase() || 'run';
-      if (target !== 'run') {
-        throw createCoreError(`Unsupported capture target "${target}".`, {
-          extra: {
-            scope: { kind: 'capture-target', target },
-          },
-        });
-      }
+      return await runInsideCoreMutationBoundary(async () => {
+        const target = String(options.target || 'run').trim().toLowerCase() || 'run';
+        if (target !== 'run') {
+          throw createCoreError(`Unsupported capture target "${target}".`, {
+            extra: {
+              scope: { kind: 'capture-target', target },
+            },
+          });
+        }
 
-      const { target: ignoredTarget, outputDir, ...request } = options;
-      const paths = services.getProjectPaths(projectRoot);
-      const result = await services.capturePresentation({ projectRoot: paths.projectRootAbs }, outputDir, request);
+        const { target: ignoredTarget, outputDir, ...request } = options;
+        const paths = services.getProjectPaths(projectRoot);
+        const result = await services.capturePresentation({ projectRoot: paths.projectRootAbs }, outputDir, request);
 
-      return {
-        kind: 'presentation-capture',
-        projectRoot: paths.projectRootAbs,
-        ...result,
-      };
+        return {
+          kind: 'presentation-capture',
+          projectRoot: paths.projectRootAbs,
+          ...result,
+        };
+      });
     },
 
     async finalize(projectRoot, options = {}) {
-      const target = String(options.target || 'run').trim().toLowerCase() || 'run';
-      if (target !== 'run') {
-        throw createCoreError(`Unsupported finalize target "${target}".`, {
-          extra: {
-            scope: { kind: 'finalize-target', target },
-          },
-        });
-      }
+      return await runInsideCoreMutationBoundary(async () => {
+        const target = String(options.target || 'run').trim().toLowerCase() || 'run';
+        if (target !== 'run') {
+          throw createCoreError(`Unsupported finalize target "${target}".`, {
+            extra: {
+              scope: { kind: 'finalize-target', target },
+            },
+          });
+        }
 
-      const { target: ignoredTarget, ...request } = options;
-      const paths = services.getProjectPaths(projectRoot);
-      const result = await services.finalizePresentation({ projectRoot }, request);
+        const { target: ignoredTarget, ...request } = options;
+        const paths = services.getProjectPaths(projectRoot);
+        const result = await services.finalizePresentation({ projectRoot }, request);
 
-      return {
-        kind: 'presentation-finalize',
-        projectRoot: paths.projectRootAbs,
-        status: result.status,
-        outputs: result.outputs,
-        evidenceUpdated: [
-          paths.renderStateRel,
-          paths.artifactsRel,
-        ],
-        issues: result.issues || [],
-      };
+        return {
+          kind: 'presentation-finalize',
+          projectRoot: paths.projectRootAbs,
+          status: result.status,
+          outputs: result.outputs,
+          evidenceUpdated: [
+            paths.renderStateRel,
+            paths.artifactsRel,
+          ],
+          issues: result.issues || [],
+        };
+      });
     },
 
     async exportPresentation(projectRoot, options = {}) {
-      const paths = services.getProjectPaths(projectRoot);
-      const target = String(options.target || '').trim().toLowerCase();
-      if (!['pdf', 'screenshots'].includes(target)) {
-        throw createCoreError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
-          extra: {
-            scope: { kind: 'export-target', target: target || null },
-          },
-        });
-      }
-
-      const inspection = await this.inspectPackage(paths.projectRootAbs, { target: 'package' });
-      const manifest = inspection.manifest;
-      const requestedSlideIds = normalizeRequestedSlideIds(options.slideIds);
-      const slideIds = requestedSlideIds.length > 0
-        ? requestedSlideIds
-        : manifest.slides.map((slide) => slide.id);
-      const scope = buildExportScope(target, paths.projectRootAbs);
-
-      if (slideIds.length === 0) {
-        throw createCoreError('No slides are available to export.', {
-          status: 'unavailable',
-          extra: { scope },
-        });
-      }
-
-      const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
-      if (missingSlideIds.length > 0) {
-        throw createCoreError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
-          status: 'invalid-request',
-          extra: { scope },
-        });
-      }
-
-      const format = target === 'pdf' ? 'pdf' : 'png';
-      const outputDir = options.outputDir
-        ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
-        : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
-      const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
-
-      let result;
-      try {
-        result = await services.exportPresentation(
-          { projectRoot: paths.projectRootAbs },
-          {
-            format,
-            slideIds,
-            outputDir,
-            outputFile,
-          },
-          { cwd: paths.projectRootAbs }
-        );
-      } catch (error) {
-        const coreError = toExportRequestCoreError(error, scope);
-        if (coreError) {
-          throw coreError;
+      return await runInsideCoreMutationBoundary(async () => {
+        const paths = services.getProjectPaths(projectRoot);
+        const target = String(options.target || '').trim().toLowerCase();
+        if (!['pdf', 'screenshots'].includes(target)) {
+          throw createCoreError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
+            extra: {
+              scope: { kind: 'export-target', target: target || null },
+            },
+          });
         }
-        throw error;
-      }
 
-      return {
-        kind: 'presentation-export',
-        projectRoot: paths.projectRootAbs,
-        status: 'pass',
-        scope,
-        outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
-        artifacts: (result.outputPaths || [])
-          .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
-        evidenceUpdated: [paths.artifactsRel],
-        issues: [],
-      };
+        const inspection = await this.inspectPackage(paths.projectRootAbs, { target: 'package' });
+        const manifest = inspection.manifest;
+        const requestedSlideIds = normalizeRequestedSlideIds(options.slideIds);
+        const slideIds = requestedSlideIds.length > 0
+          ? requestedSlideIds
+          : manifest.slides.map((slide) => slide.id);
+        const scope = buildExportScope(target, paths.projectRootAbs);
+
+        if (slideIds.length === 0) {
+          throw createCoreError('No slides are available to export.', {
+            status: 'unavailable',
+            extra: { scope },
+          });
+        }
+
+        const missingSlideIds = getMissingSlideSelections(manifest, slideIds);
+        if (missingSlideIds.length > 0) {
+          throw createCoreError(`Unknown slide selections: ${missingSlideIds.join(', ')}`, {
+            status: 'invalid-request',
+            extra: { scope },
+          });
+        }
+
+        const format = target === 'pdf' ? 'pdf' : 'png';
+        const outputDir = options.outputDir
+          ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
+          : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
+        const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
+
+        let result;
+        try {
+          result = await services.exportPresentation(
+            { projectRoot: paths.projectRootAbs },
+            {
+              format,
+              slideIds,
+              outputDir,
+              outputFile,
+            },
+            { cwd: paths.projectRootAbs }
+          );
+        } catch (error) {
+          const coreError = toExportRequestCoreError(error, scope);
+          if (coreError) {
+            throw coreError;
+          }
+          throw error;
+        }
+
+        return {
+          kind: 'presentation-export',
+          projectRoot: paths.projectRootAbs,
+          status: 'pass',
+          scope,
+          outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
+          artifacts: (result.outputPaths || [])
+            .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
+          evidenceUpdated: [paths.artifactsRel],
+          issues: [],
+        };
+      });
     },
   };
 }
