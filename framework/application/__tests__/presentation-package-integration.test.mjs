@@ -258,6 +258,107 @@ test('presentation action adapter finalizes through the protected core facade', 
   ]]);
 });
 
+test('presentation action adapter validates through the protected core facade', async () => {
+  const { createPresentationActionAdapter } = await import('../presentation-action-adapter.mjs');
+
+  const coreCalls = [];
+  const adapter = createPresentationActionAdapter({
+    core: {
+      async validatePresentation(projectRoot, options = {}) {
+        coreCalls.push(['validatePresentation', projectRoot, options]);
+        return {
+          kind: 'presentation-validation',
+          projectRoot,
+          status: 'fail',
+          outputDir: '/tmp/presentation-core-seam-check',
+          slideCount: 2,
+          consoleErrors: 0,
+          overflowSlides: [],
+          failures: ['Inline style violation'],
+          evidenceUpdated: ['.presentation/runtime/render-state.json'],
+        };
+      },
+    },
+  });
+
+  const result = await adapter.invoke('validate_presentation', {
+    target: {
+      kind: 'project',
+      projectRootAbs: '/tmp/presentation-core-seam',
+    },
+    args: {
+      options: {
+        strict: true,
+      },
+    },
+    outputPaths: {
+      outputDirAbs: '/tmp/presentation-core-seam-check',
+    },
+  });
+
+  assert.equal(result.status, 'fail');
+  assert.equal(result.message, 'Presentation validation found issues.');
+  assert.equal(result.detail, 'Inline style violation');
+  assert.deepEqual(coreCalls, [[
+    'validatePresentation',
+    '/tmp/presentation-core-seam',
+    {
+      strict: true,
+      outputDir: '/tmp/presentation-core-seam-check',
+    },
+  ]]);
+});
+
+test('presentation action adapter captures screenshots through the protected core facade', async () => {
+  const { createPresentationActionAdapter } = await import('../presentation-action-adapter.mjs');
+
+  const coreCalls = [];
+  const adapter = createPresentationActionAdapter({
+    core: {
+      async capturePresentation(projectRoot, options = {}) {
+        coreCalls.push(['capturePresentation', projectRoot, options]);
+        return {
+          kind: 'presentation-capture',
+          projectRoot,
+          status: 'fail',
+          outputDir: '/tmp/presentation-core-seam-capture',
+          slideCount: 1,
+          consoleErrors: ['Console exploded'],
+          overflowSlides: ['intro'],
+          issues: [],
+          slides: [],
+        };
+      },
+    },
+  });
+
+  const result = await adapter.invoke('capture_screenshots', {
+    target: {
+      kind: 'project',
+      projectRootAbs: '/tmp/presentation-core-seam',
+    },
+    args: {
+      options: {
+        captureFullPage: false,
+      },
+    },
+    outputPaths: {
+      outputDirAbs: '/tmp/presentation-core-seam-capture',
+    },
+  });
+
+  assert.equal(result.status, 'fail');
+  assert.equal(result.message, 'Screenshot capture found issues.');
+  assert.deepEqual(coreCalls, [[
+    'capturePresentation',
+    '/tmp/presentation-core-seam',
+    {
+      outputDir: '/tmp/presentation-core-seam-capture',
+      captureFullPage: false,
+    },
+  ]]);
+});
+
 test('legacy finalize action delegates to the new finalize semantics', async (t) => {
   const [{ createProjectScaffold }, { createPresentationActionAdapter }] = await Promise.all([
     import('../project-scaffold-service.mjs'),

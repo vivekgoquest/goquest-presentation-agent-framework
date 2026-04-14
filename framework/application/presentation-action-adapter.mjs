@@ -1,7 +1,3 @@
-import {
-  capturePresentation,
-  validatePresentation,
-} from '../runtime/services/presentation-ops-service.mjs';
 import { createPresentationCore } from '../runtime/presentation-core.mjs';
 
 function toActionMessage(actionId, result = {}) {
@@ -93,7 +89,7 @@ export function createPresentationActionAdapter(options = {}) {
           };
         }
         case 'validate_presentation': {
-          const result = await validatePresentation(target, {
+          const result = await core.validatePresentation(projectRoot, {
             ...(args.options || {}),
             outputDir: args.outputDir || args.options?.outputDir || outputPaths.outputDirAbs,
           });
@@ -105,11 +101,10 @@ export function createPresentationActionAdapter(options = {}) {
           };
         }
         case 'capture_screenshots': {
-          const result = await capturePresentation(
-            target,
-            args.outputDir || outputPaths.outputDirAbs,
-            args.options || {}
-          );
+          const result = await core.capturePresentation(projectRoot, {
+            outputDir: args.outputDir || outputPaths.outputDirAbs,
+            ...(args.options || {}),
+          });
           return {
             ...result,
             status: result.status || 'pass',

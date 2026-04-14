@@ -14,8 +14,10 @@ import { readArtifacts, readRenderState } from './presentation-runtime-state.js'
 import { renderPresentationFailureHtml } from './preview-state-page.js';
 import { getProjectState } from './project-state.js';
 import {
+  capturePresentation as capturePresentationOperation,
   exportPresentation as exportPresentationOperation,
   finalizePresentation,
+  validatePresentation as validatePresentationOperation,
 } from './services/presentation-ops-service.mjs';
 
 export class PresentationCoreError extends Error {
@@ -195,6 +197,8 @@ export function createPresentationCore(deps = {}) {
     runAuditAll,
     finalizePresentation,
     exportPresentation: exportPresentationOperation,
+    validatePresentation: validatePresentationOperation,
+    capturePresentation: capturePresentationOperation,
     ...deps,
   };
 
@@ -264,6 +268,50 @@ export function createPresentationCore(deps = {}) {
         issues: result.issues,
         nextFocus: result.nextFocus,
         families: result.families,
+      };
+    },
+
+    async validatePresentation(projectRoot, options = {}) {
+      const target = String(options.target || 'run').trim().toLowerCase() || 'run';
+      if (target !== 'run') {
+        throw createCoreError(`Unsupported validate target "${target}".`, {
+          extra: {
+            scope: { kind: 'validate-target', target },
+          },
+        });
+      }
+
+      const { target: ignoredTarget, ...request } = options;
+      const paths = services.getProjectPaths(projectRoot);
+      const result = await services.validatePresentation({ projectRoot: paths.projectRootAbs }, request);
+
+      return {
+        kind: 'presentation-validation',
+        projectRoot: paths.projectRootAbs,
+        ...result,
+        failures: result.failures || [],
+        evidenceUpdated: [paths.renderStateRel],
+      };
+    },
+
+    async capturePresentation(projectRoot, options = {}) {
+      const target = String(options.target || 'run').trim().toLowerCase() || 'run';
+      if (target !== 'run') {
+        throw createCoreError(`Unsupported capture target "${target}".`, {
+          extra: {
+            scope: { kind: 'capture-target', target },
+          },
+        });
+      }
+
+      const { target: ignoredTarget, outputDir, ...request } = options;
+      const paths = services.getProjectPaths(projectRoot);
+      const result = await services.capturePresentation({ projectRoot: paths.projectRootAbs }, outputDir, request);
+
+      return {
+        kind: 'presentation-capture',
+        projectRoot: paths.projectRootAbs,
+        ...result,
       };
     },
 
