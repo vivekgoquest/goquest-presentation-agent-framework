@@ -2,47 +2,70 @@
 
 ## Purpose
 
-This document defines the canonical user-facing structure of a scaffolded presentation project.
+This document defines the canonical **v1 shell-less presentation project**.
 
-The rebuilt core separates six concerns cleanly:
+The first shipped product is:
+- one **installed system**
+- containing the **core** and **CLI**
+- with **no shell required**
 
-1. authored source
-2. authored intent
-3. deterministic generated structure
-4. deterministic runtime evidence
-5. delivery outputs
-6. git-backed agent-internal history
+A presentation project is then created by `init` and used primarily by an agent.
 
-This package model exists so:
+The package separates four concerns cleanly:
 
-- humans can edit the presentation naturally
-- agents do not need to hand-maintain structural bookkeeping
-- runtime can record what was most recently observed
-- delivery outputs are clearly separated from evidence
-- git remains the history lane for agent work
+1. **installed system** — shared sacred logic
+2. **authored presentation workspace** — mutable project files
+3. **hidden project machinery** — `.presentation/` state and shims
+4. **user-facing deliverable** — exported PDF at the project root
+
+The shell may be added later, but the core product must already work without it.
+
+---
 
 ## Core Principle
 
 The agent should author:
-
-- content
-- editorial intent
-- optional narrative metadata
+- presentation content
+- deck-specific theme expression
+- optional structured intent
 
 The system should author:
-
-- package structure
+- hidden project metadata
+- deterministic generated structure
 - runtime evidence
-- artifact inventory
-- delivery outputs produced by explicit commands
+- local shim/wrapper files created by `init`
+- final exported PDF artifacts produced by explicit commands
 
-Git should record:
+The package should not require a shell to function.
 
-- evolution over time
-- agent milestones
-- diffs between meaningful states
+---
 
-The package should not maintain a separate history file alongside git.
+## Installed System Model
+
+The installed system is the shared sacred layer.
+
+It provides:
+- the **core**
+- the **CLI**
+- `init`
+- `inspect`
+- `status`
+- `audit`
+- `preview`
+- `finalize`
+- `export`
+
+The installed system owns:
+- package semantics
+- validators and audits
+- preview assembly
+- finalize/export orchestration
+- deterministic issue language
+- default project scaffolding templates
+
+It does **not** own one presentation’s mutable authored content.
+
+---
 
 ## Mutation Boundary
 
@@ -51,37 +74,37 @@ The rebuilt core enforces a hard authorship boundary.
 ### Only the agent may mutate authored content
 
 After project creation/scaffolding, only the agent may change authored presentation content such as:
-
 - `brief.md`
 - `theme.css`
+- `outline.md` when present
 - `slides/<NNN-id>/slide.html`
 - optional `slides/<NNN-id>/slide.css`
 - author-managed assets under `assets/` and `slides/<NNN-id>/assets/`
 
-Validators, audits, status checks, export flows, finalize flows, hooks, and shells may inspect this content, render it, diagnose it, and report issues against it, but they must not silently repair or rewrite it.
+Validators, audits, preview, export, finalize, hooks, and shells may inspect this content, render it, diagnose it, and report issues against it, but they must not silently repair or rewrite it.
 
 ### What the system may mutate
 
 The headless core may still create or update system-owned files such as:
-
+- `.presentation/project.json`
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- canonical delivery outputs under `outputs/finalized/`
-- ad hoc export outputs under `outputs/exports/`
+- `.presentation/framework-cli.mjs`
+- scaffolded local agent guidance/support files
+- the exported PDF at the project root
 
-These are generated structure, runtime evidence, and delivery artifacts. They are not authored presentation content.
+These are hidden project machinery or produced deliverables. They are not authored presentation content.
 
 ### Intent boundary
 
 `/.presentation/intent.json` is authorable intent, but it is not allowed to define structural truth such as slide existence, slide ids, or slide order.
 
-In normal authoring, the agent owns meaningful intent edits. The core may bootstrap an initial `intent.json` when scaffolding a project or regenerating missing system files, but that bootstrap behavior does not weaken the authored-content rule above.
+In normal authoring, the agent owns meaningful intent edits. The core may bootstrap an initial `intent.json` when scaffolding a project or repairing missing hidden project machinery, but that bootstrap behavior does not weaken the authored-content rule above.
 
 ### Validator and shell rule
 
 Validators and reviewers may:
-
 - inspect source
 - classify issues
 - produce deterministic findings
@@ -89,30 +112,37 @@ Validators and reviewers may:
 - route feedback into agent workflows
 
 They may not:
-
 - patch authored content directly
 - auto-fix authored content
 - bypass the agent by mutating source from the shell
 
 A shell should show state and invoke operations. It should not become a second authoring authority.
 
+---
+
 ## Operational Surface
 
-The package’s canonical command families are:
-
+The canonical core surface for the shell-less v1 product is:
+- `presentation init ...`
 - `presentation inspect ...`
 - `presentation status ...`
 - `presentation audit ...`
+- `presentation preview ...`
 - `presentation finalize ...`
 - `presentation export ...`
 
 Use them this way:
-
+- `init` to scaffold a new project
 - `inspect` for inventory and package facts
 - `status` for interpreted workflow state
 - `audit` for deterministic diagnostics
-- `finalize` for canonical delivery outputs under `outputs/finalized/`
-- `export` for ad hoc artifacts under `outputs/exports/<run-id>/`
+- `preview` for core-owned preview generation/serving
+- `finalize` for canonical final delivery generation
+- `export` for explicit artifact emission
+
+The shell may later wrap these operations, but it does not define them.
+
+---
 
 ## Package Layout
 
@@ -120,7 +150,7 @@ Use them this way:
 <project-root>/
   brief.md
   theme.css
-  outline.md                          # optional, long decks
+  outline.md                          # optional
   slides/
     010-intro/
       slide.html
@@ -128,23 +158,11 @@ Use them this way:
       assets/                         # optional
     020-problem/
       slide.html
+    030-close/
+      slide.html
   assets/
 
-  outputs/
-    finalized/
-      deck.pdf
-      full-page.png
-      report.json
-      summary.md
-      slides/
-        slide-intro.png
-        slide-problem.png
-    exports/
-      <run-id>/
-        pdf/
-          my-presentation.pdf
-        screenshots/
-          slide-intro.png
+  my-deck.pdf                         # appears after export/finalize
 
   .presentation/
     project.json
@@ -153,21 +171,48 @@ Use them this way:
     runtime/
       render-state.json
       artifacts.json
-    framework/
-      base/
-      overrides/
+    framework-cli.mjs
+    agent/
+      AGENTS.md
+      CLAUDE.md                       # optional/vendor-specific
+      hooks/
+        run-presentation-stop-workflow.mjs
 
-  .claude/
   .git/
   .gitignore
 ```
 
+### Root-level rule
+
+The project root is the visible workspace.
+
+It should contain:
+- authored presentation files
+- the final exported PDF
+
+It should **not** contain hidden package machinery beyond `.presentation/`.
+
+### Hidden-folder rule
+
+`.presentation/` is hidden project machinery.
+
+It should contain:
+- metadata
+- intent
+- generated structure
+- runtime evidence
+- local shim/entrypoints
+- local agent guidance/support files
+
+It should **not** be the main authored workspace.
+
+---
+
 ## File Roles
 
-### Authored source
+### Authored presentation source
 
 These files are the editable presentation source:
-
 - `brief.md`
 - `theme.css`
 - `outline.md` when required
@@ -178,18 +223,18 @@ These files are the editable presentation source:
 
 They define the deck as humans and agents intentionally author it.
 
-### Stable package identity
+### Hidden project metadata
 
 `/.presentation/project.json`
 
-This is stable package identity and framework linkage. It should stay boring.
+This is stable hidden project identity/metadata for the initialized project.
 
-It holds package-level facts such as:
+It should stay small and boring.
 
-- project identity
-- framework linkage mode
-- framework version/source
-- protected package invariants such as canvas policy
+In v1 it should identify only what is necessary to:
+- mark the folder as a valid presentation project
+- record minimal schema/project information
+- aid diagnostics
 
 This file is system-owned and should not be edited during normal authoring.
 
@@ -200,7 +245,6 @@ This file is system-owned and should not be edited during normal authoring.
 This is the structured package file the agent may author directly.
 
 It is for meaning that deterministic code cannot infer from the filesystem, such as:
-
 - audience
 - objective
 - tone
@@ -220,7 +264,6 @@ This is the authoritative structural manifest for the package.
 It is regenerated from source by deterministic code and should never be hand-edited.
 
 It answers questions like:
-
 - what slides exist
 - what order they are in
 - which source files define them
@@ -232,7 +275,6 @@ It answers questions like:
 `/.presentation/runtime/render-state.json`
 
 Current remembered runtime truth about the latest explicit render-backed judgment, including:
-
 - source fingerprint
 - producer
 - status
@@ -243,55 +285,124 @@ Current remembered runtime truth about the latest explicit render-backed judgmen
 
 `/.presentation/runtime/artifacts.json`
 
-Current remembered artifact inventory, split into:
-
-- canonical finalized outputs
-- latest ad hoc export inventory
+Current remembered artifact inventory, including the current exported/finalized PDF known to the system.
 
 These files are evidence, not source.
 They may be missing or stale relative to current authored state.
 
-### Delivery outputs
+### Local project shim
 
-`/outputs/finalized/`
+`/.presentation/framework-cli.mjs`
 
-This is the canonical delivery boundary produced by `presentation finalize`.
+This is the preferred local project entrypoint for agents.
 
-Typical contents:
+It should:
+- anchor execution to the current project
+- resolve the installed system via standard package resolution
+- perform lightweight project checks
+- delegate into the installed core/CLI behavior
+- fail clearly with repair guidance if the installed system is missing or unusable
 
-- `outputs/finalized/deck.pdf`
-- `outputs/finalized/full-page.png`
-- `outputs/finalized/report.json`
-- `outputs/finalized/summary.md`
-- `outputs/finalized/slides/*.png`
+It must not duplicate core semantics.
 
-`/outputs/exports/<run-id>/`
+### Local agent guidance/support files
 
-This is the ad hoc export area produced by `presentation export`.
+`/.presentation/agent/*`
 
-Typical contents:
+These are project-local guidance/support files scaffolded by `init`.
 
-- selected-slide PDFs
-- screenshot sets
-- other non-canonical delivery artifacts
+They may explain:
+- what files are mutable
+- what files are protected
+- the preferred local entrypoint
+- the normal authoring workflow
+- hard boundaries for the agent
 
-### Git-backed agent-internal history
+They are guidance/adapters, not the authority on system semantics.
 
-`/.git/`
+### User-facing deliverable
 
-Git is the history lane for the package.
+`/<project-slug>.pdf`
 
-It should be treated as:
+This is the final user-facing PDF produced by `export` or `finalize`.
 
-- evolution log
-- milestone history
-- diff/navigation substrate
+Users care about this artifact, not the hidden package machinery.
 
-It should not be treated as:
+---
 
-- the current structural manifest
-- the current runtime evidence record
-- the delivery output directory
+## Design System Placement
+
+The design system is split across two levels.
+
+### Installed core
+
+The installed core holds the **shared framework design system**.
+
+This includes:
+- canvas/stage contract
+- protected layout primitives
+- token ownership rules
+- theme boundary rules
+- allowed structural affordances
+- shared templates and starter visual grammar
+- deterministic audit rules
+- deterministic issue vocabulary for visual/system drift
+- preview/render logic that interprets the framework correctly
+
+This layer is shared, non-project-specific, and not agent-authored during normal presentation work.
+
+### Project workspace
+
+The project workspace holds the **deck-specific expression** of that shared design system.
+
+This primarily lives in:
+- `theme.css`
+- `slides/**/slide.html`
+- optional `slides/**/slide.css`
+- deck assets under `assets/` and `slides/**/assets/`
+
+#### `theme.css`
+
+`theme.css` is the main project-level design-system file.
+
+It should define the deck’s specific:
+- palette
+- typography choices
+- spacing feel
+- component styling
+- visual tone
+- reusable deck-local tokens
+
+But it must do so within the framework constraints owned by the installed core.
+
+### Hidden project machinery
+
+`.presentation/` is not the primary home of design-system authorship.
+
+It should hold only:
+- metadata
+- structure
+- runtime evidence
+- shim/guidance/support files
+
+So design-system information appears there only as:
+- remembered evidence
+- generated structure
+- validation outcomes
+- operational metadata
+
+### Exported PDF
+
+The exported PDF is the **user-facing manifestation** of the design system.
+
+Users do not need to understand framework tokens or hidden package files. They experience the design system only through:
+- coherence
+- consistency
+- readability
+- polish
+- structure in the final presentation
+
+---
 
 ## Ownership Matrix
 
@@ -318,21 +429,27 @@ Editing source may cause this file to change, but deterministic package operatio
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
+- `.presentation/framework-cli.mjs`
+- `.presentation/agent/*` unless explicitly doing system-guidance work
 
-### Runtime can write
+### Runtime/core can write
 
+- `.presentation/project.json` during init/repair flows
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `outputs/finalized/**`
-- `outputs/exports/**`
+- `.presentation/framework-cli.mjs`
+- scaffolded `.presentation/agent/*`
+- the exported PDF at the project root
 
 ### System-only / protected
 
-- `.presentation/framework/`
-- shared framework internals
-- canvas internals
-- scaffolded `.claude/` package structure except during explicit framework work
+- installed shared core logic
+- installed framework internals
+- shared canvas internals
+- local shim implementation details except during explicit system work
+
+---
 
 ## Example File Shapes
 
@@ -345,18 +462,15 @@ Illustrative example:
   "projectMode": "project-folder",
   "projectName": "My Presentation",
   "projectSlug": "my-presentation",
-  "frameworkMode": "linked",
-  "frameworkVersion": "1.0.0",
-  "frameworkSource": "/abs/path/to/framework",
-  "frameworkSourceVersion": "1.0.0",
-  "frameworkCopiedAt": null,
+  "projectSchemaVersion": 1,
+  "createdWithCoreVersion": "1.0.0",
   "canvasPolicy": "protected"
 }
 ```
 
-Implementation note:
-- current scaffolded `project.json` still includes a legacy `historyPolicy` field for compatibility
-- in the rebuilt core, git is the real history substrate and callers should not treat that field as a user-facing workflow concept
+V1 note:
+- keep compatibility metadata minimal
+- do not over-design version negotiation for the first shipped version
 
 ### `intent.json`
 
@@ -439,7 +553,7 @@ Implementation note:
   "kind": "render-state",
   "sourceFingerprint": "sha256:...",
   "generatedAt": "2026-04-12T12:34:56.000Z",
-  "producer": "finalize",
+  "producer": "preview",
   "status": "pass",
   "slideIds": ["intro", "problem", "close"],
   "previewKind": "slides",
@@ -465,87 +579,73 @@ Implementation note:
   "generatedAt": "2026-04-12T12:35:10.000Z",
   "finalized": {
     "exists": true,
-    "outputDir": "outputs/finalized",
     "pdf": {
-      "path": "outputs/finalized/deck.pdf"
-    },
-    "fullPage": {
-      "path": "outputs/finalized/full-page.png"
-    },
-    "report": {
-      "path": "outputs/finalized/report.json"
-    },
-    "summary": {
-      "path": "outputs/finalized/summary.md"
-    },
-    "slides": [
-      {
-        "id": "intro",
-        "path": "outputs/finalized/slides/slide-intro.png"
-      }
-    ]
+      "path": "my-presentation.pdf"
+    }
   },
   "latestExport": {
     "exists": true,
     "format": "pdf",
-    "outputDir": "outputs/exports/2026-04-12T12-40-00Z/pdf",
     "pdf": {
-      "path": "outputs/exports/2026-04-12T12-40-00Z/pdf/my-presentation.pdf"
-    },
-    "slides": [],
-    "artifacts": [
-      {
-        "path": "outputs/exports/2026-04-12T12-40-00Z/pdf/my-presentation.pdf"
-      }
-    ]
+      "path": "my-presentation.pdf"
+    }
   }
 }
 ```
 
+---
+
 ## Package Workflow Model
 
-A typical package loop now looks like this:
+A typical v1 package loop now looks like this:
 
-1. author source and intent
-2. run `presentation inspect ...` to orient
-3. run `presentation status ...` to understand workflow state
-4. run `presentation audit ...` to get deterministic diagnostics
-5. run `presentation finalize ...` to produce canonical delivery outputs
-6. run `presentation export ...` for non-canonical artifact requests
-7. use git directly for history, rollback, and milestone navigation
+1. install the system
+2. run `presentation init /abs/path-to-project`
+3. edit root-level authored files
+4. use `.presentation/framework-cli.mjs` as the preferred local project entrypoint
+5. run `inspect` and `status` to orient
+6. run `audit` to get deterministic diagnostics
+7. run `preview` to inspect the rendered deck without a shell
+8. run `finalize` or `export` to produce the root-level PDF
+9. use git directly for history, rollback, and milestone navigation
 
-Hooks or adapters may surface diagnostics, but the package meaning lives in these package-level operations.
+Hooks or shells may later wrap these operations, but the package meaning lives in the installed core plus the project-local shim.
+
+---
 
 ## What This Solves
 
 This package model removes recurring failure modes:
 
-1. agents forgetting to update structural bookkeeping
-2. runtime evidence being mixed with delivery outputs
-3. delivery artifacts being confused with source
-4. history semantics being spread across package files instead of git
+1. agents needing to know where the sacred installed core lives
+2. hidden project machinery getting confused with authored source
+3. user-facing deliverables being buried inside hidden system trees
+4. shells becoming required before the core product is usable
+5. framework design-system rules getting duplicated into each project
 
 With this model:
+- source stays visible and editable
+- hidden machinery stays hidden
+- the design system is shared in the installed core and expressed in the project theme/source
+- the agent has a stable local project entrypoint
+- the final PDF appears where the user expects it
 
-- source stays editable
-- structure stays deterministic
-- evidence stays explicit
-- delivery outputs stay legible
-- git remains the history substrate
+---
 
 ## Status
 
-Implemented now:
-
-- `.presentation/intent.json`
-- `.presentation/package.generated.json`
-- `.presentation/runtime/render-state.json`
-- `.presentation/runtime/artifacts.json`
-- split delivery output layout under `outputs/finalized/` and `outputs/exports/`
-- package-oriented CLI families for inspect, status, audit, finalize, and export
+Target v1 model:
+- installed system ships core + CLI first
+- shell is optional and deferred
+- preview is part of the core surface
+- every project gets a hidden local shim in `.presentation/`
+- the shim resolves the installed system using standard package resolution
+- the shim fails hard with repair guidance when needed
+- authored presentation files stay at the project root
+- hidden project machinery stays under `.presentation/`
+- the final exported PDF lands at the project root
 
 Still evolving:
-
-- broader inspect/status subcommands over the same package model
-- richer deterministic explanation layers for audits and status
-- any future migration tooling beyond the current regeneration-on-use behavior
+- the exact shell contract for later UI work
+- richer preview/export options beyond the shell-less first version
+- a fuller compatibility/migration story after real usage informs it

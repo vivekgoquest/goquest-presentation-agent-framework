@@ -7853,6 +7853,252 @@ The safest order is:
 
 That sequence best preserves correctness while moving the codebase toward the new MECE package core.
 
+## 35A. Shell-less v1 Packaging, Project, and Init Model
+
+This section captures the first shippable product model after stepping back from shell concerns.
+
+It is intentionally simpler than the broader earlier exploration.
+For the first shipped version, these shell-less v1 sections are authoritative where they differ from older output-tree or shell-adjacent ideas.
+
+### 35A.1 Product posture
+
+The first shipped product should be:
+- one installed system
+- containing the shared core and CLI
+- usable without any shell
+
+A shell may be added later, but the system must already work with:
+- installed core
+- installed CLI
+- an agent operating inside a project folder
+
+### 35A.2 Installed system vs project vs deliverable
+
+The model is three-layered.
+
+#### Installed system
+The installed system is the sacred/common layer.
+
+It owns:
+- shared core semantics
+- validators and audits
+- preview/finalize/export orchestration
+- init/scaffolding logic
+- shared framework design-system rules
+- CLI behavior
+
+#### Project workspace
+The project workspace is one mutable presentation.
+
+It owns:
+- authored source at the project root
+- hidden project machinery under `.presentation/`
+- local agent guidance/support files scaffolded by init
+
+#### Deliverable
+The user-facing deliverable is the exported PDF at the project root.
+
+Users care about the final PDF, not the hidden package machinery.
+
+### 35A.3 Root vs hidden-folder rule
+
+The project root should contain:
+- authored presentation files
+- the final exported PDF
+
+The hidden `.presentation/` folder should contain:
+- project metadata
+- intent
+- generated structure
+- runtime evidence
+- the local project shim
+- local agent guidance/support files
+
+The hidden folder should not become the main authored workspace.
+
+### 35A.4 Local shim rule
+
+Every initialized project should get a hidden local shim in:
+- `.presentation/framework-cli.mjs`
+
+This shim is the preferred local project entrypoint for agents.
+
+It should:
+- anchor execution to the current project
+- resolve the installed system through standard package resolution
+- perform lightweight project checks
+- forward commands into the installed core
+- fail clearly with repair guidance if the installed system is missing or incompatible
+
+It should not:
+- duplicate core logic
+- hold workflow semantics
+- bake in machine-specific absolute install paths
+
+### 35A.5 Init rule
+
+`init` is a core-owned scaffolding operation.
+
+It should create:
+- root-level authored presentation files
+- hidden `.presentation/` machinery
+- the local shim
+- local agent guidance/support files
+
+It should not:
+- require a shell
+- copy the full sacred core into the project
+- create final export artifacts up front
+- make the agent guess where the local entrypoint is
+
+### 35A.6 Minimal v1 project shape
+
+The intended shell-less v1 shape is:
+
+```text
+<project-root>/
+  brief.md
+  theme.css
+  outline.md                  # optional
+  slides/**
+  assets/**
+  <project-slug>.pdf          # appears after export/finalize
+  .presentation/
+    project.json
+    intent.json
+    package.generated.json
+    runtime/
+      render-state.json
+      artifacts.json
+    framework-cli.mjs
+    agent/**
+```
+
+### 35A.7 Failure posture for v1
+
+If the shim cannot resolve the installed system, or if the project is obviously unsupported:
+- fail hard
+- provide clear repair guidance
+- do not auto-repair in v1
+
+This keeps the system honest and avoids hidden mutation or surprising environment changes.
+
+## 35B. Design System Placement Spec
+
+The Hardik-style design-system model should appear in this architecture, but it should be placed carefully.
+
+### 35B.1 Core placement rule
+
+The installed system holds the shared framework design system.
+
+That includes:
+- canvas/stage contract
+- protected layout primitives
+- token ownership rules
+- shared structural affordances
+- deterministic audit rules
+- deterministic issue vocabulary
+- preview/render behavior that interprets the framework correctly
+
+This is the sacred/common design language.
+
+### 35B.2 Project placement rule
+
+The project workspace holds the deck-specific expression of that shared design system.
+
+This primarily lives in:
+- `theme.css`
+- `slides/**/slide.html`
+- optional `slides/**/slide.css`
+- presentation assets
+
+`theme.css` is the main editable deck-specific design-system file.
+
+### 35B.3 Hidden-folder rule for design-system material
+
+`.presentation/` is not the primary home of design-system authorship.
+
+It should contain design-system-related information only as:
+- generated structure
+- remembered evidence
+- validation outcomes
+- operational metadata
+
+It should not become the main place where the deck’s visual language is authored.
+
+### 35B.4 Deliverable rule
+
+The final PDF is the user-facing manifestation of the design system.
+
+End users do not need to understand framework tokens or hidden package files.
+They experience the design system through the rendered/exported deck.
+
+### 35B.5 Agent boundary rule
+
+The agent may edit:
+- deck-specific design-system expression in `theme.css`
+- slide structure/content in `slide.html`
+- optional slide-local `slide.css`
+- supporting assets
+
+The agent may read but should not normally mutate:
+- installed shared design-system logic
+- hidden package-generated structure
+- runtime evidence
+- local shim implementation details
+
+## 35C. Precise v1 Init Behavior Spec
+
+### 35C.1 Purpose of init
+
+`init` creates a valid presentation project that can be used immediately by:
+- the installed system
+- the CLI
+- an agent
+- later shells, if added
+
+It must produce a mutable presentation workspace plus hidden project machinery.
+
+### 35C.2 What init must create at project root
+
+`init` must create templated authored files such as:
+- `brief.md`
+- `theme.css`
+- starter `slides/**/slide.html`
+- `assets/`
+- optional `outline.md` only when the template/mode requires it
+
+The starter slides should already satisfy the structural slide-root contract.
+
+### 35C.3 What init must create in `.presentation/`
+
+`init` must create:
+- `.presentation/project.json`
+- `.presentation/intent.json`
+- `.presentation/package.generated.json`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
+- `.presentation/framework-cli.mjs`
+- `.presentation/agent/*` guidance/support files
+
+### 35C.4 What init must never do
+
+`init` must not:
+- require the shell
+- generate the final exported PDF
+- copy the whole sacred core into the project
+- hide the main authored source inside `.presentation/`
+- record machine-specific absolute install paths in project files
+
+### 35C.5 Init success criteria
+
+A successful init guarantees:
+- the project is structurally valid
+- the local shim exists
+- authored files exist at the project root
+- hidden machinery exists under `.presentation/`
+- inspect/status/audit/preview can operate immediately
+
 ## 36. Update Instructions for This Document
 
 As the architecture discussion continues, this document should be updated rather than replaced.
