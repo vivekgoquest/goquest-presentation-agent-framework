@@ -7,6 +7,7 @@ import {
   createPresentationTarget,
   getPresentationOutputPaths,
   getProjectPaths,
+  readProjectCompatibilityMetadata,
 } from '../runtime/deck-paths.js';
 import { createPresentationCore } from '../runtime/presentation-core.mjs';
 import { buildProjectTreeNode } from '../runtime/project-tree.js';
@@ -206,6 +207,8 @@ export function createProjectQueryService(options = {}) {
       };
     }
 
+    const compatibilityMetadata = readProjectCompatibilityMetadata(activeProjectPaths.projectRootAbs);
+
     return {
       active: true,
       kind: 'project',
@@ -214,11 +217,11 @@ export function createProjectQueryService(options = {}) {
       slug: activeProjectPaths.slug,
       previewPath: PROJECT_PREVIEW_PATH,
       projectMode: activeProjectPaths.metadata.projectMode,
-      frameworkMode: activeProjectPaths.metadata.frameworkMode,
+      frameworkMode: activeProjectPaths.frameworkMode,
       frameworkVersion: activeProjectPaths.metadata.frameworkVersion,
-      frameworkCopiedAt: activeProjectPaths.metadata.frameworkCopiedAt,
+      frameworkCopiedAt: compatibilityMetadata.frameworkCopiedAt,
       canvasPolicy: activeProjectPaths.metadata.canvasPolicy,
-      historyPolicy: activeProjectPaths.metadata.historyPolicy,
+      historyPolicy: compatibilityMetadata.historyPolicy,
       packageModel: 'deterministic',
       outputsPath: activeProjectPaths.outputsDirAbs,
     };

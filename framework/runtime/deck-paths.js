@@ -178,6 +178,24 @@ function buildDefaultProjectMetadata(projectRootAbs) {
   };
 }
 
+function hasCopiedFrameworkSnapshot(projectRootInput) {
+  const { frameworkBaseAbs } = getProjectSystemPaths(projectRootInput);
+  return existsSync(resolve(frameworkBaseAbs, 'runtime', 'presentation-cli.mjs'));
+}
+
+function createCompatibilityMetadata(projectRootAbs, metadata) {
+  return {
+    ...metadata,
+    frameworkMode: VALID_FRAMEWORK_MODES.has(metadata.frameworkMode)
+      ? metadata.frameworkMode
+      : (hasCopiedFrameworkSnapshot(projectRootAbs) ? 'copied' : 'linked'),
+    frameworkSource: metadata.frameworkSource || FRAMEWORK_ROOT,
+    frameworkSourceVersion: metadata.frameworkSourceVersion || metadata.frameworkVersion,
+    frameworkCopiedAt: metadata.frameworkCopiedAt || null,
+    historyPolicy: metadata.historyPolicy || 'checkpointed',
+  };
+}
+
 export function readProjectMetadata(projectRootInput) {
   const { metadataAbs } = getProjectSystemPaths(projectRootInput);
   if (!existsSync(metadataAbs)) {
@@ -221,6 +239,11 @@ export function readProjectMetadata(projectRootInput) {
   return metadata;
 }
 
+export function readProjectCompatibilityMetadata(projectRootInput) {
+  const ref = createProjectRef(projectRootInput);
+  return createCompatibilityMetadata(ref.projectRootAbs, readProjectMetadata(ref.projectRootAbs));
+}
+
 export function createProjectMetadata(projectRootInput, options = {}) {
   const projectRootAbs = createProjectRef(projectRootInput, options.baseDir).projectRootAbs;
   const base = buildDefaultProjectMetadata(projectRootAbs);
@@ -246,6 +269,7 @@ export function getProjectPaths(projectRootInput) {
   const ref = createProjectRef(projectRootInput);
   const systemPaths = getProjectSystemPaths(ref.projectRootAbs);
   const metadata = readProjectMetadata(ref.projectRootAbs);
+  const compatibilityMetadata = createCompatibilityMetadata(ref.projectRootAbs, metadata);
 
   return {
     kind: 'project',
@@ -254,7 +278,7 @@ export function getProjectPaths(projectRootInput) {
     slug: metadata.projectSlug,
     title: metadata.projectName,
     metadata,
-    frameworkMode: metadata.frameworkMode || 'linked',
+    frameworkMode: compatibilityMetadata.frameworkMode,
     sourceDirAbs: ref.projectRootAbs,
     sourceDirRel: ref.projectRootAbs,
     sourceDirDisplay: ref.projectRootAbs,

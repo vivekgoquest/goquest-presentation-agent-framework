@@ -64,9 +64,11 @@ test('application scaffold creates a linked project scaffold with the required a
   const [
     { createProjectScaffold },
     { getProjectAgentScaffoldPackage },
+    { getProjectPaths, readProjectCompatibilityMetadata },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
     import('../../../../project-agent/scaffold-package.mjs'),
+    import('../../deck-paths.js'),
   ]);
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
@@ -100,11 +102,19 @@ test('application scaffold creates a linked project scaffold with the required a
   assert.match(agentsContract, /\.presentation\/runtime\/render-state\.json/);
 
   const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
-  assert.equal(metadata.frameworkMode, 'linked');
+  const compatibilityMetadata = readProjectCompatibilityMetadata(projectRoot);
+  const projectPaths = getProjectPaths(projectRoot);
+  assert.equal('frameworkMode' in metadata, false);
+  assert.equal(compatibilityMetadata.frameworkMode, 'linked');
+  assert.equal(compatibilityMetadata.historyPolicy, 'checkpointed');
+  assert.equal(projectPaths.frameworkMode, 'linked');
 });
 
 test('copied framework scaffold omits prompts and specs snapshots', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const [{ createProjectScaffold }, { getProjectPaths, readProjectCompatibilityMetadata }] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../../deck-paths.js'),
+  ]);
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
@@ -121,6 +131,13 @@ test('copied framework scaffold omits prompts and specs snapshots', async (t) =>
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'specs')), false);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'prompts')), false);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'specs')), false);
+
+  const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
+  const compatibilityMetadata = readProjectCompatibilityMetadata(projectRoot);
+  const projectPaths = getProjectPaths(projectRoot);
+  assert.equal('frameworkMode' in metadata, false);
+  assert.equal(compatibilityMetadata.frameworkMode, 'copied');
+  assert.equal(projectPaths.frameworkMode, 'copied');
 });
 
 test('runtime services operate on a real scaffolded project', async (t) => {

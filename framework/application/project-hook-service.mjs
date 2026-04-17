@@ -22,7 +22,7 @@ function loadProjectMetadata(projectRoot) {
 }
 
 function shouldSkipHook(projectRoot, metadata) {
-  if (!metadata?.frameworkSource) {
+  if (!metadata) {
     return true;
   }
   const slidesDir = resolve(projectRoot, 'slides');
@@ -30,7 +30,7 @@ function shouldSkipHook(projectRoot, metadata) {
 }
 
 function maybeCheckpointProject(projectRoot, metadata) {
-  if (metadata?.historyPolicy === 'manual') {
+  if ((metadata?.historyPolicy || 'checkpointed') === 'manual') {
     return { committed: false, commit: '' };
   }
   return checkpointProjectGit(projectRoot);

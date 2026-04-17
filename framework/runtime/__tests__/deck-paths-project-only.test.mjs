@@ -64,3 +64,36 @@ test('shell-less v1 project metadata and paths prefer root pdf delivery', async 
   assert.equal('lastGoodRel' in paths, false);
   assert.equal('lastGoodAbs' in paths, false);
 });
+
+test('compatibility metadata restores legacy defaults and preserves copied mode inference', async (t) => {
+  const [{ createProjectScaffold }, { FRAMEWORK_ROOT, getProjectPaths, readProjectCompatibilityMetadata, readProjectMetadata }] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../deck-paths.js'),
+  ]);
+
+  const linkedProjectRoot = createTempProjectRoot();
+  const copiedProjectRoot = createTempProjectRoot();
+  t.after(() => rmSync(linkedProjectRoot, { recursive: true, force: true }));
+  t.after(() => rmSync(copiedProjectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot: linkedProjectRoot }, { slideCount: 2, copyFramework: false });
+  createProjectScaffold({ projectRoot: copiedProjectRoot }, { slideCount: 2, copyFramework: true });
+
+  const linkedRaw = readProjectMetadata(linkedProjectRoot);
+  const linkedCompat = readProjectCompatibilityMetadata(linkedProjectRoot);
+  const copiedRaw = readProjectMetadata(copiedProjectRoot);
+  const copiedCompat = readProjectCompatibilityMetadata(copiedProjectRoot);
+  const copiedPaths = getProjectPaths(copiedProjectRoot);
+
+  assert.equal('frameworkMode' in linkedRaw, false);
+  assert.equal('historyPolicy' in linkedRaw, false);
+  assert.equal(linkedCompat.frameworkMode, 'linked');
+  assert.equal(linkedCompat.frameworkSource, FRAMEWORK_ROOT);
+  assert.equal(linkedCompat.historyPolicy, 'checkpointed');
+
+  assert.equal('frameworkMode' in copiedRaw, false);
+  assert.equal(copiedCompat.frameworkMode, 'copied');
+  assert.equal(copiedCompat.frameworkSource, FRAMEWORK_ROOT);
+  assert.equal(copiedCompat.historyPolicy, 'checkpointed');
+  assert.equal(copiedPaths.frameworkMode, 'copied');
+});

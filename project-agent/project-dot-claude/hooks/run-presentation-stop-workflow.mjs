@@ -19,12 +19,26 @@ function loadProjectMetadata(projectRoot) {
 
 async function loadProjectHookService(projectRoot) {
   const metadata = loadProjectMetadata(projectRoot);
-  if (!metadata?.frameworkSource) {
+  let frameworkSource = metadata?.frameworkSource || '';
+
+  const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
+  if (existsSync(shimPath)) {
+    try {
+      const shim = await import(pathToFileURL(shimPath).href);
+      if (typeof shim.resolveProjectFrameworkSourceRoot === 'function') {
+        frameworkSource = shim.resolveProjectFrameworkSourceRoot(projectRoot) || frameworkSource;
+      }
+    } catch {
+      // fall back to metadata.frameworkSource when older shims do not expose the helper
+    }
+  }
+
+  if (!frameworkSource) {
     return null;
   }
 
   const moduleUrl = pathToFileURL(
-    resolve(metadata.frameworkSource, 'framework', 'application', 'project-hook-service.mjs')
+    resolve(frameworkSource, 'framework', 'application', 'project-hook-service.mjs')
   ).href;
   return import(moduleUrl);
 }

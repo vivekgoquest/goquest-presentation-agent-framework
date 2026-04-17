@@ -247,7 +247,10 @@ test('project query preview fails closed when a copied framework canvas drifts f
   );
 
   const service = createProjectQueryService();
-  service.openProject({ projectRoot });
+  const openResult = service.openProject({ projectRoot });
+
+  assert.equal(openResult.meta.frameworkMode, 'copied');
+  assert.equal(openResult.meta.historyPolicy, 'checkpointed');
 
   const preview = service.getPreviewDocument();
   assert.notEqual(preview.kind, 'slides');
