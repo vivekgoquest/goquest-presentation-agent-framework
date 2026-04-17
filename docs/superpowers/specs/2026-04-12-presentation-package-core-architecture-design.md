@@ -7866,11 +7866,13 @@ The first shipped product should be:
 - one installed system
 - containing the shared core and CLI
 - usable without any shell
+- with a Claude-first project scaffold
+- with `export` as the real PDF-producing command and `finalize` only as a thin alias in v1
 
 A shell may be added later, but the system must already work with:
 - installed core
 - installed CLI
-- an agent operating inside a project folder
+- Claude operating inside a project folder as the main agent
 
 ### 35A.2 Installed system vs project vs deliverable
 
@@ -7892,8 +7894,8 @@ The project workspace is one mutable presentation.
 
 It owns:
 - authored source at the project root
-- hidden project machinery under `.presentation/`
-- local agent guidance/support files scaffolded by init
+- hidden package machinery under `.presentation/`
+- a protected Claude adapter layer under `/.claude/`
 
 #### Deliverable
 The user-facing deliverable is the exported PDF at the project root.
@@ -7912,9 +7914,16 @@ The hidden `.presentation/` folder should contain:
 - generated structure
 - runtime evidence
 - the local project shim
-- local agent guidance/support files
 
 The hidden folder should not become the main authored workspace.
+
+The hidden `/.claude/` folder should contain:
+- Claude settings
+- Claude guidance files
+- Claude hooks
+- Claude rules/support files
+
+This keeps package machinery and Claude adapter machinery separate.
 
 ### 35A.4 Local shim rule
 
@@ -7943,7 +7952,7 @@ It should create:
 - root-level authored presentation files
 - hidden `.presentation/` machinery
 - the local shim
-- local agent guidance/support files
+- protected `/.claude/` adapter files
 
 It should not:
 - require a shell
@@ -7959,7 +7968,6 @@ The intended shell-less v1 shape is:
 <project-root>/
   brief.md
   theme.css
-  outline.md                  # optional
   slides/**
   assets/**
   <project-slug>.pdf          # appears after export/finalize
@@ -7971,7 +7979,7 @@ The intended shell-less v1 shape is:
       render-state.json
       artifacts.json
     framework-cli.mjs
-    agent/**
+  .claude/**
 ```
 
 ### 35A.7 Failure posture for v1
@@ -8046,6 +8054,7 @@ The agent may read but should not normally mutate:
 - hidden package-generated structure
 - runtime evidence
 - local shim implementation details
+- protected `/.claude/` adapter files
 
 ## 35C. Precise v1 Init Behavior Spec
 
@@ -8066,9 +8075,13 @@ It must produce a mutable presentation workspace plus hidden project machinery.
 - `theme.css`
 - starter `slides/**/slide.html`
 - `assets/`
-- optional `outline.md` only when the template/mode requires it
 
 The starter slides should already satisfy the structural slide-root contract.
+
+For v1, init should scaffold three starter slides:
+- `slides/010-intro/slide.html`
+- `slides/020-slide-02/slide.html`
+- `slides/030-close/slide.html`
 
 ### 35C.3 What init must create in `.presentation/`
 
@@ -8079,7 +8092,11 @@ The starter slides should already satisfy the structural slide-root contract.
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
-- `.presentation/agent/*` guidance/support files
+- `/.claude/settings.json`
+- `/.claude/AGENTS.md`
+- `/.claude/CLAUDE.md`
+- `/.claude/hooks/*`
+- `/.claude/rules/*`
 
 ### 35C.4 What init must never do
 
@@ -8094,10 +8111,12 @@ The starter slides should already satisfy the structural slide-root contract.
 
 A successful init guarantees:
 - the project is structurally valid
-- the local shim exists
+- the local shim exists in `.presentation/`
 - authored files exist at the project root
-- hidden machinery exists under `.presentation/`
-- inspect/status/audit/preview can operate immediately
+- hidden package machinery exists under `.presentation/`
+- protected Claude adapter files exist under `/.claude/`
+- inspect/status/audit can operate immediately
+- preview is available through shell-less `preview open` and `preview serve` flows
 
 ## 36. Update Instructions for This Document
 

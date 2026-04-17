@@ -8,15 +8,17 @@ The first shipped product is:
 - one **installed system**
 - containing the **core** and **CLI**
 - with **no shell required**
+- and a **Claude-first** project scaffold
 
-A presentation project is then created by `init` and used primarily by an agent.
+A presentation project is created by `init` and then used primarily by Claude as the main agent.
 
-The package separates four concerns cleanly:
+The package separates five concerns cleanly:
 
 1. **installed system** — shared sacred logic
 2. **authored presentation workspace** — mutable project files
-3. **hidden project machinery** — `.presentation/` state and shims
-4. **user-facing deliverable** — exported PDF at the project root
+3. **hidden package machinery** — `.presentation/` state and shim
+4. **hidden Claude adapter layer** — `/.claude/`
+5. **user-facing deliverable** — exported PDF at the project root
 
 The shell may be added later, but the core product must already work without it.
 
@@ -34,6 +36,7 @@ The system should author:
 - deterministic generated structure
 - runtime evidence
 - local shim/wrapper files created by `init`
+- protected Claude scaffold files under `/.claude/`
 - final exported PDF artifacts produced by explicit commands
 
 The package should not require a shell to function.
@@ -52,14 +55,14 @@ It provides:
 - `status`
 - `audit`
 - `preview`
-- `finalize`
 - `export`
+- `finalize` as a thin compatibility alias to `export`
 
 The installed system owns:
 - package semantics
 - validators and audits
 - preview assembly
-- finalize/export orchestration
+- export orchestration
 - deterministic issue language
 - default project scaffolding templates
 
@@ -76,7 +79,6 @@ The rebuilt core enforces a hard authorship boundary.
 After project creation/scaffolding, only the agent may change authored presentation content such as:
 - `brief.md`
 - `theme.css`
-- `outline.md` when present
 - `slides/<NNN-id>/slide.html`
 - optional `slides/<NNN-id>/slide.css`
 - author-managed assets under `assets/` and `slides/<NNN-id>/assets/`
@@ -91,7 +93,7 @@ The headless core may still create or update system-owned files such as:
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
-- scaffolded local agent guidance/support files
+- scaffolded protected Claude adapter files under `/.claude/`
 - the exported PDF at the project root
 
 These are hidden project machinery or produced deliverables. They are not authored presentation content.
@@ -128,8 +130,8 @@ The canonical core surface for the shell-less v1 product is:
 - `presentation status ...`
 - `presentation audit ...`
 - `presentation preview ...`
-- `presentation finalize ...`
 - `presentation export ...`
+- `presentation finalize ...` as a thin alias to `export`
 
 Use them this way:
 - `init` to scaffold a new project
@@ -137,8 +139,8 @@ Use them this way:
 - `status` for interpreted workflow state
 - `audit` for deterministic diagnostics
 - `preview` for core-owned preview generation/serving
-- `finalize` for canonical final delivery generation
-- `export` for explicit artifact emission
+- `export` for explicit artifact emission of the root-level PDF
+- `finalize` only as a compatibility alias in v1
 
 The shell may later wrap these operations, but it does not define them.
 
@@ -150,19 +152,18 @@ The shell may later wrap these operations, but it does not define them.
 <project-root>/
   brief.md
   theme.css
-  outline.md                          # optional
   slides/
     010-intro/
       slide.html
       slide.css                       # optional
       assets/                         # optional
-    020-problem/
+    020-slide-02/
       slide.html
     030-close/
       slide.html
   assets/
 
-  my-deck.pdf                         # appears after export/finalize
+  <project-slug>.pdf                  # appears after export/finalize
 
   .presentation/
     project.json
@@ -172,11 +173,14 @@ The shell may later wrap these operations, but it does not define them.
       render-state.json
       artifacts.json
     framework-cli.mjs
-    agent/
-      AGENTS.md
-      CLAUDE.md                       # optional/vendor-specific
-      hooks/
-        run-presentation-stop-workflow.mjs
+
+  .claude/
+    settings.json
+    AGENTS.md
+    CLAUDE.md
+    hooks/
+      run-presentation-stop-workflow.mjs
+    rules/
 
   .git/
   .gitignore
@@ -190,21 +194,32 @@ It should contain:
 - authored presentation files
 - the final exported PDF
 
-It should **not** contain hidden package machinery beyond `.presentation/`.
+It should **not** contain hidden package machinery beyond `.presentation/` and `/.claude/`.
 
 ### Hidden-folder rule
 
-`.presentation/` is hidden project machinery.
+`.presentation/` is hidden package machinery.
 
 It should contain:
 - metadata
 - intent
 - generated structure
 - runtime evidence
-- local shim/entrypoints
-- local agent guidance/support files
+- local shim/entrypoint
 
 It should **not** be the main authored workspace.
+
+### Claude-folder rule
+
+`/.claude/` is the protected Claude adapter layer.
+
+It should contain:
+- Claude settings
+- Claude guidance files
+- Claude hooks
+- Claude rules/support files
+
+It is scaffolded by `init` and is not part of the mutable presentation layer.
 
 ---
 
@@ -215,7 +230,6 @@ It should **not** be the main authored workspace.
 These files are the editable presentation source:
 - `brief.md`
 - `theme.css`
-- `outline.md` when required
 - `slides/<NNN-name>/slide.html`
 - optional `slides/<NNN-name>/slide.css`
 - `assets/`
@@ -268,7 +282,7 @@ It answers questions like:
 - what order they are in
 - which source files define them
 - which optional files and assets exist
-- whether brief, outline, and theme are present and complete enough to proceed
+- whether brief and theme are present and complete enough to proceed
 
 ### Deterministic runtime evidence
 
@@ -285,7 +299,7 @@ Current remembered runtime truth about the latest explicit render-backed judgmen
 
 `/.presentation/runtime/artifacts.json`
 
-Current remembered artifact inventory, including the current exported/finalized PDF known to the system.
+Current remembered artifact inventory, including the current exported PDF known to the system.
 
 These files are evidence, not source.
 They may be missing or stale relative to current authored state.
@@ -305,20 +319,22 @@ It should:
 
 It must not duplicate core semantics.
 
-### Local agent guidance/support files
+### Claude adapter layer
 
-`/.presentation/agent/*`
+`/.claude/*`
 
-These are project-local guidance/support files scaffolded by `init`.
+This is the protected Claude adapter layer scaffolded by `init`.
 
-They may explain:
-- what files are mutable
-- what files are protected
-- the preferred local entrypoint
-- the normal authoring workflow
-- hard boundaries for the agent
+It includes files such as:
+- `/.claude/settings.json`
+- `/.claude/AGENTS.md`
+- `/.claude/CLAUDE.md`
+- `/.claude/hooks/*`
+- `/.claude/rules/*`
 
-They are guidance/adapters, not the authority on system semantics.
+Its purpose is to help Claude operate correctly inside this project.
+
+It is not part of the mutable authored presentation layer, and it is not the authority on core semantics.
 
 ### User-facing deliverable
 
@@ -375,7 +391,7 @@ It should define the deck’s specific:
 
 But it must do so within the framework constraints owned by the installed core.
 
-### Hidden project machinery
+### Hidden package machinery
 
 `.presentation/` is not the primary home of design-system authorship.
 
@@ -383,7 +399,7 @@ It should hold only:
 - metadata
 - structure
 - runtime evidence
-- shim/guidance/support files
+- operational metadata
 
 So design-system information appears there only as:
 - remembered evidence
@@ -410,7 +426,6 @@ Users do not need to understand framework tokens or hidden package files. They e
 
 - `brief.md`
 - `theme.css`
-- `outline.md` when applicable
 - `slides/<NNN-name>/slide.html`
 - optional `slides/<NNN-name>/slide.css`
 - `assets/`
@@ -430,7 +445,7 @@ Editing source may cause this file to change, but deterministic package operatio
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
-- `.presentation/agent/*` unless explicitly doing system-guidance work
+- `/.claude/*`
 
 ### Runtime/core can write
 
@@ -439,7 +454,7 @@ Editing source may cause this file to change, but deterministic package operatio
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
-- scaffolded `.presentation/agent/*`
+- scaffolded `/.claude/*`
 - the exported PDF at the project root
 
 ### System-only / protected
@@ -448,6 +463,7 @@ Editing source may cause this file to change, but deterministic package operatio
 - installed framework internals
 - shared canvas internals
 - local shim implementation details except during explicit system work
+- `/.claude/*`
 
 ---
 
@@ -511,12 +527,6 @@ V1 note:
       "exists": true,
       "complete": true
     },
-    "outline": {
-      "path": "outline.md",
-      "exists": false,
-      "required": false,
-      "complete": true
-    },
     "theme": {
       "path": "theme.css",
       "exists": true
@@ -555,7 +565,7 @@ V1 note:
   "generatedAt": "2026-04-12T12:34:56.000Z",
   "producer": "preview",
   "status": "pass",
-  "slideIds": ["intro", "problem", "close"],
+  "slideIds": ["intro", "slide-02", "close"],
   "previewKind": "slides",
   "canvasContract": {
     "valid": true,
@@ -601,13 +611,14 @@ A typical v1 package loop now looks like this:
 
 1. install the system
 2. run `presentation init /abs/path-to-project`
-3. edit root-level authored files
-4. use `.presentation/framework-cli.mjs` as the preferred local project entrypoint
-5. run `inspect` and `status` to orient
-6. run `audit` to get deterministic diagnostics
-7. run `preview` to inspect the rendered deck without a shell
-8. run `finalize` or `export` to produce the root-level PDF
-9. use git directly for history, rollback, and milestone navigation
+3. Claude operates inside the initialized project
+4. edit root-level authored files
+5. use `.presentation/framework-cli.mjs` as the preferred local project entrypoint
+6. run `inspect` and `status` to orient
+7. run `audit` to get deterministic diagnostics
+8. run `preview open` or `preview serve` to inspect the rendered deck without a shell
+9. run `export` to produce the root-level PDF (`finalize` is only an alias in v1)
+10. use git directly for history, rollback, and milestone navigation
 
 Hooks or shells may later wrap these operations, but the package meaning lives in the installed core plus the project-local shim.
 
@@ -618,14 +629,16 @@ Hooks or shells may later wrap these operations, but the package meaning lives i
 This package model removes recurring failure modes:
 
 1. agents needing to know where the sacred installed core lives
-2. hidden project machinery getting confused with authored source
+2. hidden package machinery getting confused with authored source
 3. user-facing deliverables being buried inside hidden system trees
 4. shells becoming required before the core product is usable
 5. framework design-system rules getting duplicated into each project
+6. Claude integration being scattered across the authored workspace
 
 With this model:
 - source stays visible and editable
-- hidden machinery stays hidden
+- hidden package machinery stays under `.presentation/`
+- Claude adapter files stay under `/.claude/`
 - the design system is shared in the installed core and expressed in the project theme/source
 - the agent has a stable local project entrypoint
 - the final PDF appears where the user expects it
@@ -637,12 +650,14 @@ With this model:
 Target v1 model:
 - installed system ships core + CLI first
 - shell is optional and deferred
+- v1 project scaffolding is Claude-first
 - preview is part of the core surface
 - every project gets a hidden local shim in `.presentation/`
 - the shim resolves the installed system using standard package resolution
 - the shim fails hard with repair guidance when needed
 - authored presentation files stay at the project root
-- hidden project machinery stays under `.presentation/`
+- hidden package machinery stays under `.presentation/`
+- protected Claude adapter files live under `/.claude/`
 - the final exported PDF lands at the project root
 
 Still evolving:
