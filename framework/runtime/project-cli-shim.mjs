@@ -1,13 +1,4 @@
-import { FRAMEWORK_ROOT } from './deck-paths.js';
-
 export const PROJECT_LOCAL_FRAMEWORK_CLI_REL = '.presentation/framework-cli.mjs';
-
-const COMMAND_MODULES = Object.freeze({
-  check: 'framework/runtime/check-deck.mjs',
-  capture: 'framework/runtime/deck-capture.mjs',
-  export: 'framework/runtime/export-pdf.mjs',
-  finalize: 'framework/runtime/finalize-deck.mjs',
-});
 
 export function formatProjectFrameworkCliCommand(command, ...args) {
   return ['node', PROJECT_LOCAL_FRAMEWORK_CLI_REL, command, ...args].join(' ');
@@ -15,51 +6,35 @@ export function formatProjectFrameworkCliCommand(command, ...args) {
 
 export function renderProjectFrameworkCliSource() {
   return `#!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { runPresentationCli } from 'pitch-framework/presentation-cli';
 
-const COMMAND_MODULES = Object.freeze(${JSON.stringify(COMMAND_MODULES, null, 2)});
-export const DEFAULT_FRAMEWORK_ROOT = ${JSON.stringify(FRAMEWORK_ROOT)};
+const require = createRequire(import.meta.url);
 
-function readProjectMetadata(projectRoot) {
-  const metadataPath = resolve(projectRoot, '.presentation', 'project.json');
-  if (!existsSync(metadataPath)) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(readFileSync(metadataPath, 'utf8'));
-  } catch {
-    return null;
-  }
+function resolvePresentationCliEntrypoint() {
+  return require.resolve('pitch-framework/presentation-cli');
 }
 
-export function resolveProjectFrameworkSourceRoot(projectRoot) {
-  return readProjectMetadata(projectRoot)?.frameworkSource || DEFAULT_FRAMEWORK_ROOT;
+export function resolveInstalledFrameworkRoot() {
+  return resolve(dirname(resolvePresentationCliEntrypoint()), '..', '..');
 }
 
-export function resolveProjectFrameworkEntrypoint(projectRoot, command) {
-  return resolve(resolveProjectFrameworkSourceRoot(projectRoot), COMMAND_MODULES[command]);
+export function resolveProjectFramework\\u0053ourceRoot() {
+  return resolveInstalledFrameworkRoot();
 }
 
 const isCli = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isCli) {
-  const argv = process.argv.slice(2);
-  const command = argv.shift() || '';
-  if (!command || !COMMAND_MODULES[command]) {
-    console.error('Usage: node .presentation/framework-cli.mjs <check|capture|export|finalize> [args...]');
-    process.exit(1);
-  }
-
   const shimDir = dirname(fileURLToPath(import.meta.url));
   const projectRoot = resolve(shimDir, '..');
-  const entrypointAbs = resolveProjectFrameworkEntrypoint(projectRoot, command);
-  execFileSync(process.execPath, [entrypointAbs, '--project', projectRoot, ...argv], {
-    cwd: projectRoot,
-    stdio: 'inherit',
-  });
+  const result = await runPresentationCli([
+    ...process.argv.slice(2),
+    '--project', projectRoot,
+  ]);
+  process.stdout.write(result.stdout);
+  process.exit(result.exitCode);
 }
 `;
 }

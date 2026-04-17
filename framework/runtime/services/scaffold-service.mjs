@@ -96,6 +96,26 @@ function createSlidePlan(slideCount) {
     ];
   }
 
+  if (slideCount === 3) {
+    return [
+      {
+        dirName: '010-intro',
+        templatePath: 'slides/010-hero/slide.html',
+        slideLabel: '01',
+      },
+      {
+        dirName: '020-slide-02',
+        templatePath: 'slides/generic/slide.html',
+        slideLabel: '02',
+      },
+      {
+        dirName: '030-close',
+        templatePath: 'slides/030-close/slide.html',
+        slideLabel: '03',
+      },
+    ];
+  }
+
   const slides = [];
   for (let index = 0; index < slideCount; index += 1) {
     const prefix = formatSlidePrefix(index);
@@ -242,16 +262,10 @@ function scaffoldIntoPaths(paths, options = {}) {
   mkdirSync(paths.sourceDirAbs, { recursive: true });
   mkdirSync(paths.assetsDirAbs, { recursive: true });
   mkdirSync(paths.slidesDirAbs, { recursive: true });
-  mkdirSync(paths.outputsDirAbs, { recursive: true });
 
   writeFileSync(paths.themeCssAbs, renderTemplate('theme.css'));
   writeFileSync(paths.briefAbs, renderTemplate('brief.md'));
   writeFileSync(resolve(paths.assetsDirAbs, '.gitkeep'), '');
-  writeFileSync(resolve(paths.outputsDirAbs, '.gitkeep'), '');
-
-  if (outlineRequired) {
-    writeFileSync(paths.outlineAbs, renderTemplate('outline.md'));
-  }
 
   for (const slide of slidePlan) {
     const targetPath = resolve(paths.slidesDirAbs, slide.dirName, 'slide.html');
@@ -268,9 +282,11 @@ function scaffoldIntoPaths(paths, options = {}) {
   const systemPaths = getProjectSystemPaths(paths.sourceDirAbs);
   mkdirSync(systemPaths.systemDirAbs, { recursive: true });
   mkdirSync(resolve(systemPaths.systemDirAbs, 'runtime'), { recursive: true });
-  mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
-  mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
-  mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
+  if (copyFramework) {
+    mkdirSync(systemPaths.frameworkDirAbs, { recursive: true });
+    mkdirSync(systemPaths.frameworkBaseAbs, { recursive: true });
+    mkdirSync(systemPaths.frameworkOverridesAbs, { recursive: true });
+  }
   writeFileSync(resolve(paths.sourceDirAbs, PROJECT_LOCAL_FRAMEWORK_CLI_REL), renderProjectFrameworkCliSource());
   const metadata = createProjectMetadata(paths.sourceDirAbs, {
     frameworkMode: copyFramework ? 'copied' : 'linked',
@@ -290,7 +306,6 @@ function scaffoldIntoPaths(paths, options = {}) {
     paths.themeCssRel,
     paths.briefRel,
     `${paths.assetsDirRel}/`,
-    `${paths.outputsDirRel}/`,
   ];
 
   createdFiles.push(paths.metadataRel);
@@ -305,10 +320,6 @@ function scaffoldIntoPaths(paths, options = {}) {
     createdFiles.push(paths.frameworkOverridesRel);
   }
 
-  if (outlineRequired) {
-    createdFiles.push(paths.outlineRel);
-  }
-
   for (const slide of slidePlan) {
     createdFiles.push(`${paths.slidesDirRel}/${slide.dirName}/slide.html`);
   }
@@ -316,16 +327,9 @@ function scaffoldIntoPaths(paths, options = {}) {
   const nextSteps = [
     `Open ${paths.briefRel} and replace every [[TODO_...]] marker with the user's plain-English brief.`,
     `Edit ${paths.themeCssRel} and the slide fragments under ${paths.slidesDirRel}/ to build the deck.`,
-    `Preview, check, export, and finalize will stay blocked until ${paths.briefRel} no longer contains TODO markers.`,
-    'Launch Electron with npm run start, open this project, then review /preview/ from inside the app.',
+    `Use ${formatProjectFrameworkCliCommand('inspect')} and ${formatProjectFrameworkCliCommand('status')} to review package state as you work.`,
+    `Run ${formatProjectFrameworkCliCommand('audit', 'all')} after meaningful edits.`,
   ];
-
-  if (outlineRequired) {
-    nextSteps.splice(1, 0, `Open ${paths.outlineRel}, replace every [[TODO_...]] marker, and lock the full story before slide buildout.`);
-    nextSteps.splice(2, 0, `Build ${slideCount} slides in batches of ${LONG_DECK_BATCH_SIZE} and run ${formatProjectFrameworkCliCommand('check')} after each batch.`);
-  }
-
-  nextSteps.push(`Run ${formatProjectFrameworkCliCommand('finalize')}`);
 
   const gitignoreContent = [
     'outputs/',

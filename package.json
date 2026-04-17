@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Layered HTML/CSS presentation framework with PDF export",
+  "bin": {
+    "presentation": "./framework/runtime/presentation-cli.mjs"
+  },
+  "exports": {
+    ".": "./framework/runtime/presentation-core.mjs",
+    "./presentation-cli": "./framework/runtime/presentation-cli.mjs"
+  },
   "scripts": {
     "setup": "node framework/runtime/setup.mjs",
     "start": "electron electron/main.mjs",

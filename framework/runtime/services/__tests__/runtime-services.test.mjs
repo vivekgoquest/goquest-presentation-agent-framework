@@ -60,84 +60,48 @@ function readJson(absPath) {
   return JSON.parse(readFileSync(absPath, 'utf8'));
 }
 
-test('application scaffold creates a linked project scaffold with the required agent package contract', async (t) => {
+test('application scaffold creates the shell-less v1 layout for a 3-slide project', async (t) => {
   const [
     { createProjectScaffold },
     { getProjectAgentScaffoldPackage },
-    { getProjectPaths, readProjectCompatibilityMetadata },
   ] = await Promise.all([
     import('../../../application/project-scaffold-service.mjs'),
     import('../../../../project-agent/scaffold-package.mjs'),
-    import('../../deck-paths.js'),
   ]);
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  const result = await createProjectScaffold(
-    { projectRoot },
-    { slideCount: 3, copyFramework: false }
-  );
+  const result = await createProjectScaffold({ projectRoot }, { slideCount: 3 });
 
   assert.equal(result.status, 'created');
-  assert.equal(result.frameworkMode, 'linked');
-  assert.ok(existsSync(resolve(projectRoot, 'AGENTS.md')));
-  assert.ok(existsSync(resolve(projectRoot, 'theme.css')));
-  assert.equal(existsSync(resolve(projectRoot, 'revisions.md')), false);
-  assert.ok(existsSync(resolve(projectRoot, 'slides', '010-intro', 'slide.html')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'project.json')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'presentation-hook-runner.mjs')), false);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'hooks', 'lib', 'git-checkpoint.mjs')), false);
+  assert.deepEqual(result.files.filter((file) => file.endsWith('slide.html')).sort(), [
+    'slides/010-intro/slide.html',
+    'slides/020-slide-02/slide.html',
+    'slides/030-close/slide.html',
+  ]);
+  assert.ok(result.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.files.includes('.claude/settings.json'));
+  assert.ok(result.files.includes('.claude/AGENTS.md'));
+  assert.ok(result.files.includes('.claude/CLAUDE.md'));
+  assert.ok(!result.files.includes('outline.md'));
+  assert.ok(!result.files.includes('outputs/'));
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, 'AGENTS.md')), false);
 
   const scaffoldPackage = getProjectAgentScaffoldPackage({ frameworkRoot: process.cwd() });
   for (const requiredPath of scaffoldPackage.requiredPaths) {
     assert.ok(existsSync(resolve(projectRoot, requiredPath)), `missing required scaffold path: ${requiredPath}`);
   }
-
-  const agentsContract = readFileSync(resolve(projectRoot, 'AGENTS.md'), 'utf8');
-  assert.match(agentsContract, /\.presentation\/package\.generated\.json/);
-  assert.match(agentsContract, /\.presentation\/runtime\/render-state\.json/);
-
-  const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
-  const compatibilityMetadata = readProjectCompatibilityMetadata(projectRoot);
-  const projectPaths = getProjectPaths(projectRoot);
-  assert.equal('frameworkMode' in metadata, false);
-  assert.equal(compatibilityMetadata.frameworkMode, 'linked');
-  assert.equal(compatibilityMetadata.historyPolicy, 'checkpointed');
-  assert.equal(projectPaths.frameworkMode, 'linked');
 });
 
-test('copied framework scaffold omits prompts and specs snapshots', async (t) => {
-  const [{ createProjectScaffold }, { getProjectPaths, readProjectCompatibilityMetadata }] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
-    import('../../deck-paths.js'),
-  ]);
-  const projectRoot = createTempProjectRoot();
-  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+test('project shim injects project root and delegates through package resolution', async () => {
+  const { renderProjectFrameworkCliSource } = await import('../../project-cli-shim.mjs');
 
-  const result = await createProjectScaffold(
-    { projectRoot },
-    { slideCount: 3, copyFramework: true }
-  );
-
-  assert.equal(result.status, 'created');
-  assert.equal(result.frameworkMode, 'copied');
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'templates')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'templates')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'prompts')), false);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'base', 'specs')), false);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'prompts')), false);
-  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework', 'overrides', 'specs')), false);
-
-  const metadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
-  const compatibilityMetadata = readProjectCompatibilityMetadata(projectRoot);
-  const projectPaths = getProjectPaths(projectRoot);
-  assert.equal('frameworkMode' in metadata, false);
-  assert.equal(compatibilityMetadata.frameworkMode, 'copied');
-  assert.equal(projectPaths.frameworkMode, 'copied');
+  const source = renderProjectFrameworkCliSource();
+  assert.match(source, /from 'pitch-framework\/presentation-cli'/);
+  assert.match(source, /'--project', projectRoot/);
+  assert.doesNotMatch(source, /frameworkSource/);
+  assert.doesNotMatch(source, /execFileSync/);
 });
 
 test('runtime services operate on a real scaffolded project', async (t) => {
