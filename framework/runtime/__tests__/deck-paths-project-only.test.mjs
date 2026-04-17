@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-deck-paths-'));
@@ -25,8 +25,8 @@ test('parsePresentationTargetCliArgs accepts project targets only', async () => 
   );
 });
 
-test('project paths expose finalized and export output roots without last-good rel paths', async (t) => {
-  const [{ createProjectScaffold }, { getProjectOutputPaths, getProjectPaths }] = await Promise.all([
+test('shell-less v1 project metadata and paths prefer root pdf delivery', async (t) => {
+  const [{ createProjectScaffold }, { getProjectPaths, getSuggestedPdfName, readProjectMetadata }] = await Promise.all([
     import('../../application/project-scaffold-service.mjs'),
     import('../deck-paths.js'),
   ]);
@@ -37,17 +37,30 @@ test('project paths expose finalized and export output roots without last-good r
   createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
 
   const paths = getProjectPaths(projectRoot);
+  const metadata = readProjectMetadata(projectRoot);
+  const onDiskMetadata = JSON.parse(readFileSync(paths.metadataAbs, 'utf8'));
+
+  assert.deepEqual(Object.keys(onDiskMetadata).sort(), [
+    'canvasPolicy',
+    'createdWithCoreVersion',
+    'frameworkVersion',
+    'projectMode',
+    'projectName',
+    'projectSchemaVersion',
+    'projectSlug',
+  ].sort());
+  assert.equal(metadata.projectSchemaVersion, 1);
+  assert.equal(metadata.createdWithCoreVersion, metadata.frameworkVersion);
   assert.equal(paths.renderStateRel, '.presentation/runtime/render-state.json');
   assert.equal(paths.artifactsRel, '.presentation/runtime/artifacts.json');
+  assert.equal(paths.rootPdfRel, `${metadata.projectSlug}.pdf`);
+  assert.equal(paths.rootPdfAbs, resolve(projectRoot, `${metadata.projectSlug}.pdf`));
+  assert.equal(paths.claudeDirRel, '.claude');
+  assert.equal(paths.claudeDirAbs, resolve(projectRoot, '.claude'));
+  assert.equal(getSuggestedPdfName({ projectRootAbs: projectRoot }), `${metadata.projectSlug}.pdf`);
+  assert.equal('historyPolicy' in metadata, false);
+  assert.equal('frameworkMode' in metadata, false);
+  assert.equal('frameworkSource' in metadata, false);
   assert.equal('lastGoodRel' in paths, false);
   assert.equal('lastGoodAbs' in paths, false);
-
-  const outputPaths = getProjectOutputPaths(projectRoot);
-  assert.equal(outputPaths.finalizedOutputDirRel, 'outputs/finalized');
-  assert.equal(outputPaths.finalizedPdfRel, 'outputs/finalized/deck.pdf');
-  assert.equal(outputPaths.finalizedReportRel, 'outputs/finalized/report.json');
-  assert.equal(outputPaths.finalizedSummaryRel, 'outputs/finalized/summary.md');
-  assert.equal(outputPaths.finalizedFullPageRel, 'outputs/finalized/full-page.png');
-  assert.equal(outputPaths.finalizedSlidesDirRel, 'outputs/finalized/slides');
-  assert.equal(outputPaths.exportsOutputDirRel, 'outputs/exports');
 });

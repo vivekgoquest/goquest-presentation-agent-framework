@@ -8,7 +8,7 @@ function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-package-'));
 }
 
-test('getProjectPaths exposes canonical presentation package files', async (t) => {
+test('getProjectPaths exposes shell-less v1 package, adapter, and root pdf helpers', async (t) => {
   const [{ createProjectScaffold }, { getProjectPaths }] = await Promise.all([
     import('../../application/project-scaffold-service.mjs'),
     import('../deck-paths.js'),
@@ -25,10 +25,45 @@ test('getProjectPaths exposes canonical presentation package files', async (t) =
   assert.equal(paths.runtimeDirRel, '.presentation/runtime');
   assert.equal(paths.renderStateRel, '.presentation/runtime/render-state.json');
   assert.equal(paths.artifactsRel, '.presentation/runtime/artifacts.json');
-  assert.equal(paths.finalizedOutputDirRel, 'outputs/finalized');
-  assert.equal(paths.exportsOutputDirRel, 'outputs/exports');
+  assert.equal(paths.rootPdfRel, `${paths.slug}.pdf`);
+  assert.equal(paths.claudeDirRel, '.claude');
+  assert.equal(paths.claudeDirAbs, resolve(projectRoot, '.claude'));
   assert.equal('lastGoodRel' in paths, false);
   assert.equal('lastGoodAbs' in paths, false);
+});
+
+function flattenTree(node) {
+  return [
+    node,
+    ...((node.children || []).flatMap((child) => flattenTree(child))),
+  ];
+}
+
+test('project tree classifies shell-less v1 source, system, adapter, and deliverable files', async (t) => {
+  const [{ createProjectScaffold }, { getProjectPaths }, { buildProjectTreeNode }] = await Promise.all([
+    import('../../application/project-scaffold-service.mjs'),
+    import('../deck-paths.js'),
+    import('../project-tree.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  const paths = getProjectPaths(projectRoot);
+  writeFileSync(paths.rootPdfAbs, 'fake pdf');
+
+  const nodes = new Map(flattenTree(buildProjectTreeNode(projectRoot, projectRoot)).map((node) => [node.relativePath, node]));
+
+  assert.equal(nodes.get('.presentation').classification, 'system');
+  assert.equal(nodes.get('.presentation/project.json').classification, 'system');
+  assert.equal(nodes.get('.claude').classification, 'adapter');
+  assert.equal(nodes.get('.claude/CLAUDE.md').classification, 'adapter');
+  assert.equal(nodes.get('brief.md').classification, 'source');
+  assert.equal(nodes.get('theme.css').classification, 'source');
+  assert.equal(nodes.get('slides').classification, 'source');
+  assert.equal(nodes.get('slides/010-intro').classification, 'source');
+  assert.equal(nodes.get(paths.rootPdfRel).classification, 'deliverable');
 });
 
 test('generatePresentationPackageManifest derives presentation structure from source files', async (t) => {

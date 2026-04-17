@@ -164,21 +164,17 @@ export function getProjectSystemPaths(projectRootInput) {
 // Project Metadata and Project Paths
 // -----------------------------------------------------------------------------
 
-function buildDefaultProjectMetadata(projectRootAbs, frameworkMode = 'linked') {
+function buildDefaultProjectMetadata(projectRootAbs) {
   const projectSlug = slugifyProjectName(basename(projectRootAbs));
-  const normalizedFrameworkMode = VALID_FRAMEWORK_MODES.has(frameworkMode) ? frameworkMode : 'linked';
 
   return {
     projectMode: 'project-folder',
     projectName: slugToTitle(projectSlug),
     projectSlug,
-    frameworkMode: normalizedFrameworkMode,
+    projectSchemaVersion: 1,
+    createdWithCoreVersion: FRAMEWORK_VERSION,
     frameworkVersion: FRAMEWORK_VERSION,
-    frameworkSource: FRAMEWORK_ROOT,
-    frameworkSourceVersion: FRAMEWORK_VERSION,
-    frameworkCopiedAt: normalizedFrameworkMode === 'copied' ? new Date().toISOString() : null,
     canvasPolicy: 'protected',
-    historyPolicy: 'checkpointed',
   };
 }
 
@@ -196,37 +192,53 @@ export function readProjectMetadata(projectRootInput) {
   }
 
   const projectSlug = slugifyProjectName(data.projectSlug || basename(createProjectRef(projectRootInput).projectRootAbs));
-  const frameworkMode = VALID_FRAMEWORK_MODES.has(data.frameworkMode) ? data.frameworkMode : 'linked';
-
-  return {
+  const metadata = {
     projectMode: data.projectMode || 'project-folder',
     projectName: typeof data.projectName === 'string' && data.projectName.trim()
       ? data.projectName.trim()
       : slugToTitle(projectSlug),
     projectSlug,
-    frameworkMode,
+    projectSchemaVersion: Number.isInteger(data.projectSchemaVersion) ? data.projectSchemaVersion : 1,
+    createdWithCoreVersion: data.createdWithCoreVersion || data.frameworkVersion || FRAMEWORK_VERSION,
     frameworkVersion: data.frameworkVersion || FRAMEWORK_VERSION,
-    frameworkSource: data.frameworkSource || FRAMEWORK_ROOT,
-    frameworkSourceVersion: data.frameworkSourceVersion || FRAMEWORK_VERSION,
-    frameworkCopiedAt: data.frameworkCopiedAt || null,
     canvasPolicy: data.canvasPolicy || 'protected',
-    historyPolicy: data.historyPolicy || 'checkpointed',
   };
+
+  if (
+    'frameworkMode' in data
+    || 'frameworkSource' in data
+    || 'frameworkSourceVersion' in data
+    || 'frameworkCopiedAt' in data
+    || 'historyPolicy' in data
+  ) {
+    metadata.frameworkMode = VALID_FRAMEWORK_MODES.has(data.frameworkMode) ? data.frameworkMode : 'linked';
+    metadata.frameworkSource = data.frameworkSource || FRAMEWORK_ROOT;
+    metadata.frameworkSourceVersion = data.frameworkSourceVersion || metadata.frameworkVersion;
+    metadata.frameworkCopiedAt = data.frameworkCopiedAt || null;
+    metadata.historyPolicy = data.historyPolicy || 'checkpointed';
+  }
+
+  return metadata;
 }
 
 export function createProjectMetadata(projectRootInput, options = {}) {
   const projectRootAbs = createProjectRef(projectRootInput, options.baseDir).projectRootAbs;
-  const base = buildDefaultProjectMetadata(projectRootAbs, options.frameworkMode);
+  const base = buildDefaultProjectMetadata(projectRootAbs);
+  const overrides = options.overrides || {};
+  const frameworkVersion = overrides.frameworkVersion || base.frameworkVersion;
 
   return {
-    ...base,
-    ...options.overrides,
-    projectSlug: slugifyProjectName((options.overrides && options.overrides.projectSlug) || base.projectSlug),
-    frameworkMode: VALID_FRAMEWORK_MODES.has((options.overrides && options.overrides.frameworkMode) || base.frameworkMode)
-      ? ((options.overrides && options.overrides.frameworkMode) || base.frameworkMode)
-      : 'linked',
-    canvasPolicy: 'protected',
-    historyPolicy: (options.overrides && options.overrides.historyPolicy) || base.historyPolicy || 'checkpointed',
+    projectMode: overrides.projectMode || base.projectMode,
+    projectName: typeof overrides.projectName === 'string' && overrides.projectName.trim()
+      ? overrides.projectName.trim()
+      : base.projectName,
+    projectSlug: slugifyProjectName(overrides.projectSlug || base.projectSlug),
+    projectSchemaVersion: Number.isInteger(overrides.projectSchemaVersion)
+      ? overrides.projectSchemaVersion
+      : base.projectSchemaVersion,
+    createdWithCoreVersion: overrides.createdWithCoreVersion || frameworkVersion,
+    frameworkVersion,
+    canvasPolicy: overrides.canvasPolicy || base.canvasPolicy,
   };
 }
 
@@ -242,7 +254,7 @@ export function getProjectPaths(projectRootInput) {
     slug: metadata.projectSlug,
     title: metadata.projectName,
     metadata,
-    frameworkMode: metadata.frameworkMode,
+    frameworkMode: metadata.frameworkMode || 'linked',
     sourceDirAbs: ref.projectRootAbs,
     sourceDirRel: ref.projectRootAbs,
     sourceDirDisplay: ref.projectRootAbs,
@@ -257,6 +269,10 @@ export function getProjectPaths(projectRootInput) {
     assetsDirAbs: resolve(ref.projectRootAbs, 'assets'),
     slidesDirRel: 'slides',
     slidesDirAbs: resolve(ref.projectRootAbs, 'slides'),
+    rootPdfRel: `${metadata.projectSlug}.pdf`,
+    rootPdfAbs: resolve(ref.projectRootAbs, `${metadata.projectSlug}.pdf`),
+    claudeDirRel: '.claude',
+    claudeDirAbs: resolve(ref.projectRootAbs, '.claude'),
     outputsDirRel: 'outputs',
     outputsDirAbs: resolve(ref.projectRootAbs, 'outputs'),
     finalizedOutputDirRel: 'outputs/finalized',
@@ -404,7 +420,7 @@ export function getProjectOutputPaths(projectRootInput) {
 
 export function getSuggestedPdfName(target) {
   const normalized = createPresentationTarget(target);
-  return `${getProjectPaths(normalized.projectRootAbs).slug}.pdf`;
+  return getProjectPaths(normalized.projectRootAbs).rootPdfRel;
 }
 
 export function getPresentationId(target) {

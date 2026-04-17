@@ -1,14 +1,13 @@
 import { readdirSync, statSync } from 'fs';
 import { resolve, sep } from 'path';
-import { PROJECT_SYSTEM_DIRNAME } from './deck-paths.js';
+import { getProjectPaths } from './deck-paths.js';
 
-const PRIMARY_PROJECT_PATHS = new Set([
+const ROOT_SOURCE_PATHS = new Set([
+  'assets',
   'brief.md',
   'outline.md',
-  'theme.css',
-  'assets',
   'slides',
-  'outputs',
+  'theme.css',
 ]);
 
 function deriveSlideId(relativePath) {
@@ -16,7 +15,72 @@ function deriveSlideId(relativePath) {
   return match ? match[1] : '';
 }
 
-export function buildProjectTreeNode(absPath, rootAbs) {
+function classifyProjectPath(relativePath, paths) {
+  if (relativePath === '.') {
+    return 'root';
+  }
+
+  if (relativePath === paths.rootPdfRel) {
+    return 'deliverable';
+  }
+
+  if (relativePath === paths.systemDirRel || relativePath.startsWith(`${paths.systemDirRel}/`)) {
+    return 'system';
+  }
+
+  if (relativePath === paths.claudeDirRel || relativePath.startsWith(`${paths.claudeDirRel}/`)) {
+    return 'adapter';
+  }
+
+  if (
+    ROOT_SOURCE_PATHS.has(relativePath)
+    || relativePath.startsWith('assets/')
+    || relativePath.startsWith('slides/')
+  ) {
+    return 'source';
+  }
+
+  return 'other';
+}
+
+function deriveNodeKind(relativePath, classification, slideId, isDirectory) {
+  if (relativePath === '.') {
+    return 'root';
+  }
+
+  if (classification === 'system') {
+    return isDirectory ? 'system-directory' : 'system-file';
+  }
+
+  if (slideId && isDirectory && /^slides\/\d{3}-[a-z0-9-]+$/.test(relativePath)) {
+    return 'slide-directory';
+  }
+
+  if (slideId && /\/slide\.html$/.test(relativePath)) {
+    return 'slide-file';
+  }
+
+  return isDirectory ? 'directory' : 'file';
+}
+
+function buildLeafNode(childAbs, rootAbs, projectPaths) {
+  const relativePath = childAbs.slice(rootAbs.length + 1).replace(/\\/g, '/');
+  const slideId = deriveSlideId(relativePath);
+  const classification = classifyProjectPath(relativePath, projectPaths);
+
+  return {
+    name: childAbs.split(sep).pop(),
+    relativePath,
+    kind: deriveNodeKind(relativePath, classification, slideId, false),
+    classification,
+    isDirectory: false,
+    isSystem: classification === 'system',
+    isPrimary: classification === 'source' || classification === 'deliverable',
+    slideId: slideId || null,
+  };
+}
+
+export function buildProjectTreeNode(absPath, rootAbs, projectPaths = getProjectPaths(rootAbs)) {
   const entries = readdirSync(absPath, { withFileTypes: true })
     .filter((entry) => !['.DS_Store', 'Thumbs.db'].includes(entry.name))
     .sort((a, b) => {
@@ -26,56 +90,24 @@ export function buildProjectTreeNode(absPath, rootAbs) {
     });
 
   const relativePath = absPath === rootAbs ? '.' : absPath.slice(rootAbs.length + 1).replace(/\\/g, '/');
-  const systemManaged = relativePath === PROJECT_SYSTEM_DIRNAME || relativePath.startsWith(`${PROJECT_SYSTEM_DIRNAME}/`);
   const slideId = deriveSlideId(relativePath);
   const isDirectory = absPath === rootAbs || statSync(absPath).isDirectory();
-
-  let kind = 'directory';
-  if (relativePath === '.') {
-    kind = 'root';
-  } else if (systemManaged) {
-    kind = isDirectory ? 'system-directory' : 'system-file';
-  } else if (slideId && isDirectory && /^slides\/\d{3}-[a-z0-9-]+$/.test(relativePath)) {
-    kind = 'slide-directory';
-  } else if (slideId && /\/slide\.html$/.test(relativePath)) {
-    kind = 'slide-file';
-  } else if (relativePath.startsWith('outputs/')) {
-    kind = isDirectory ? 'output-directory' : 'output-file';
-  } else if (!isDirectory) {
-    kind = 'file';
-  }
+  const classification = classifyProjectPath(relativePath, projectPaths);
 
   return {
     name: absPath === rootAbs ? '.' : absPath.split(sep).pop(),
     relativePath,
-    kind,
+    kind: deriveNodeKind(relativePath, classification, slideId, isDirectory),
+    classification,
     isDirectory,
-    isSystem: systemManaged,
-    isPrimary: PRIMARY_PROJECT_PATHS.has(relativePath),
+    isSystem: classification === 'system',
+    isPrimary: classification === 'source' || classification === 'deliverable',
     slideId: slideId || null,
     children: entries.map((entry) => {
       const childAbs = resolve(absPath, entry.name);
-      if (entry.isDirectory()) {
-        return buildProjectTreeNode(childAbs, rootAbs);
-      }
-      const childRelativePath = childAbs.slice(rootAbs.length + 1).replace(/\\/g, '/');
-      const childSystemManaged = childRelativePath === PROJECT_SYSTEM_DIRNAME || childRelativePath.startsWith(`${PROJECT_SYSTEM_DIRNAME}/`);
-      const childSlideId = deriveSlideId(childRelativePath);
-      return {
-        name: entry.name,
-        relativePath: childRelativePath,
-        kind: childSystemManaged
-          ? 'system-file'
-          : childSlideId && /\/slide\.html$/.test(childRelativePath)
-            ? 'slide-file'
-            : childRelativePath.startsWith('outputs/')
-              ? 'output-file'
-              : 'file',
-        isDirectory: false,
-        isSystem: childSystemManaged,
-        isPrimary: PRIMARY_PROJECT_PATHS.has(childRelativePath),
-        slideId: childSlideId || null,
-      };
+      return entry.isDirectory()
+        ? buildProjectTreeNode(childAbs, rootAbs, projectPaths)
+        : buildLeafNode(childAbs, rootAbs, projectPaths);
     }),
   };
 }
