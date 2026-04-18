@@ -362,6 +362,27 @@ async function runPreviewCommand(parsed, command, core) {
   return response;
 }
 
+function buildFinalizeExportRequest(parsed) {
+  if (parsed.positionals.length > 0) {
+    throw new CliError(
+      'Finalize does not accept extra positionals. Use plain "presentation finalize" or "presentation export pdf".',
+      {
+        extra: {
+          scope: {
+            kind: 'finalize-target',
+            target: parsed.positionals[0],
+          },
+        },
+      }
+    );
+  }
+
+  return {
+    ...parsed,
+    positionals: ['pdf'],
+  };
+}
+
 async function runExportCommand(parsed, command, core) {
   const result = await core.exportPresentation(parsed.projectRoot, {
     target: parsed.positionals[0] || '',
@@ -404,7 +425,7 @@ async function dispatchPresentationCli(argv = process.argv.slice(2), options = {
       case 'preview':
         return await runPreviewCommand(parsed, command, core);
       case 'finalize':
-        return await runExportCommand({ ...parsed, positionals: ['pdf'] }, command, core);
+        return await runExportCommand(buildFinalizeExportRequest(parsed), command, core);
       case 'export':
         return await runExportCommand(parsed, command, core);
       case 'explain':

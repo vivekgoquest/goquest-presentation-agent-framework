@@ -32,13 +32,13 @@ function closeServer(server) {
   });
 }
 
-function buildPreviewUrl(projectRoot, host, server) {
+function buildPreviewUrl(previewPath, host, server) {
   const address = server.address();
   if (!address || typeof address === 'string') {
     throw new Error('Preview server did not expose a TCP address.');
   }
 
-  return `http://${host}:${address.port}${getProjectPaths(projectRoot).previewPath}`;
+  return `http://${host}:${address.port}${previewPath}`;
 }
 
 function getOpenCommand(previewUrl, platform = process.platform) {
@@ -72,13 +72,14 @@ export async function previewPresentation(projectRootInput, options = {}) {
     throw new Error(`Unsupported preview mode "${mode}". Use "serve" or "open".`);
   }
 
+  const projectPaths = getProjectPaths(projectRoot);
   const host = options.host || '127.0.0.1';
   const port = Number.isInteger(options.port) ? options.port : 0;
   const app = typeof options.appFactory === 'function'
     ? options.appFactory({ projectRoot })
     : createDefaultApp(projectRoot);
   const server = await startServer(app, host, port);
-  const previewUrl = buildPreviewUrl(projectRoot, host, server);
+  const previewUrl = buildPreviewUrl(projectPaths.previewPath, host, server);
 
   let resolveClosed;
   const waitUntilClose = new Promise((resolvePromise) => {

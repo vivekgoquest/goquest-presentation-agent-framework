@@ -491,6 +491,37 @@ test('presentation CLI treats finalize as a thin export alias in v1', async (t) 
   ]]);
 });
 
+test('presentation CLI rejects finalize positionals instead of silently exporting pdf', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  let exportCalls = 0;
+  const result = await runPresentationCli(['finalize', 'status', '--project', projectRoot, '--format', 'json'], {
+    core: {
+      async exportPresentation() {
+        exportCalls += 1;
+        return {
+          status: 'pass',
+          outputDir: 'outputs/exports/manual',
+          artifacts: ['outputs/exports/manual/deck.pdf'],
+          evidenceUpdated: ['.presentation/runtime/artifacts.json'],
+          issues: [],
+          scope: {
+            kind: 'export',
+            format: 'pdf',
+            projectRoot,
+          },
+        };
+      },
+    },
+  });
+
+  assert.equal(result.exitCode, 3);
+  assert.equal(result.payload.status, 'unsupported');
+  assert.match(result.payload.summary, /Finalize does not accept extra positionals/i);
+  assert.equal(exportCalls, 0);
+});
+
 test('presentation CLI delegates export through the core facade', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
