@@ -38,6 +38,32 @@ test('scaffold package writes AGENTS and CLAUDE files beneath .claude only', asy
   assert.match(readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8'), /\.presentation\/package\.generated\.json/);
 });
 
+test('scaffold package avoids removed project-shim command guidance in copied Claude docs', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const packetFiles = [
+    '.claude/AGENTS.md',
+    '.claude/rules/authoring-rules.md',
+    '.claude/skills/new-deck/SKILL.md',
+    '.claude/skills/fix-validation-issues/SKILL.md',
+  ];
+
+  for (const packetFile of packetFiles) {
+    const content = readFileSync(resolve(projectRoot, packetFile), 'utf8');
+    assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs check\b/);
+    assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs capture\b/);
+    assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs export \/tmp\//);
+  }
+
+  const agentsContent = readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8');
+  assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs audit all/);
+  assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export screenshots --output-dir/);
+});
+
 test('scaffold package resolves its source files from the installed package root instead of cwd', async (t) => {
   const outsideCwd = createTempProjectRoot();
   const scaffoldPackageUrl = pathToFileURL(resolve(import.meta.dirname, '..', 'scaffold-package.mjs')).href;

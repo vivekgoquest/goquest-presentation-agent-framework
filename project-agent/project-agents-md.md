@@ -118,15 +118,16 @@ These are system-owned or runtime-owned.
 - Deterministic package truth comes from `.presentation/package.generated.json`
 - Each `slide.html` must contain exactly one valid slide root fragment
 
-## Validation Commands
+## Project CLI Commands
 
 Use these commands from the project root:
 
-- `node .presentation/framework-cli.mjs check`
+- `node .presentation/framework-cli.mjs audit all`
 - `node .presentation/framework-cli.mjs finalize`
-- `node .presentation/framework-cli.mjs capture /tmp/<capture-dir>`
+- `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
+- `node .presentation/framework-cli.mjs export pdf --output-file outputs/manual-export/deck.pdf`
 
-Run `check` during iteration and `finalize` before handoff.
+Run `audit all` during iteration and `finalize` before handoff.
 
 ## Expected Handoff
 

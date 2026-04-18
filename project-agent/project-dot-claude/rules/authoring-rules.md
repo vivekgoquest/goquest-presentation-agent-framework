@@ -39,18 +39,18 @@ After meaningful deck changes, prefer:
 
 Optional lower-level commands:
 
-- `node .presentation/framework-cli.mjs check`
-- `node .presentation/framework-cli.mjs capture /tmp/<capture-dir>`
-- `node .presentation/framework-cli.mjs export /tmp/<deck-name>.pdf`
+- `node .presentation/framework-cli.mjs audit all`
+- `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
+- `node .presentation/framework-cli.mjs export pdf --output-file outputs/manual-export/deck.pdf`
 
-## What `check` Enforces
+## What `audit all` Covers
 
-The repo check currently fails on:
+The project audit currently checks deterministic source-policy issues such as:
 
-- policy violations across slide source files, `theme.css`, optional `slide.css`, and the rendered HTML
-- browser console errors during capture
-- page runtime errors during capture
-- overflow detected on slides
+- policy violations across slide source files, `theme.css`, and optional `slide.css`
+- TODO markers left in authored source such as `outline.md`
+- invalid slide wrappers, inline styles, and other boundary contract violations
+- illegal theme or slide CSS selectors that escape their allowed ownership boundaries
 - decks with zero discovered slides
 
 ## Authoring Heuristics For Agents
@@ -59,7 +59,7 @@ The repo check currently fails on:
 - runtime evidence is read-only: `.presentation/runtime/*.json` is owned by the framework, not by deck edits
 - prefer deck-local theme variables over one-off visual hacks
 - for decks with more than 10 slides, lock the story in `outline.md` before slide-by-slide buildout
-- for decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs check` after each batch
+- for decks with more than 10 slides, build in batches of 5 and run `node .presentation/framework-cli.mjs audit all` after each batch
 - prefer optional `slide.css` only when markup plus theme primitives are not enough
 - keep slide-local selectors scoped to the generated slide id
 - prefer semantic copy structure over visual hacks

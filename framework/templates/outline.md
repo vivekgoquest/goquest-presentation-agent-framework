@@ -2,7 +2,7 @@
 
 Long decks must lock the story before slide-by-slide buildout.
 
-Replace every `[[TODO_...]]` marker below before preview, check, export, or finalize.
+Replace every `[[TODO_...]]` marker below before preview, audit, export, or finalize.
 
 ## Story Arc
 
@@ -14,7 +14,7 @@ Replace every `[[TODO_...]]` marker below before preview, check, export, or fina
 
 - Total slides: {{SLIDE_COUNT}}
 - Batch size: {{SLIDE_BATCH_SIZE}}
-- Build the deck in batches of {{SLIDE_BATCH_SIZE}} slides and run `node .presentation/framework-cli.mjs check` after each batch.
+- Build the deck in batches of {{SLIDE_BATCH_SIZE}} slides and run `node .presentation/framework-cli.mjs audit all` after each batch.
 
 ## Slide Plan
 

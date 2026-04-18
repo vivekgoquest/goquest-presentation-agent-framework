@@ -22,7 +22,7 @@ Then:
 - design each slide: for every slide in the outline, decide how it will look — which primitives, how it differs from neighbors, whether it needs images; record design notes in the outline
 - do not start building slide HTML until the theme is finalized and every slide in the outline has a design decision
 - build the source slides in /abs/path-to-project/slides/<NNN-id>/slide.html following the per-slide design decisions
-- for decks with more than 10 slides, build in batches of 5 and run node .presentation/framework-cli.mjs check after each batch
+- for decks with more than 10 slides, build in batches of 5 and run node .presentation/framework-cli.mjs audit all after each batch
 - use optional /abs/path-to-project/slides/<NNN-id>/slide.css only when a slide needs local CSS
 - keep assets either deck-shared in /abs/path-to-project/assets/ or slide-local in each slide folder
 - keep framework changes out of scope unless truly necessary
