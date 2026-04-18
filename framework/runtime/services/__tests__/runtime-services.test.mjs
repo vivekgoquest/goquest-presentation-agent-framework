@@ -461,6 +461,45 @@ test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', a
   assert.deepEqual(runtimeArtifacts.slides, []);
 });
 
+test('failed canonical pdf export does not resurrect deleted legacy finalized aliases', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  seedLegacyFinalizedAliases(projectRoot);
+
+  const result = await exportPresentation(
+    { projectRoot },
+    { format: 'pdf', slideIds: ['intro', 'close'], selectionMode: 'full-deck' }
+  );
+  const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.equal(result.status, 'fail');
+  assert.equal(result.outputPath, '');
+  assert.deepEqual(result.outputPaths, []);
+  assert.match(result.issues.join('\n'), /brief\.md|Deck policy violation|TODO/i);
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), false);
+  assert.equal(runtimeArtifacts.finalized.exists, false);
+  assert.equal(runtimeArtifacts.finalized.pdf, null);
+  assert.equal(runtimeArtifacts.latestExport.exists, false);
+  assert.equal(runtimeArtifacts.latestExport.pdf, null);
+  assert.deepEqual(runtimeArtifacts.latestExport.artifacts, []);
+  assert.equal(runtimeArtifacts.outputDir, '');
+  assert.equal(runtimeArtifacts.pdf, null);
+  assert.equal(runtimeArtifacts.report, null);
+  assert.equal(runtimeArtifacts.summary, null);
+  assert.equal(runtimeArtifacts.fullPage, null);
+  assert.deepEqual(runtimeArtifacts.slides, []);
+});
+
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
   const [
     { createProjectScaffold },

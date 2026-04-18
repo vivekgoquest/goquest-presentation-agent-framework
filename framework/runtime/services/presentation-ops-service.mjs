@@ -405,6 +405,47 @@ function clearLegacyArtifactAliases() {
   };
 }
 
+function isDeletedLegacyArtifactPath(legacyOutputPaths, pathValue) {
+  const normalizedPath = String(pathValue?.path || pathValue || '').trim().replaceAll('\\', '/');
+  const legacyOutputDir = String(legacyOutputPaths?.finalizedOutputDirRel || '').trim();
+
+  return Boolean(
+    normalizedPath
+    && legacyOutputDir
+    && (normalizedPath === legacyOutputDir || normalizedPath.startsWith(`${legacyOutputDir}/`))
+  );
+}
+
+function sanitizeArtifactsAfterLegacyRefreshFailure(previousArtifacts, legacyOutputPaths) {
+  const finalized = isDeletedLegacyArtifactPath(legacyOutputPaths, previousArtifacts?.finalized?.pdf)
+    ? null
+    : previousArtifacts?.finalized || null;
+
+  const latestExportPdf = previousArtifacts?.latestExport?.pdf;
+  if (isDeletedLegacyArtifactPath(legacyOutputPaths, latestExportPdf)) {
+    return {
+      finalized,
+      latestExport: null,
+    };
+  }
+
+  const latestExportArtifacts = Array.isArray(previousArtifacts?.latestExport?.artifacts)
+    ? previousArtifacts.latestExport.artifacts.filter((artifact) => !isDeletedLegacyArtifactPath(legacyOutputPaths, artifact))
+    : [];
+
+  return {
+    finalized,
+    latestExport: previousArtifacts?.latestExport
+      ? {
+        ...previousArtifacts.latestExport,
+        artifacts: latestExportArtifacts.length > 0
+          ? latestExportArtifacts
+          : (latestExportPdf ? [latestExportPdf] : []),
+      }
+      : null,
+  };
+}
+
 function buildPdfLatestExport(projectPaths, outputPath) {
   const pdfRel = toProjectArtifactPath(projectPaths, outputPath);
   return {
@@ -729,11 +770,13 @@ export async function finalizePresentation(targetInput, options = {}) {
       markFinalized: status === 'pass',
     });
   } else {
+    const preservedArtifacts = sanitizeArtifactsAfterLegacyRefreshFailure(previousArtifacts, legacyOutputPaths);
+
     writeArtifacts(sourcePaths.projectRootAbs, {
       generatedAt,
       sourceFingerprint,
-      finalized: previousArtifacts?.finalized,
-      latestExport: previousArtifacts?.latestExport,
+      finalized: preservedArtifacts.finalized,
+      latestExport: preservedArtifacts.latestExport,
       ...clearLegacyArtifactAliases(),
     });
   }
