@@ -42,7 +42,7 @@ function parseFlagValue(argv, index, flagName) {
 export function parsePresentationCliArgs(argv = []) {
   const family = String(argv[0] || '').trim();
   if (!family) {
-    throw new CliError('Missing command family. Expected one of: inspect, status, audit, finalize, export.');
+    throw new CliError('Missing command family. Expected one of: init, inspect, status, audit, preview, finalize, export.');
   }
 
   const positionals = [];
@@ -52,6 +52,8 @@ export function parsePresentationCliArgs(argv = []) {
   let outputDir = '';
   let outputFile = '';
   let pathValue = '';
+  let slideCount = 3;
+  let copyFramework = false;
   let deck = false;
   let strict = false;
   let render = false;
@@ -89,9 +91,21 @@ export function parsePresentationCliArgs(argv = []) {
         pathValue = parseFlagValue(argv, index, '--path');
         index += 1;
         break;
+      case '--slides': {
+        const rawValue = parseFlagValue(argv, index, '--slides');
+        if (!/^\d+$/.test(rawValue)) {
+          throw new CliError('--slides <count> must be a whole number.');
+        }
+        slideCount = Number.parseInt(rawValue, 10);
+        index += 1;
+        break;
+      }
       case '--severity':
         severity = parseFlagValue(argv, index, '--severity').toLowerCase();
         index += 1;
+        break;
+      case '--copy-framework':
+        copyFramework = true;
         break;
       case '--deck':
         deck = true;
@@ -124,6 +138,8 @@ export function parsePresentationCliArgs(argv = []) {
     outputDir,
     outputFile,
     pathValue,
+    slideCount,
+    copyFramework,
     deck,
     strict,
     render,
@@ -154,6 +170,12 @@ function renderTextEnvelope(payload) {
   }
   if (payload.facets) {
     lines.push(`facets: ${formatTextValue(payload.facets)}`);
+  }
+  if (payload.projectRoot) {
+    lines.push(`projectRoot: ${formatTextValue(payload.projectRoot)}`);
+  }
+  if (payload.previewUrl) {
+    lines.push(`previewUrl: ${formatTextValue(payload.previewUrl)}`);
   }
   if (payload.outputs) {
     lines.push(`outputs: ${formatTextValue(payload.outputs)}`);
@@ -299,25 +321,45 @@ async function runAuditCommand(parsed, command, core) {
   return finalizeResult(payload, parsed.format, result.status === 'fail' ? EXIT_CODE_VIOLATIONS : EXIT_CODE_OK);
 }
 
-async function runFinalizeCommand(parsed, command, core) {
-  const target = parsed.positionals[0] || 'run';
-  if (target === 'status') {
-    return runStatusCommand({ ...parsed, positionals: ['finalize'] }, command, core, 'finalize');
+async function runInitCommand(parsed, command, core) {
+  const result = await core.initProject(parsed.projectRoot, {
+    slideCount: parsed.slideCount,
+    copyFramework: parsed.copyFramework,
+  });
+
+  return finalizeResult({
+    command,
+    status: result.status || 'created',
+    summary: 'Presentation project scaffold created.',
+    projectRoot: parsed.projectRoot,
+    deck: result.deck,
+    slideCount: result.slideCount,
+    files: result.files || [],
+    nextSteps: result.nextSteps || [],
+  }, parsed.format, EXIT_CODE_OK);
+}
+
+async function runPreviewCommand(parsed, command, core) {
+  const mode = String(parsed.positionals[0] || 'serve').trim().toLowerCase() || 'serve';
+  if (!['serve', 'open'].includes(mode)) {
+    throw new CliError(`Unsupported preview mode "${mode}". Use "serve" or "open".`);
   }
 
-  const result = await core.finalize(parsed.projectRoot, { target });
-  const payload = {
+  const result = await core.previewPresentation(parsed.projectRoot, { mode });
+  const response = finalizeResult({
     command,
-    status: result.status,
-    summary: result.status === 'pass'
-      ? 'Canonical delivery outputs were produced.'
-      : 'Finalize completed with blocking issues.',
-    outputs: result.outputs,
-    evidenceUpdated: result.evidenceUpdated || [],
-    issues: result.issues || [],
-  };
-
-  return finalizeResult(payload, parsed.format, result.status === 'pass' ? EXIT_CODE_OK : EXIT_CODE_VIOLATIONS);
+    status: result.status || 'pass',
+    summary: result.summary || (mode === 'open' ? 'Preview opened in the default browser.' : 'Preview server started.'),
+    projectRoot: result.projectRoot || parsed.projectRoot,
+    previewUrl: result.previewUrl,
+    scope: {
+      kind: 'preview',
+      mode,
+      projectRoot: result.projectRoot || parsed.projectRoot,
+    },
+  }, parsed.format, EXIT_CODE_OK);
+  response.holdOpen = result.waitUntilClose || null;
+  return response;
 }
 
 async function runExportCommand(parsed, command, core) {
@@ -351,14 +393,18 @@ async function dispatchPresentationCli(argv = process.argv.slice(2), options = {
     const core = options.core || createPresentationCore();
 
     switch (parsed.family) {
+      case 'init':
+        return await runInitCommand(parsed, command, core);
       case 'inspect':
         return await runInspectCommand(parsed, command, core);
       case 'status':
         return await runStatusCommand(parsed, command, core);
       case 'audit':
         return await runAuditCommand(parsed, command, core);
+      case 'preview':
+        return await runPreviewCommand(parsed, command, core);
       case 'finalize':
-        return await runFinalizeCommand(parsed, command, core);
+        return await runExportCommand({ ...parsed, positionals: ['pdf'] }, command, core);
       case 'export':
         return await runExportCommand(parsed, command, core);
       case 'explain':
@@ -401,5 +447,8 @@ export async function runPresentationCli(argv = process.argv.slice(2), options =
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = await dispatchPresentationCli(process.argv.slice(2));
   process.stdout.write(result.stdout);
+  if (result.holdOpen) {
+    await result.holdOpen;
+  }
   process.exit(result.exitCode);
 }

@@ -14,12 +14,50 @@ function createTempProjectRoot() {
 
 test('presentation core exposes semantic query and operation entrypoints', () => {
   const core = createPresentationCore();
+  assert.equal(typeof core.initProject, 'function');
   assert.equal(typeof core.inspectPackage, 'function');
   assert.equal(typeof core.getStatus, 'function');
   assert.equal(typeof core.getPreview, 'function');
+  assert.equal(typeof core.previewPresentation, 'function');
   assert.equal(typeof core.runAudit, 'function');
   assert.equal(typeof core.finalize, 'function');
   assert.equal(typeof core.exportPresentation, 'function');
+});
+
+
+test('presentation core delegates initProject and previewPresentation through injected services', async () => {
+  const calls = [];
+  const core = createPresentationCore({
+    createProjectScaffold(target, options = {}) {
+      calls.push(['createProjectScaffold', target, options]);
+      return {
+        status: 'created',
+        deck: 'shell-less-v1',
+        sourceDir: target.projectRoot,
+        slideCount: options.slideCount,
+        files: ['brief.md'],
+      };
+    },
+    async previewPresentation(projectRoot, options = {}) {
+      calls.push(['previewPresentation', projectRoot, options]);
+      return {
+        status: 'pass',
+        previewUrl: 'http://127.0.0.1:4173/preview/',
+        summary: 'Preview server started.',
+      };
+    },
+  });
+
+  const initResult = await core.initProject('/tmp/core-init-project', { slideCount: 4 });
+  const previewResult = await core.previewPresentation('/tmp/core-preview-project', { mode: 'serve' });
+
+  assert.equal(initResult.status, 'created');
+  assert.equal(initResult.slideCount, 4);
+  assert.equal(previewResult.previewUrl, 'http://127.0.0.1:4173/preview/');
+  assert.deepEqual(calls, [
+    ['createProjectScaffold', { projectRoot: '/tmp/core-init-project' }, { slideCount: 4, copyFramework: false }],
+    ['previewPresentation', '/tmp/core-preview-project', { mode: 'serve' }],
+  ]);
 });
 
 test('presentation core inspectPackage returns manifest, evidence, and status', async (t) => {
@@ -358,30 +396,46 @@ test('presentation CLI delegates audit through the core facade', async (t) => {
   ]]);
 });
 
-test('presentation CLI delegates finalize through the core facade', async (t) => {
+test('presentation CLI delegates init through the core facade', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  const calls = [];
+  const result = await runPresentationCli(['init', '--project', projectRoot, '--slides', '4', '--format', 'json'], {
+    core: {
+      async initProject(input, options = {}) {
+        calls.push(['initProject', input, options]);
+        return {
+          status: 'created',
+          deck: 'shell-less-v1',
+          sourceDir: input,
+          slideCount: options.slideCount,
+          files: ['brief.md', 'slides/010-intro/slide.html'],
+          nextSteps: ['presentation status --project /tmp/example'],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.payload.status, 'created');
+  assert.equal(result.payload.projectRoot, projectRoot);
+  assert.deepEqual(calls, [['initProject', projectRoot, { slideCount: 4, copyFramework: false }]]);
+});
+
+test('presentation CLI delegates preview through the core facade', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   const calls = [];
-  const result = await runPresentationCli(['finalize', 'run', '--project', projectRoot, '--format', 'json'], {
+  const result = await runPresentationCli(['preview', 'serve', '--project', projectRoot, '--format', 'json'], {
     core: {
-      async finalize(input, options = {}) {
-        calls.push(['finalize', input, options]);
+      async previewPresentation(input, options = {}) {
+        calls.push(['previewPresentation', input, options]);
         return {
-          kind: 'presentation-finalize',
-          projectRoot: input,
           status: 'pass',
-          outputs: {
-            outputDir: 'outputs/finalized',
-            pdf: 'outputs/finalized/deck.pdf',
-          },
-          evidenceUpdated: [
-            '.presentation/runtime/render-state.json',
-            '.presentation/runtime/artifacts.json',
-          ],
-          issues: [],
+          previewUrl: 'http://127.0.0.1:4173/preview/',
+          summary: 'Preview server started.',
         };
       },
     },
@@ -389,7 +443,52 @@ test('presentation CLI delegates finalize through the core facade', async (t) =>
 
   assert.equal(result.exitCode, 0);
   assert.equal(result.payload.status, 'pass');
-  assert.deepEqual(calls, [['finalize', projectRoot, { target: 'run' }]]);
+  assert.equal(result.payload.previewUrl, 'http://127.0.0.1:4173/preview/');
+  assert.deepEqual(calls, [['previewPresentation', projectRoot, { mode: 'serve' }]]);
+});
+
+test('presentation CLI treats finalize as a thin export alias in v1', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const calls = [];
+  const result = await runPresentationCli(['finalize', '--project', projectRoot, '--format', 'json'], {
+    core: {
+      async exportPresentation(input, options = {}) {
+        calls.push(['exportPresentation', input, options]);
+        return {
+          kind: 'presentation-export',
+          projectRoot: input,
+          status: 'pass',
+          outputDir: 'outputs/exports/manual',
+          artifacts: ['outputs/exports/manual/deck.pdf'],
+          evidenceUpdated: ['.presentation/runtime/artifacts.json'],
+          issues: [],
+          scope: {
+            kind: 'export',
+            format: 'pdf',
+            projectRoot: input,
+          },
+        };
+      },
+    },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.payload.status, 'pass');
+  assert.equal(result.payload.summary, 'Requested export artifacts were produced.');
+  assert.deepEqual(calls, [[
+    'exportPresentation',
+    projectRoot,
+    {
+      target: 'pdf',
+      slideIds: [],
+      outputDir: '',
+      outputFile: '',
+    },
+  ]]);
 });
 
 test('presentation CLI delegates export through the core facade', async (t) => {

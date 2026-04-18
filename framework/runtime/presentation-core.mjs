@@ -16,6 +16,7 @@ import {
   withPresentationPackageMutationBoundary,
 } from './presentation-package.js';
 import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
+import { previewPresentation as previewPresentationOperation } from './preview-server.mjs';
 import { renderPresentationFailureHtml } from './preview-state-page.js';
 import { getProjectState } from './project-state.js';
 import {
@@ -24,6 +25,7 @@ import {
   finalizePresentation,
   validatePresentation as validatePresentationOperation,
 } from './services/presentation-ops-service.mjs';
+import { createPresentationScaffold as createProjectScaffold } from './services/scaffold-service.mjs';
 
 export class PresentationCoreError extends Error {
   constructor(message, options = {}) {
@@ -322,6 +324,8 @@ export function createPresentationCore(deps = {}) {
     runCanvasAudit,
     runBoundaryAudit,
     runAuditAll,
+    createProjectScaffold,
+    previewPresentation: previewPresentationOperation,
     finalizePresentation,
     exportPresentation: exportPresentationOperation,
     validatePresentation: validatePresentationOperation,
@@ -330,6 +334,13 @@ export function createPresentationCore(deps = {}) {
   };
 
   return {
+    initProject(projectRoot, options = {}) {
+      return services.createProjectScaffold({ projectRoot }, {
+        slideCount: options.slideCount ?? 3,
+        copyFramework: Boolean(options.copyFramework),
+      });
+    },
+
     inspectPackage(projectRoot, options = {}) {
       return runInsideCoreMutationBoundary(() => {
         const target = String(options.target || 'package').trim().toLowerCase() || 'package';
@@ -373,6 +384,10 @@ export function createPresentationCore(deps = {}) {
 
     getPreview(projectRoot) {
       return runInsideCoreMutationBoundary(() => buildPreviewResult(projectRoot, services));
+    },
+
+    async previewPresentation(projectRoot, options = {}) {
+      return await services.previewPresentation(projectRoot, options);
     },
 
     async runAudit(projectRoot, options = {}) {

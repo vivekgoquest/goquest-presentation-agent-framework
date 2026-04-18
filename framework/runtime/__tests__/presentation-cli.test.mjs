@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { parsePresentationCliArgs } from '../presentation-cli.mjs';
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 
 const CLI_PATH = resolve(process.cwd(), 'framework/runtime/presentation-cli.mjs');
@@ -119,20 +120,15 @@ test('presentation-cli inspect package returns a structured package envelope', a
   assert.ok(json.freshness);
 });
 
-test('presentation-cli finalize status is exposed through the finalize family', async (t) => {
-  const projectRoot = createTempProjectRoot();
-  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+test('presentation-cli parser accepts init and preview command families', () => {
+  const initParsed = parsePresentationCliArgs(['init', '--project', '/tmp/example', '--slides', '4']);
+  assert.equal(initParsed.family, 'init');
+  assert.equal(initParsed.projectRoot, '/tmp/example');
+  assert.equal(initParsed.slideCount, 4);
 
-  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
-
-  const result = runCli(['finalize', 'status', '--project', projectRoot, '--format', 'json']);
-
-  assert.equal(result.exitCode, 0);
-  const json = JSON.parse(result.stdout);
-  assert.equal(json.status, 'ok');
-  assert.ok(json.workflow);
-  assert.ok(json.facets);
-  assert.deepEqual(json.scope, { kind: 'finalize', projectRoot });
+  const previewParsed = parsePresentationCliArgs(['preview', 'serve', '--project', '/tmp/example']);
+  assert.equal(previewParsed.family, 'preview');
+  assert.deepEqual(previewParsed.positionals, ['serve']);
 });
 
 test('presentation-cli inspect text renders structured summaries instead of object placeholders', async (t) => {
