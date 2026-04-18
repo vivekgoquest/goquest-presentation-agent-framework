@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Layered HTML/CSS presentation framework with PDF export",
   "bin": {
-    "presentation": "./framework/runtime/presentation-cli.mjs"
+    "presentation": "./framework/application/presentation-bin.mjs"
   },
   "exports": {
     ".": "./framework/runtime/presentation-core.mjs",

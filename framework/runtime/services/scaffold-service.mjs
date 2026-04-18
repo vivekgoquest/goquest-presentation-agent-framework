@@ -25,6 +25,16 @@ import {
 import { writeInitialPresentationIntent } from '../presentation-intent.js';
 import { ensurePresentationRuntimeStateFiles } from '../presentation-runtime-state.js';
 
+function assertSupportedV1SlideCount(slideCount) {
+  if (!Number.isSafeInteger(slideCount) || slideCount < 1 || slideCount > LONG_DECK_OUTLINE_THRESHOLD) {
+    throw new Error(
+      `Shell-less v1 init currently supports 1-${LONG_DECK_OUTLINE_THRESHOLD} slides. Long-deck scaffolds are not supported yet.`
+    );
+  }
+
+  return slideCount;
+}
+
 export function parseNewDeckCliArgs(argv) {
   let slideCount = 3;
   let copyFramework = false;
@@ -51,10 +61,7 @@ export function parseNewDeckCliArgs(argv) {
       throw new Error('--slides <count> must be a whole number.');
     }
 
-    slideCount = Number.parseInt(rawValue, 10);
-    if (!Number.isSafeInteger(slideCount) || slideCount < 1 || slideCount > 99) {
-      throw new Error('--slides <count> must stay between 1 and 99.');
-    }
+    slideCount = assertSupportedV1SlideCount(Number.parseInt(rawValue, 10));
 
     i += 1;
   }
@@ -359,7 +366,8 @@ export function createPresentationScaffold(targetInput, options = {}) {
     slideCount = 3,
     copyFramework = false,
   } = options;
+  const validatedSlideCount = assertSupportedV1SlideCount(slideCount);
   const projectPaths = createPendingProjectPaths(targetInput.projectRootAbs || targetInput.projectRoot || targetInput);
   ensureEmptyDirectory(projectPaths.sourceDirAbs, 'Project folder');
-  return scaffoldIntoPaths(projectPaths, { slideCount, copyFramework });
+  return scaffoldIntoPaths(projectPaths, { slideCount: validatedSlideCount, copyFramework });
 }

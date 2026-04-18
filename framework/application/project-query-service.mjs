@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  LONG_DECK_OUTLINE_THRESHOLD,
   PROJECT_METADATA_FILENAME,
   PROJECT_PREVIEW_PATH,
   PROJECT_SYSTEM_DIRNAME,
@@ -33,8 +34,10 @@ function requireProjectRootInput(value, message) {
 
 function assertSlideCount(value) {
   const slideCount = Number.parseInt(String(value ?? '3'), 10);
-  if (!Number.isFinite(slideCount) || slideCount < 1 || slideCount > 99) {
-    throw new Error('Slides must be a whole number between 1 and 99.');
+  if (!Number.isFinite(slideCount) || slideCount < 1 || slideCount > LONG_DECK_OUTLINE_THRESHOLD) {
+    throw new Error(
+      `Shell-less v1 init currently supports 1-${LONG_DECK_OUTLINE_THRESHOLD} slides. Long-deck scaffolds are not supported yet.`
+    );
   }
   return slideCount;
 }

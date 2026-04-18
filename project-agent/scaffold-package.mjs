@@ -1,6 +1,8 @@
 import { cpSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
+const DEFAULT_FRAMEWORK_ROOT = resolve(import.meta.dirname, '..');
+
 function listDirectoryEntries(sourceDirAbs, targetDirRel) {
   const entries = [];
   for (const entry of readdirSync(sourceDirAbs, { withFileTypes: true })) {
@@ -19,7 +21,7 @@ function listDirectoryEntries(sourceDirAbs, targetDirRel) {
 }
 
 export function getProjectAgentScaffoldPackage(options = {}) {
-  const frameworkRoot = options.frameworkRoot || process.cwd();
+  const frameworkRoot = options.frameworkRoot || DEFAULT_FRAMEWORK_ROOT;
   const projectAgentRoot = resolve(frameworkRoot, 'project-agent');
   const claudeRoot = resolve(projectAgentRoot, 'project-dot-claude');
 

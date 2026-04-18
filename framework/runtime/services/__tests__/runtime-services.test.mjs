@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -94,14 +95,43 @@ test('application scaffold creates the shell-less v1 layout for a 3-slide projec
   }
 });
 
-test('project shim injects project root and delegates through package resolution', async () => {
-  const { renderProjectFrameworkCliSource } = await import('../../project-cli-shim.mjs');
+test('project shim executes from a real temp project outside the repo', async (t) => {
+  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const workspaceRoot = createTempProjectRoot();
+  const projectRoot = resolve(workspaceRoot, 'external-project');
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
-  const source = renderProjectFrameworkCliSource();
-  assert.match(source, /from 'pitch-framework\/presentation-cli'/);
+  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+
+  const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
+  const source = readFileSync(shimPath, 'utf8');
+  assert.match(source, /pitch-framework\/presentation-cli/);
   assert.match(source, /'--project', projectRoot/);
-  assert.doesNotMatch(source, /frameworkSource/);
   assert.doesNotMatch(source, /execFileSync/);
+
+  const result = spawnSync(process.execPath, [shimPath, 'status', '--format', 'json'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.status, 'ok');
+  assert.equal(realpathSync(json.scope.projectRoot), realpathSync(projectRoot));
+});
+
+test('application scaffold rejects unsupported long-deck v1 projects before writing files', async (t) => {
+  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const workspaceRoot = createTempProjectRoot();
+  const projectRoot = resolve(workspaceRoot, 'unsupported-long-deck');
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
+
+  assert.throws(
+    () => createProjectScaffold({ projectRoot }, { slideCount: 11 }),
+    /supports 1 to 10 slides|supports 1-10 slides|long-deck/i
+  );
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), false);
+  assert.equal(existsSync(resolve(projectRoot, 'outline.md')), false);
 });
 
 test('runtime services operate on a real scaffolded project', async (t) => {
