@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 function createTempProjectRoot() {
@@ -12,6 +12,10 @@ function createTempProjectRoot() {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toProjectRelativePath(projectRoot, absPath) {
+  return relative(projectRoot, absPath).split('\\').join('/');
 }
 
 function installResolvableFrameworkPackage(workspaceRoot) {
@@ -250,6 +254,7 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   assert.equal(initialArtifacts.kind, 'artifacts');
   assert.equal(initialArtifacts.finalized.exists, false);
   assert.equal(initialArtifacts.latestExport.exists, false);
+  assert.equal(initialArtifacts.latestExport.format, 'pdf');
 
   const checkDir = resolve(projectRoot, '.artifacts', 'check');
   const check = await validatePresentation({ projectRoot }, { outputDir: checkDir });
@@ -261,29 +266,38 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const artifactsAfterCheck = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.deepEqual(artifactsAfterCheck, initialArtifacts);
 
-  const exportPath = resolve(projectRoot, 'outputs', 'service-export.pdf');
-  const exported = await exportDeckPdf({ projectRoot }, exportPath);
-  assert.equal(exported.outputPath, exportPath);
-  assert.ok(existsSync(exportPath));
-  assert.equal(readFileSync(exportPath).subarray(0, 4).toString(), '%PDF');
+  const projectMetadata = readJson(resolve(projectRoot, '.presentation', 'project.json'));
+  const rootPdfRel = `${projectMetadata.projectSlug}.pdf`;
+  const rootPdfAbs = resolve(projectRoot, rootPdfRel);
+  const exported = await exportDeckPdf({ projectRoot });
+  assert.equal(exported.outputPath, rootPdfAbs);
+  assert.ok(existsSync(rootPdfAbs));
+  assert.equal(readFileSync(rootPdfAbs).subarray(0, 4).toString(), '%PDF');
   const exportedArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.equal(exportedArtifacts.finalized.exists, true);
+  assert.equal(exportedArtifacts.finalized.pdf.path, rootPdfRel);
+  assert.ok(!('outputDir' in exportedArtifacts.finalized) || exportedArtifacts.finalized.outputDir === '');
   assert.equal(exportedArtifacts.latestExport.exists, true);
   assert.equal(exportedArtifacts.latestExport.format, 'pdf');
-  assert.equal(exportedArtifacts.latestExport.outputDir, 'outputs');
-  assert.equal(exportedArtifacts.latestExport.pdf.path, 'outputs/service-export.pdf');
-  assert.equal(exportedArtifacts.finalized.exists, false);
+  assert.equal(exportedArtifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(exportedArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
 
   const finalized = await finalizePresentation({ projectRoot });
   assert.equal(finalized.status, 'pass');
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')));
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'report.json')));
-  assert.ok(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'summary.md')));
+  assert.equal(finalized.outputs.pdf, rootPdfRel);
+  assert.deepEqual(finalized.outputs.artifacts, [rootPdfRel]);
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), false);
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'report.json')), false);
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'summary.md')), false);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
   const finalizedArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.equal(finalizedArtifacts.finalized.exists, true);
-  assert.equal(finalizedArtifacts.finalized.outputDir, 'outputs/finalized');
-  assert.equal(finalizedArtifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
-  assert.equal(finalizedArtifacts.finalized.summary.path, 'outputs/finalized/summary.md');
+  assert.equal(finalizedArtifacts.finalized.pdf.path, rootPdfRel);
+  assert.ok(!('outputDir' in finalizedArtifacts.finalized) || finalizedArtifacts.finalized.outputDir === '');
+  assert.equal(finalizedArtifacts.latestExport.exists, true);
+  assert.equal(finalizedArtifacts.latestExport.format, 'pdf');
+  assert.equal(finalizedArtifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(finalizedArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
 });
 
 test('assembled deck keeps export in Electron and out of the deck html', async (t) => {
@@ -348,8 +362,9 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.equal(existsSync(resolve(pngOutputDir, 'report.json')), false);
   const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.equal(runtimeArtifacts.latestExport.exists, true);
-  assert.equal(runtimeArtifacts.latestExport.format, 'png');
-  assert.deepEqual(runtimeArtifacts.latestExport.slides.map((slide) => slide.id), ['intro']);
+  assert.equal(runtimeArtifacts.latestExport.format, 'pdf');
+  assert.equal(runtimeArtifacts.latestExport.pdf.path, toProjectRelativePath(projectRoot, pdfResult.outputPath));
+  assert.deepEqual(runtimeArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [toProjectRelativePath(projectRoot, pdfResult.outputPath)]);
   assert.equal(runtimeArtifacts.finalized.exists, false);
 });
 

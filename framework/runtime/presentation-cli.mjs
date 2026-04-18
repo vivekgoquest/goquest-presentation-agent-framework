@@ -385,7 +385,7 @@ function buildFinalizeExportRequest(parsed) {
 
 async function runExportCommand(parsed, command, core) {
   const result = await core.exportPresentation(parsed.projectRoot, {
-    target: parsed.positionals[0] || '',
+    target: parsed.positionals[0] || 'pdf',
     slideIds: parsed.slideIds,
     outputDir: parsed.outputDir,
     outputFile: parsed.outputFile,

@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-package-hook-'));
@@ -109,7 +110,36 @@ function parseTrailingCliJson(stdout) {
   return JSON.parse(match[1]);
 }
 
-test('export CLI writes ad hoc PDF artifacts under outputs/exports and does not finalize the package', async (t) => {
+function getProjectPdfRel(projectRoot) {
+  const metadata = readJson(resolve(projectRoot, '.presentation', 'project.json'));
+  return `${metadata.projectSlug}.pdf`;
+}
+
+function installResolvableFrameworkPackage(workspaceRoot) {
+  const packageRoot = resolve(workspaceRoot, 'node_modules', 'pitch-framework');
+  mkdirSync(resolve(packageRoot, 'framework', 'runtime'), { recursive: true });
+  mkdirSync(resolve(packageRoot, 'framework', 'application'), { recursive: true });
+  writeFileSync(
+    resolve(packageRoot, 'package.json'),
+    `${JSON.stringify({
+      name: 'pitch-framework',
+      type: 'module',
+      exports: {
+        './presentation-cli': './framework/runtime/presentation-cli.mjs',
+      },
+    }, null, 2)}\n`
+  );
+  writeFileSync(
+    resolve(packageRoot, 'framework', 'runtime', 'presentation-cli.mjs'),
+    `export { runPresentationCli } from ${JSON.stringify(pathToFileURL(resolve(process.cwd(), 'framework', 'runtime', 'presentation-cli.mjs')).href)};\n`
+  );
+  writeFileSync(
+    resolve(packageRoot, 'framework', 'application', 'project-hook-service.mjs'),
+    `export * from ${JSON.stringify(pathToFileURL(resolve(process.cwd(), 'framework', 'application', 'project-hook-service.mjs')).href)};\n`
+  );
+}
+
+test('export CLI writes the canonical root pdf and simplified runtime evidence', async (t) => {
   const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
@@ -117,21 +147,26 @@ test('export CLI writes ad hoc PDF artifacts under outputs/exports and does not 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
+  const rootPdfRel = getProjectPdfRel(projectRoot);
   const exportResult = runExportCliDetailed(projectRoot);
   assert.equal(exportResult.status, 0, exportResult.stderr);
 
+  const json = parseTrailingCliJson(exportResult.stdout);
   const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
 
-  assert.equal(artifacts.finalized.exists, false);
+  assert.deepEqual(json.outputs.artifacts, [rootPdfRel]);
+  assert.equal(artifacts.finalized.exists, true);
+  assert.equal(artifacts.finalized.pdf.path, rootPdfRel);
+  assert.ok(!('outputDir' in artifacts.finalized) || artifacts.finalized.outputDir === '');
   assert.equal(artifacts.latestExport.exists, true);
   assert.equal(artifacts.latestExport.format, 'pdf');
-  assert.match(artifacts.latestExport.outputDir, /^outputs\/exports\//);
-  assert.match(artifacts.latestExport.pdf.path, /^outputs\/exports\//);
-  assert.equal(existsSync(resolve(projectRoot, artifacts.latestExport.pdf.path)), true);
-  assert.equal(readFileSync(resolve(projectRoot, artifacts.latestExport.pdf.path)).subarray(0, 4).toString(), '%PDF');
+  assert.equal(artifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(artifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
+  assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
+  assert.equal(readFileSync(resolve(projectRoot, rootPdfRel)).subarray(0, 4).toString(), '%PDF');
 });
 
-test('finalize keeps finalized outputs canonical and preserves latest export evidence as a separate lane', async (t) => {
+test('finalize writes the canonical root pdf and resets runtime evidence to the v1 delivery shape', async (t) => {
   const [
     { createProjectScaffold },
     { exportPresentation },
@@ -157,29 +192,29 @@ test('finalize keeps finalized outputs canonical and preserves latest export evi
   const finalizeResult = runFinalizeCliDetailed(projectRoot);
   assert.equal(finalizeResult.status, 0, finalizeResult.stderr);
 
+  const rootPdfRel = getProjectPdfRel(projectRoot);
   const json = parseTrailingCliJson(finalizeResult.stdout);
   assert.equal(json.status, 'pass');
-  assert.equal(json.outputs.pdf, 'outputs/finalized/deck.pdf');
-  assert.equal(json.outputs.outputDir, 'outputs/finalized');
-  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), true);
+  assert.deepEqual(json.outputs.artifacts, [rootPdfRel]);
+  assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
+  assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), false);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
 
   const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
 
   assert.equal(artifacts.finalized.exists, true);
-  assert.equal(artifacts.finalized.outputDir, 'outputs/finalized');
-  assert.equal(artifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
+  assert.equal(artifacts.finalized.pdf.path, rootPdfRel);
   assert.equal(artifacts.latestExport.exists, true);
-  assert.equal(artifacts.latestExport.format, 'png');
-  assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/review-pass');
-  assert.deepEqual(artifacts.latestExport.slides.map((slide) => slide.id), ['intro']);
+  assert.equal(artifacts.latestExport.format, 'pdf');
+  assert.equal(artifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(artifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
   assert.ok(renderState.sourceFingerprint);
   assert.equal(renderState.sourceFingerprint, artifacts.sourceFingerprint);
   assert.equal(renderState.producer, 'finalize');
 });
 
-test('export refreshes latest export evidence without clearing existing finalized outputs', async (t) => {
+test('png exports leave the root-pdf runtime evidence untouched after finalize', async (t) => {
   const [
     { createProjectScaffold },
     { exportPresentation },
@@ -205,13 +240,14 @@ test('export refreshes latest export evidence without clearing existing finalize
     }
   );
 
+  const rootPdfRel = getProjectPdfRel(projectRoot);
   const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
   assert.equal(artifacts.finalized.exists, true);
-  assert.equal(artifacts.finalized.outputDir, 'outputs/finalized');
-  assert.equal(artifacts.finalized.pdf.path, 'outputs/finalized/deck.pdf');
+  assert.equal(artifacts.finalized.pdf.path, rootPdfRel);
   assert.equal(artifacts.latestExport.exists, true);
-  assert.equal(artifacts.latestExport.format, 'png');
-  assert.equal(artifacts.latestExport.outputDir, 'outputs/exports/post-finalize-review');
+  assert.equal(artifacts.latestExport.format, 'pdf');
+  assert.equal(artifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(artifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
 });
 
 test('presentation action adapter finalizes through the protected core facade', async () => {
@@ -227,11 +263,9 @@ test('presentation action adapter finalizes through the protected core facade', 
           projectRoot,
           status: 'pass',
           outputs: {
-            outputDir: 'outputs/finalized',
-            pdf: 'outputs/finalized/deck.pdf',
-            report: 'outputs/finalized/report.json',
-            summary: 'outputs/finalized/summary.md',
-            slides: 'outputs/finalized/slides',
+            outputDir: '',
+            pdf: 'presentation-core-seam.pdf',
+            artifacts: ['presentation-core-seam.pdf'],
           },
           issues: [],
         };
@@ -248,9 +282,9 @@ test('presentation action adapter finalizes through the protected core facade', 
 
   assert.equal(result.status, 'pass');
   assert.equal(result.message, 'Presentation finalize completed.');
-  assert.equal(result.outputs.outputDir, 'outputs/finalized');
-  assert.equal(result.outputs.pdf, 'outputs/finalized/deck.pdf');
-  assert.match(result.detail, /outputs\/finalized\/deck\.pdf$/);
+  assert.equal(result.outputs.outputDir, '');
+  assert.equal(result.outputs.pdf, 'presentation-core-seam.pdf');
+  assert.match(result.detail, /presentation-core-seam\.pdf$/);
   assert.deepEqual(coreCalls, [[
     'finalize',
     '/tmp/presentation-core-seam',
@@ -378,11 +412,12 @@ test('legacy finalize action delegates to the new finalize semantics', async (t)
     },
   });
 
+  const rootPdfRel = getProjectPdfRel(projectRoot);
   assert.equal(result.status, 'pass');
   assert.equal(result.message, 'Presentation finalize completed.');
-  assert.equal(result.outputs.outputDir, 'outputs/finalized');
-  assert.equal(result.outputs.pdf, 'outputs/finalized/deck.pdf');
-  assert.match(result.detail, /outputs\/finalized\/deck\.pdf$/);
+  assert.equal(result.outputs.outputDir, '');
+  assert.equal(result.outputs.pdf, rootPdfRel);
+  assert.match(result.detail, new RegExp(`${rootPdfRel.replace('.', '\\.')}$`));
 });
 
 test('legacy check entrypoint delegates to audit-compatible behavior', async (t) => {
@@ -421,6 +456,7 @@ test('presentation stop hook regenerates package state and checkpoints a clean p
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+  installResolvableFrameworkPackage(projectRoot);
 
   const settings = JSON.parse(readFileSync(resolve(projectRoot, '.claude', 'settings.json'), 'utf8'));
   assert.match(settings.hooks.Stop[0].hooks[0].command, /run-presentation-stop-workflow/);
@@ -452,6 +488,7 @@ test('presentation stop hook blocks invalid intent references and skips git chec
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+  installResolvableFrameworkPackage(projectRoot);
 
   writeFileSync(
     resolve(projectRoot, '.presentation', 'intent.json'),
@@ -492,6 +529,7 @@ test('presentation stop hook preserves canonical artifacts after a clean run', a
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+  installResolvableFrameworkPackage(projectRoot);
 
   execFileSync('node', ['.presentation/framework-cli.mjs', 'finalize'], {
     cwd: projectRoot,
@@ -503,8 +541,7 @@ test('presentation stop hook preserves canonical artifacts after a clean run', a
   const artifactsAfter = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
 
   assert.deepEqual(artifactsAfter, artifactsBefore);
-  assert.equal(existsSync(resolve(projectRoot, artifactsAfter.fullPage.path)), true);
-  assert.equal(existsSync(resolve(projectRoot, artifactsAfter.report.path)), true);
+  assert.equal(existsSync(resolve(projectRoot, artifactsAfter.finalized.pdf.path)), true);
 });
 
 test('presentation stop hook returns structured failure output for deck policy errors', async (t) => {
@@ -513,6 +550,7 @@ test('presentation stop hook returns structured failure output for deck policy e
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  installResolvableFrameworkPackage(projectRoot);
 
   const hookResult = runStopHookDetailed(projectRoot);
 

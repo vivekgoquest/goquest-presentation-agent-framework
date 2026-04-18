@@ -52,6 +52,7 @@ const CORE_AUTHORED_CONTENT_GLOBS = Object.freeze([
 const CORE_SYSTEM_WRITE_GLOBS = Object.freeze([
   '.presentation/package.generated.json',
   '.presentation/runtime/*.json',
+  '*.pdf',
   'outputs/finalized/**',
   'outputs/exports/**',
 ]);
@@ -254,7 +255,8 @@ function getMissingSlideSelections(manifest, slideIds) {
 
 function toProjectRelativeOutputPath(projectRoot, pathValue, scope) {
   try {
-    return toRelativeWithin(projectRoot, resolve(projectRoot, pathValue));
+    const relativePath = toRelativeWithin(projectRoot, resolve(projectRoot, pathValue));
+    return relativePath === '.' ? '' : relativePath;
   } catch {
     throw createCoreError(`Export outputs must stay within the project root: ${projectRoot}.`, {
       extra: { scope },
@@ -502,7 +504,7 @@ export function createPresentationCore(deps = {}) {
         const paths = services.getProjectPaths(projectRoot);
 
         return await enforceCoreAuthoredContentImmutability(paths.projectRootAbs, 'export', async () => {
-          const target = String(options.target || '').trim().toLowerCase();
+          const target = String(options.target || 'pdf').trim().toLowerCase() || 'pdf';
           if (!['pdf', 'screenshots'].includes(target)) {
             throw createCoreError(`Unsupported export target "${target || '(missing)'}". Use "pdf" or "screenshots".`, {
               extra: {
@@ -537,7 +539,9 @@ export function createPresentationCore(deps = {}) {
           const format = target === 'pdf' ? 'pdf' : 'png';
           const outputDir = options.outputDir
             ? toProjectRelativeOutputDir(paths, options.outputDir, scope)
-            : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
+            : target === 'pdf'
+              ? ''
+              : `${paths.exportsOutputDirRel}/${timestampSegment()}/${target}`;
           const outputFile = toProjectRelativeOutputFile(paths, outputDir, options.outputFile, scope);
 
           let result;
@@ -563,13 +567,13 @@ export function createPresentationCore(deps = {}) {
           return {
             kind: 'presentation-export',
             projectRoot: paths.projectRootAbs,
-            status: 'pass',
+            status: result.status || 'pass',
             scope,
             outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
             artifacts: (result.outputPaths || [])
               .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
-            evidenceUpdated: [paths.artifactsRel],
-            issues: [],
+            evidenceUpdated: result.evidenceUpdated || (target === 'pdf' ? [paths.artifactsRel] : []),
+            issues: result.issues || [],
           };
         });
       });

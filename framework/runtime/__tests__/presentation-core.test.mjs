@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 import { createPresentationCore, PresentationCoreError } from '../presentation-core.mjs';
@@ -190,9 +190,9 @@ test('presentation core rejects export implementations that create or mutate aut
   );
 });
 
-test('presentation core exportPresentation anchors export requests to the project root and returns project-relative outputs', async (t) => {
+test('presentation core exportPresentation defaults to the root pdf deliverable when no target or output path is provided', async (t) => {
   const projectRoot = createTempProjectRoot();
-  const exportOutputDir = resolve(projectRoot, 'outputs', 'exports', 'manual');
+  const rootPdfRel = `${basename(projectRoot)}.pdf`;
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
@@ -204,16 +204,13 @@ test('presentation core exportPresentation anchors export requests to the projec
       return {
         format: request.format,
         slideIds: request.slideIds,
-        outputDir: exportOutputDir,
-        outputPaths: [resolve(exportOutputDir, 'deck.pdf')],
+        outputDir: projectRoot,
+        outputPaths: [resolve(projectRoot, rootPdfRel)],
       };
     },
   });
 
-  const result = await core.exportPresentation(projectRoot, {
-    target: 'pdf',
-    outputDir: exportOutputDir,
-  });
+  const result = await core.exportPresentation(projectRoot, {});
 
   assert.equal(exportCalls.length, 1);
   assert.deepEqual(exportCalls[0], {
@@ -221,7 +218,7 @@ test('presentation core exportPresentation anchors export requests to the projec
     request: {
       format: 'pdf',
       slideIds: [exportCalls[0].request.slideIds[0]],
-      outputDir: 'outputs/exports/manual',
+      outputDir: '',
       outputFile: '',
     },
     runtimeOptions: {
@@ -229,8 +226,8 @@ test('presentation core exportPresentation anchors export requests to the projec
     },
   });
   assert.equal(result.projectRoot, projectRoot);
-  assert.equal(result.outputDir, 'outputs/exports/manual');
-  assert.deepEqual(result.artifacts, ['outputs/exports/manual/deck.pdf']);
+  assert.equal(result.outputDir, '');
+  assert.deepEqual(result.artifacts, [rootPdfRel]);
   assert.deepEqual(result.evidenceUpdated, ['.presentation/runtime/artifacts.json']);
 });
 
@@ -522,7 +519,7 @@ test('presentation CLI rejects finalize positionals instead of silently exportin
   assert.equal(exportCalls, 0);
 });
 
-test('presentation CLI delegates export through the core facade', async (t) => {
+test('presentation CLI defaults export to pdf and the root deliverable when no target is provided', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
@@ -531,15 +528,8 @@ test('presentation CLI delegates export through the core facade', async (t) => {
   const calls = [];
   const result = await runPresentationCli([
     'export',
-    'pdf',
     '--project',
     projectRoot,
-    '--slide',
-    'intro',
-    '--output-dir',
-    'outputs/exports/manual',
-    '--output-file',
-    'deck.pdf',
     '--format',
     'json',
   ], {
@@ -550,8 +540,8 @@ test('presentation CLI delegates export through the core facade', async (t) => {
           kind: 'presentation-export',
           projectRoot: input,
           status: 'pass',
-          outputDir: 'outputs/exports/manual',
-          artifacts: ['outputs/exports/manual/deck.pdf'],
+          outputDir: '',
+          artifacts: [`${basename(input)}.pdf`],
           evidenceUpdated: ['.presentation/runtime/artifacts.json'],
           issues: [],
           scope: {
@@ -571,9 +561,9 @@ test('presentation CLI delegates export through the core facade', async (t) => {
     projectRoot,
     {
       target: 'pdf',
-      slideIds: ['intro'],
-      outputDir: 'outputs/exports/manual',
-      outputFile: 'deck.pdf',
+      slideIds: [],
+      outputDir: '',
+      outputFile: '',
     },
   ]]);
 });

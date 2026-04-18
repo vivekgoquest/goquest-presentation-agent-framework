@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-runtime-state-'));
@@ -63,7 +63,7 @@ test('writeRenderState persists runtime validation truth and evidence metadata',
   assert.deepEqual(json.slideIds, ['intro', 'close']);
 });
 
-test('writeArtifacts persists finalized and latest export evidence', async (t) => {
+test('writeArtifacts persists simplified root-pdf artifact evidence', async (t) => {
   const [{ createProjectScaffold }, { writeArtifacts }] = await Promise.all([
     import('../../application/project-scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
@@ -75,19 +75,18 @@ test('writeArtifacts persists finalized and latest export evidence', async (t) =
   createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const artifactsPath = resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json');
 
+  const rootPdfRel = `${basename(projectRoot)}.pdf`;
+
   writeArtifacts(projectRoot, {
     sourceFingerprint: 'sha256:test',
     finalized: {
       exists: true,
-      outputDir: 'outputs/finalized',
-      pdf: 'outputs/finalized/deck.pdf',
-      slides: ['outputs/finalized/slides/slide-intro.png'],
+      pdf: rootPdfRel,
     },
     latestExport: {
       exists: true,
-      format: 'png',
-      outputDir: 'outputs/exports/review',
-      slides: [{ id: 'intro', path: 'outputs/exports/review/slide-intro.png' }],
+      pdf: rootPdfRel,
+      artifacts: [rootPdfRel],
     },
   });
 
@@ -96,10 +95,16 @@ test('writeArtifacts persists finalized and latest export evidence', async (t) =
   assert.equal(json.schemaVersion, 1);
   assert.equal(json.kind, 'artifacts');
   assert.equal(json.sourceFingerprint, 'sha256:test');
-  assert.equal(json.finalized.exists, true);
-  assert.equal(json.finalized.pdf.path, 'outputs/finalized/deck.pdf');
-  assert.deepEqual(json.finalized.slides.map((slide) => slide.path), ['outputs/finalized/slides/slide-intro.png']);
-  assert.equal(json.latestExport.exists, true);
-  assert.equal(json.latestExport.format, 'png');
-  assert.deepEqual(json.latestExport.slides.map((slide) => slide.path), ['outputs/exports/review/slide-intro.png']);
+  assert.deepEqual(json.finalized, {
+    exists: true,
+    pdf: { path: rootPdfRel },
+  });
+  assert.deepEqual(json.latestExport, {
+    exists: true,
+    format: 'pdf',
+    pdf: { path: rootPdfRel },
+    artifacts: [{ path: rootPdfRel }],
+  });
+  assert.equal(json.pdf.path, rootPdfRel);
+  assert.equal(json.outputDir, '');
 });

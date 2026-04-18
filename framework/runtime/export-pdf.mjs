@@ -11,13 +11,12 @@ let parsed;
 try {
   parsed = parsePresentationTargetCliArgs(process.argv.slice(2));
 } catch (err) {
-  console.error(`Usage: node framework/runtime/export-pdf.mjs --project /abs/path [output.pdf]\n\n${err.message}`);
+  console.error(`Usage: node framework/runtime/export-pdf.mjs --project /abs/path\n\n${err.message}`);
   process.exit(1);
 }
 
 const argv = [
   'export',
-  'pdf',
   '--project',
   parsed.target.projectRootAbs,
   '--format',

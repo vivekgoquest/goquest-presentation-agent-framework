@@ -7,7 +7,7 @@ let parsed;
 try {
   parsed = parsePresentationTargetCliArgs(args);
 } catch (err) {
-  console.error(`Usage: node framework/runtime/check-deck.mjs --project /abs/path [output-dir]\n\n${err.message}`);
+  console.error(`Usage: node framework/runtime/check-deck.mjs --project /abs/path\n\n${err.message}`);
   process.exit(1);
 }
 

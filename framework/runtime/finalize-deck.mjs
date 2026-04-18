@@ -5,13 +5,12 @@ let parsed;
 try {
   parsed = parsePresentationTargetCliArgs(process.argv.slice(2));
 } catch (err) {
-  console.error(`Usage: npm run finalize -- --project /abs/path\n\n${err.message}`);
+  console.error(`Usage: node framework/runtime/finalize-deck.mjs --project /abs/path\n\n${err.message}`);
   process.exit(1);
 }
 
 const result = await runPresentationCli([
   'finalize',
-  'run',
   '--project',
   parsed.target.projectRootAbs,
   '--format',

@@ -26,6 +26,15 @@ function normalizeArtifactList(entries = []) {
   return entries.map((entry) => (typeof entry === 'string' ? { path: entry } : entry));
 }
 
+function deriveOutputDir(pathRecord) {
+  const artifactPath = String(pathRecord?.path || '').trim();
+  if (!artifactPath || !artifactPath.includes('/')) {
+    return '';
+  }
+
+  return artifactPath.split('/').slice(0, -1).join('/');
+}
+
 export function createInitialRenderState() {
   return {
     schemaVersion: 1,
@@ -53,19 +62,12 @@ export function createInitialArtifacts() {
     generatedAt: null,
     finalized: {
       exists: false,
-      outputDir: '',
       pdf: null,
-      fullPage: null,
-      report: null,
-      summary: null,
-      slides: [],
     },
     latestExport: {
       exists: false,
-      format: '',
-      outputDir: '',
+      format: 'pdf',
       pdf: null,
-      slides: [],
       artifacts: [],
     },
 
@@ -81,13 +83,21 @@ export function createInitialArtifacts() {
 
 function normalizeArtifacts(payload = {}) {
   const base = createInitialArtifacts();
-  const hasLegacyFinalizedFields = Boolean(payload.report || payload.summary || payload.fullPage);
-  const hasLegacyExportFields = typeof payload.format === 'string'
-    || (Boolean(payload.outputDir) && !hasLegacyFinalizedFields);
+  const hasTopLevelPdf = Boolean(payload.pdf);
+  const hasLegacyFinalizedFields = Boolean(
+    payload.report
+    || payload.summary
+    || payload.fullPage
+    || (hasTopLevelPdf && !payload.format)
+  );
+  const hasLegacyExportFields = Boolean(
+    typeof payload.format === 'string'
+    || (hasTopLevelPdf && !hasLegacyFinalizedFields)
+  );
 
   const finalizedInput = payload.finalized || (hasLegacyFinalizedFields
     ? {
-      exists: true,
+      exists: payload.exists ?? Boolean(payload.pdf || payload.report || payload.summary || payload.fullPage),
       outputDir: payload.outputDir || '',
       pdf: payload.pdf || null,
       fullPage: payload.fullPage || null,
@@ -99,8 +109,8 @@ function normalizeArtifacts(payload = {}) {
 
   const latestExportInput = payload.latestExport || (hasLegacyExportFields
     ? {
-      exists: true,
-      format: payload.format || '',
+      exists: payload.exists ?? Boolean(payload.pdf),
+      format: payload.format || 'pdf',
       outputDir: payload.outputDir || '',
       pdf: payload.pdf || null,
       slides: payload.slides || [],
@@ -108,30 +118,33 @@ function normalizeArtifacts(payload = {}) {
     }
     : {});
 
+  const finalizedPdf = normalizePathRecord(finalizedInput.pdf);
+  const latestExportPdf = normalizePathRecord(latestExportInput.pdf);
+  const latestExportArtifacts = normalizeArtifactList(
+    latestExportInput.artifacts || (latestExportPdf ? [latestExportPdf] : [])
+  );
+
   const finalized = {
     ...base.finalized,
-    ...finalizedInput,
-    exists: Boolean(finalizedInput.exists),
-    outputDir: finalizedInput.outputDir || '',
-    pdf: normalizePathRecord(finalizedInput.pdf),
-    fullPage: normalizePathRecord(finalizedInput.fullPage),
-    report: normalizePathRecord(finalizedInput.report),
-    summary: normalizePathRecord(finalizedInput.summary),
-    slides: normalizeArtifactList(finalizedInput.slides || []),
+    exists: Boolean(finalizedInput.exists && finalizedPdf),
+    pdf: finalizedPdf,
   };
 
   const latestExport = {
     ...base.latestExport,
-    ...latestExportInput,
-    exists: Boolean(latestExportInput.exists),
-    format: latestExportInput.format || '',
-    outputDir: latestExportInput.outputDir || '',
-    pdf: normalizePathRecord(latestExportInput.pdf),
-    slides: normalizeArtifactList(latestExportInput.slides || []),
-    artifacts: normalizeArtifactList(latestExportInput.artifacts || []),
+    exists: Boolean(latestExportInput.exists && latestExportPdf),
+    format: 'pdf',
+    pdf: latestExportPdf,
+    artifacts: latestExportArtifacts,
   };
 
-  const preferredAliasSource = finalized.exists ? finalized : latestExport;
+  const aliasPdf = finalized.pdf || latestExport.pdf;
+  const aliasOutputDir = String(
+    payload.outputDir
+    || finalizedInput.outputDir
+    || latestExportInput.outputDir
+    || deriveOutputDir(aliasPdf)
+  ).trim();
 
   return {
     ...base,
@@ -141,12 +154,12 @@ function normalizeArtifacts(payload = {}) {
     generatedAt: payload.generatedAt || base.generatedAt,
     finalized,
     latestExport,
-    outputDir: preferredAliasSource.outputDir || '',
-    pdf: finalized.pdf || latestExport.pdf,
-    fullPage: finalized.fullPage,
-    report: finalized.report,
-    summary: finalized.summary,
-    slides: finalized.slides.length > 0 ? finalized.slides : latestExport.slides,
+    outputDir: aliasOutputDir === '.' ? '' : aliasOutputDir,
+    pdf: aliasPdf,
+    fullPage: normalizePathRecord(payload.fullPage || finalizedInput.fullPage),
+    report: normalizePathRecord(payload.report || finalizedInput.report),
+    summary: normalizePathRecord(payload.summary || finalizedInput.summary),
+    slides: normalizeArtifactList(payload.slides || finalizedInput.slides || latestExportInput.slides || []),
   };
 }
 
@@ -183,7 +196,7 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
 
   return {
     renderState: readJson(paths.renderStateAbs),
-    artifacts: readJson(paths.artifactsAbs),
+    artifacts: normalizeArtifacts(readJson(paths.artifactsAbs) || {}),
   };
 }
 
@@ -194,5 +207,6 @@ export function readRenderState(projectRootInput) {
 
 export function readArtifacts(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
-  return readJson(paths.artifactsAbs);
+  const artifacts = readJson(paths.artifactsAbs);
+  return artifacts ? normalizeArtifacts(artifacts) : null;
 }
