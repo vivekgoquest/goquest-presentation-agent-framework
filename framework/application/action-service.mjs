@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-import { getProjectPaths } from '../runtime/deck-paths.js';
 import { listSlideSourceEntries } from '../runtime/deck-source.js';
 import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { readPresentationIntent, validatePresentationIntent } from '../runtime/presentation-intent.js';
@@ -588,16 +587,16 @@ function buildProjectTruthPrompt(definition, truth, options = {}) {
 function resolveReviewLanePaths(projectRoot, frameworkRoot, laneConfig) {
   const reviewBankRoot = resolve(frameworkRoot, 'framework', 'runtime', 'review', laneConfig.laneId);
   const reviewersRoot = resolve(reviewBankRoot, 'reviewers');
-  const projectPaths = getProjectPaths(projectRoot);
+  const reviewOutputDir = resolve(projectRoot, '.presentation', 'runtime', 'reviews', laneConfig.outputDirName);
   return {
     briefPath: resolve(projectRoot, 'brief.md'),
     outlinePath: resolve(projectRoot, 'outline.md'),
-    freshPdfPath: projectPaths.rootPdfAbs,
+    freshPdfPath: resolve(reviewOutputDir, 'review.pdf'),
     reviewBankRoot,
     sharedProtocolPath: resolve(reviewBankRoot, 'shared-protocol.md'),
     reviewerFilePaths: laneConfig.reviewerIds.map((reviewerId) => resolve(reviewersRoot, `${reviewerId}.md`)),
-    reviewOutputDir: resolve(projectRoot, '.presentation', 'runtime', 'reviews', laneConfig.outputDirName),
-    reviewOutputPath: resolve(projectRoot, '.presentation', 'runtime', 'reviews', laneConfig.outputDirName, laneConfig.outputFileName),
+    reviewOutputDir,
+    reviewOutputPath: resolve(reviewOutputDir, laneConfig.outputFileName),
   };
 }
 
@@ -941,7 +940,9 @@ async function invokeReviewWorkflow(definition, base, adapters, laneConfig, opti
 
   try {
     mkdirSync(reviewPaths.reviewOutputDir, { recursive: true });
-    await (options.exportPdf || exportDeckPdf)(base.context.target, reviewPaths.freshPdfPath);
+    await (options.exportPdf || exportDeckPdf)(base.context.target, reviewPaths.freshPdfPath, {
+      recordArtifacts: false,
+    });
   } catch (error) {
     return normalizeWorkflowResult(definition, base.trigger, {
       status: 'blocked',

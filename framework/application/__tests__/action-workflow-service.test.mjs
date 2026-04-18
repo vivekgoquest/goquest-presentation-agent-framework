@@ -91,8 +91,8 @@ function getCanonicalPdfName(projectRoot) {
     .replace(/-{2,}/g, '-')}.pdf`;
 }
 
-function getCanonicalPdfPath(projectRoot) {
-  return resolve(projectRoot, getCanonicalPdfName(projectRoot));
+function getReviewPdfPath(projectRoot, lane) {
+  return resolve(projectRoot, '.presentation', 'runtime', 'reviews', lane, 'review.pdf');
 }
 
 function createWorkflowContext(projectRoot, overrides = {}) {
@@ -325,7 +325,7 @@ test('fix validation issues workflow refreshes deterministic failures before inv
   assert.match(agentCalls[0].workflow.prompt, /Current validation failures:/);
 });
 
-test('visual review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
+test('visual review workflow exports a review-scoped PDF without recording canonical artifacts before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../action-service.mjs'),
@@ -340,8 +340,8 @@ test('visual review workflow exports a fresh PDF before invoking the agent adapt
 
   const calls = [];
   const workflowService = createActionWorkflowService({
-    exportPdf: async (target, outputFile) => {
-      calls.push(['exportPdf', target.projectRootAbs, outputFile]);
+    exportPdf: async (target, outputFile, options = {}) => {
+      calls.push(['exportPdf', target.projectRootAbs, outputFile, options.recordArtifacts]);
       return { outputPath: outputFile };
     },
     agentAdapter: {
@@ -371,11 +371,11 @@ test('visual review workflow exports a fresh PDF before invoking the agent adapt
   assert.equal(result.status, 'started');
   assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json'));
   assert.deepEqual(calls[0], ['availability', 'review_visual_presentation']);
-  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getCanonicalPdfPath(projectRoot)]);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getReviewPdfPath(projectRoot, 'visual'), false]);
   assert.deepEqual(calls[2], ['agent', 'review_visual_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json')]);
 });
 
-test('narrative review workflow exports a fresh PDF before invoking the agent adapter and returns started with the canonical output path', async (t) => {
+test('narrative review workflow exports a review-scoped PDF without recording canonical artifacts before invoking the agent adapter', async (t) => {
   const [{ createProjectScaffold }, { createActionWorkflowService }] = await Promise.all([
     import('../project-scaffold-service.mjs'),
     import('../action-service.mjs'),
@@ -390,8 +390,8 @@ test('narrative review workflow exports a fresh PDF before invoking the agent ad
 
   const calls = [];
   const workflowService = createActionWorkflowService({
-    exportPdf: async (target, outputFile) => {
-      calls.push(['exportPdf', target.projectRootAbs, outputFile]);
+    exportPdf: async (target, outputFile, options = {}) => {
+      calls.push(['exportPdf', target.projectRootAbs, outputFile, options.recordArtifacts]);
       return { outputPath: outputFile };
     },
     agentAdapter: {
@@ -421,7 +421,7 @@ test('narrative review workflow exports a fresh PDF before invoking the agent ad
   assert.equal(result.status, 'started');
   assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json'));
   assert.deepEqual(calls[0], ['availability', 'review_narrative_presentation']);
-  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getCanonicalPdfPath(projectRoot)]);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getReviewPdfPath(projectRoot, 'narrative'), false]);
   assert.deepEqual(calls[2], ['agent', 'review_narrative_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json')]);
 });
 

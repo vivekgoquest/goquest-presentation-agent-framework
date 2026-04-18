@@ -78,12 +78,32 @@ function getCanonicalPdfFocus(facts = {}) {
   return canonicalPdfPath ? [canonicalPdfPath] : [];
 }
 
+function buildOnboardingFocus(facts = {}) {
+  const focus = [];
+
+  if (facts.briefComplete !== true) {
+    focus.push('brief.md');
+  }
+
+  if (facts.outlineRequired && facts.outlineComplete === false) {
+    focus.push('outline.md');
+  }
+
+  const remainingSlideCount = Number(facts.remainingSlideCount);
+  const knowsRemainingSlideCount = Number.isFinite(remainingSlideCount);
+  if (!knowsRemainingSlideCount || remainingSlideCount > 0 || focus.length === 0) {
+    focus.push('slides/');
+  }
+
+  return focus;
+}
+
 function buildNextFocus(workflow, facets, facts = {}) {
   const canonicalPdfFocus = getCanonicalPdfFocus(facts);
 
   switch (workflow) {
     case 'onboarding':
-      return ['brief.md', 'slides/'];
+      return buildOnboardingFocus(facts);
     case 'blocked':
       return ['presentation audit all'];
     case 'ready_for_finalize':

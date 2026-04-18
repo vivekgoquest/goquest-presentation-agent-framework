@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -40,6 +40,41 @@ function fillBrief(projectRoot) {
       '',
     ].join('\n')
   );
+}
+
+function createCompleteSlideHtml(title) {
+  return [
+    '<div class="slide">',
+    '  <div class="eyebrow">Project Query Deck</div>',
+    `  <h2 class="sect-title">${title}</h2>`,
+    '  <div class="g2">',
+    '    <div class="icard"><p class="body-text">Point one</p></div>',
+    '    <div class="icard"><p class="body-text">Point two</p></div>',
+    '  </div>',
+    '</div>',
+    '',
+  ].join('\n');
+}
+
+function fillAllSlides(projectRoot) {
+  const slidesRoot = resolve(projectRoot, 'slides');
+  const slideDirs = readdirSync(slidesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+
+  for (const [index, slideDir] of slideDirs.entries()) {
+    writeFileSync(
+      resolve(slidesRoot, slideDir, 'slide.html'),
+      createCompleteSlideHtml(`Completed slide ${index + 1}`)
+    );
+  }
+}
+
+function addLongDeckSlide(projectRoot) {
+  const slideDir = resolve(projectRoot, 'slides', '110-wrap-up');
+  mkdirSync(slideDir, { recursive: true });
+  writeFileSync(resolve(slideDir, 'slide.html'), createCompleteSlideHtml('Completed slide 11'));
 }
 
 test('project query service creates, opens, and previews a project through application-owned queries', async (t) => {
@@ -97,6 +132,32 @@ test('project query service creates, opens, and previews a project through appli
     slides.map((slide) => slide.dirName),
     ['010-intro', '020-close']
   );
+});
+
+test('project query service includes outline guidance for long-deck onboarding states', async (t) => {
+  const [{ createProjectQueryService }, { createProjectScaffold }] = await Promise.all([
+    import('../project-query-service.mjs'),
+    import('../project-scaffold-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 10, copyFramework: false });
+  fillBrief(projectRoot);
+  fillAllSlides(projectRoot);
+  addLongDeckSlide(projectRoot);
+
+  const service = createProjectQueryService();
+  service.openProject({ projectRoot });
+
+  const state = service.getState();
+
+  assert.equal(state.status, 'onboarding');
+  assert.equal(state.outlineRequired, true);
+  assert.equal(state.outlineComplete, false);
+  assert.deepEqual(state.nextFocus, ['outline.md']);
+  assert.match(state.nextStep, /outline\.md/i);
 });
 
 test('project query service reads package state and preview through the protected core facade', async (t) => {

@@ -85,7 +85,7 @@ test('derivePackageStatus does not promote finalized delivery to finalized when 
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
 });
 
-test('derivePackageStatus keeps onboarding focused on brief.md and slides without outline.md guidance', () => {
+test('derivePackageStatus keeps onboarding focused on brief.md and slides for normal scaffolds', () => {
   const status = derivePackageStatus({
     sourceComplete: false,
     blockerCount: 0,
@@ -95,4 +95,20 @@ test('derivePackageStatus keeps onboarding focused on brief.md and slides withou
 
   assert.equal(status.workflow, 'onboarding');
   assert.deepEqual(status.nextFocus, ['brief.md', 'slides/']);
+});
+
+test('derivePackageStatus adds outline.md guidance when long-deck onboarding is blocked on the outline', () => {
+  const status = derivePackageStatus({
+    sourceComplete: false,
+    blockerCount: 0,
+    delivery: 'not_finalized',
+    evidence: 'missing',
+    briefComplete: true,
+    outlineRequired: true,
+    outlineComplete: false,
+    remainingSlideCount: 0,
+  });
+
+  assert.equal(status.workflow, 'onboarding');
+  assert.deepEqual(status.nextFocus, ['outline.md']);
 });

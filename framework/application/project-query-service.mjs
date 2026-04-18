@@ -64,6 +64,19 @@ function toLegacyProjectStatus(workflow = '') {
   }
 }
 
+function toAuthoringStep(focus) {
+  switch (focus) {
+    case 'brief.md':
+      return 'Complete brief.md with the normalized user request';
+    case 'outline.md':
+      return 'Complete outline.md with the long-deck story arc';
+    case 'slides/':
+      return 'Finish the remaining slide sources';
+    default:
+      return `Continue authoring: ${focus}`;
+  }
+}
+
 function buildNextStep(status = {}) {
   if (status.workflow === 'blocked') {
     return 'Run presentation audit all and fix the reported issues before preview or export.';
@@ -80,7 +93,8 @@ function buildNextStep(status = {}) {
 
   const nextFocus = Array.isArray(status.nextFocus) ? status.nextFocus.filter(Boolean) : [];
   if (nextFocus.length > 0) {
-    return `Continue authoring: ${nextFocus.join(', ')}.`;
+    const authoringSteps = nextFocus.map((focus) => toAuthoringStep(focus));
+    return `${authoringSteps.join('; ')}.`;
   }
 
   return 'Continue authoring the presentation package.';

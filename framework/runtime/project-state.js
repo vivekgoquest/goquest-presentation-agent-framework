@@ -88,6 +88,33 @@ function hasRecordedFinalizedPdf(projectRootAbs, artifacts) {
   );
 }
 
+function buildAuthoringNextStep({ briefComplete, outlineRequired, outlineComplete, remainingSlides }) {
+  const pendingSteps = [];
+
+  if (!briefComplete) {
+    pendingSteps.push('complete brief.md with the normalized user request');
+  }
+
+  if (outlineRequired && !outlineComplete) {
+    pendingSteps.push('complete outline.md with the long-deck story arc');
+  }
+
+  if (remainingSlides.length > 0) {
+    pendingSteps.push(`finish the remaining slide sources: ${remainingSlides.map((slide) => slide.slideDir).join(', ')}`);
+  }
+
+  if (pendingSteps.length === 0) {
+    return '';
+  }
+
+  if (pendingSteps.length === 1) {
+    const [singleStep] = pendingSteps;
+    return `${singleStep[0].toUpperCase()}${singleStep.slice(1)}.`;
+  }
+
+  return `Complete the remaining authoring inputs before exporting: ${pendingSteps.join('; ')}.`;
+}
+
 export function classifyPolicyErrorMessage(message = '') {
   const text = String(message || '');
   if (!text.includes('Deck policy violation')) {
@@ -175,17 +202,23 @@ export function getProjectState(projectRootInput) {
     evidence,
     blockers: validationError ? [validationError] : [],
     canonicalPdfPath: paths.rootPdfRel,
+    briefComplete,
+    outlineRequired,
+    outlineComplete,
+    remainingSlideCount: remainingSlides.length,
   });
   const workflow = packageStatus.workflow;
   const status = toLegacyProjectStatus(packageStatus);
 
   let nextStep = 'Run presentation export to generate the canonical root PDF.';
-  if (!briefComplete) {
-    nextStep = 'Complete brief.md with the normalized user request.';
-  } else if (!outlineComplete) {
-    nextStep = 'Complete the remaining long-deck source materials before exporting.';
-  } else if (remainingSlides.length > 0) {
-    nextStep = `Finish the remaining slide sources: ${remainingSlides.map((slide) => slide.slideDir).join(', ')}.`;
+  const authoringNextStep = buildAuthoringNextStep({
+    briefComplete,
+    outlineRequired,
+    outlineComplete,
+    remainingSlides,
+  });
+  if (authoringNextStep) {
+    nextStep = authoringNextStep;
   } else if (workflow === 'blocked') {
     nextStep = 'Run presentation audit all and fix the current policy violation before preview or export.';
   } else if (packageStatus.facets.delivery === 'finalized_stale') {
