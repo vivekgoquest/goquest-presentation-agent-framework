@@ -202,13 +202,14 @@ test('package scripts expose one desktop launch path and four deterministic runt
   assert.equal(packageJson.scripts.finalize, 'node framework/runtime/finalize-deck.mjs');
 });
 
-test('project-local framework cli exposes only check, capture, export, and finalize', () => {
+test('project-local framework cli delegates through the presentation cli with injected project scope', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'framework', 'runtime', 'project-cli-shim.mjs'), 'utf8');
-  assert.match(content, /check: 'framework\/runtime\/check-deck\.mjs'/);
-  assert.match(content, /capture: 'framework\/runtime\/deck-capture\.mjs'/);
-  assert.match(content, /export: 'framework\/runtime\/export-pdf\.mjs'/);
-  assert.match(content, /finalize: 'framework\/runtime\/finalize-deck\.mjs'/);
-  assert.match(content, /<check\|capture\|export\|finalize>/);
+  assert.match(content, /PRESENTATION_CLI_SPECIFIER = 'pitch-framework\/presentation-cli'/);
+  assert.match(content, /resolve\(frameworkRoot, 'framework', 'runtime', 'presentation-cli\.mjs'\)/);
+  assert.match(content, /const \{ runPresentationCli \} = await import\(presentationCliModuleUrl\)/);
+  assert.match(content, /\.\.\.process\.argv\.slice\(2\),\s*'--project', projectRoot/);
+  assert.doesNotMatch(content, /check: 'framework\/runtime\/check-deck\.mjs'/);
+  assert.doesNotMatch(content, /<check\|capture\|export\|finalize>/);
 });
 
 test('project authoring rules describe deterministic package ownership', () => {
