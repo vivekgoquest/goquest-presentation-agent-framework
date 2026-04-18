@@ -11,27 +11,62 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PRESENTATION_CLI_SPECIFIER = 'pitch-framework/presentation-cli';
-const REPAIR_GUIDANCE = [
-  \`Unable to resolve "\${PRESENTATION_CLI_SPECIFIER}" from this presentation project.\`,
-  '',
-  'Repair guidance:',
-  '- install or link the "pitch-framework" package where this project can resolve it with standard Node package resolution',
-  '- then rerun this project-local command',
-  '',
-  'This v1 shim does not embed machine-specific framework paths.',
-].join('\\n');
+const SHIM_PORTABILITY_NOTE = 'This v1 shim does not embed machine-specific framework paths.';
+
+function formatRepairGuidance(summary, steps, error) {
+  const detail = error?.message
+    ? \`\\n\\nNode resolution error: \${error.message}\`
+    : '';
+  return [
+    summary,
+    '',
+    'Repair guidance:',
+    ...steps,
+    '',
+    SHIM_PORTABILITY_NOTE,
+  ].join('\\n') + detail;
+}
 
 let cachedPresentationCliModuleUrl = '';
 let cachedResolutionError = null;
 
 function createMissingPresentationCliError(error) {
-  const detail = error?.message
-    ? \`\\n\\nNode resolution error: \${error.message}\`
-    : '';
-  const wrapped = new Error(\`\${REPAIR_GUIDANCE}\${detail}\`);
+  const wrapped = new Error(formatRepairGuidance(
+    \`Unable to resolve "\${PRESENTATION_CLI_SPECIFIER}" from this presentation project.\`,
+    [
+      '- install or link the "pitch-framework" package where this project can resolve it with standard Node package resolution',
+      '- then rerun this project-local command',
+    ],
+    error,
+  ));
   wrapped.code = 'PRESENTATION_CLI_NOT_RESOLVABLE';
   wrapped.cause = error;
   return wrapped;
+}
+
+function createIncompatiblePresentationCliError(error) {
+  const wrapped = new Error(formatRepairGuidance(
+    \`Installed "pitch-framework" was found, but it does not expose "\${PRESENTATION_CLI_SPECIFIER}" for this v1 presentation project.\`,
+    [
+      '- upgrade or relink the "pitch-framework" package to a version that exports "./presentation-cli"',
+      '- then rerun this project-local command',
+    ],
+    error,
+  ));
+  wrapped.code = 'PRESENTATION_CLI_INCOMPATIBLE';
+  wrapped.cause = error;
+  return wrapped;
+}
+
+function createPresentationCliResolutionError(error) {
+  switch (error?.code) {
+    case 'ERR_MODULE_NOT_FOUND':
+      return createMissingPresentationCliError(error);
+    case 'ERR_PACKAGE_PATH_NOT_EXPORTED':
+      return createIncompatiblePresentationCliError(error);
+    default:
+      return error;
+  }
 }
 
 function resolvePresentationCliModuleUrl() {
@@ -47,9 +82,7 @@ function resolvePresentationCliModuleUrl() {
     cachedPresentationCliModuleUrl = import.meta.resolve(PRESENTATION_CLI_SPECIFIER);
     return cachedPresentationCliModuleUrl;
   } catch (error) {
-    cachedResolutionError = error?.code === 'ERR_MODULE_NOT_FOUND'
-      ? createMissingPresentationCliError(error)
-      : error;
+    cachedResolutionError = createPresentationCliResolutionError(error);
     throw cachedResolutionError;
   }
 }

@@ -57,11 +57,16 @@ test('scaffold package avoids removed project-shim command guidance in copied Cl
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs check\b/);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs capture\b/);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs export \/tmp\//);
+    assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs export pdf --output-file outputs\/manual-export\/deck\.pdf/);
   }
 
   const agentsContent = readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8');
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs audit all/);
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export screenshots --output-dir/);
+  assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export pdf --output-dir outputs\/manual-export --output-file deck\.pdf/);
+
+  const authoringContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'authoring-rules.md'), 'utf8');
+  assert.match(authoringContent, /node \.presentation\/framework-cli\.mjs export pdf --output-dir outputs\/manual-export --output-file deck\.pdf/);
 });
 
 test('scaffolded Claude packet points agents to the in-packet AGENTS contract instead of a missing root file', async (t) => {

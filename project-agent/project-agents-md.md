@@ -125,7 +125,7 @@ Use these commands from the project root:
 - `node .presentation/framework-cli.mjs audit all`
 - `node .presentation/framework-cli.mjs finalize`
 - `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
-- `node .presentation/framework-cli.mjs export pdf --output-file outputs/manual-export/deck.pdf`
+- `node .presentation/framework-cli.mjs export pdf --output-dir outputs/manual-export --output-file deck.pdf`
 
 Run `audit all` during iteration and `finalize` before handoff.
 

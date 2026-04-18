@@ -33,6 +33,21 @@ function installResolvableFrameworkPackage(workspaceRoot) {
   );
 }
 
+function installIncompatibleFrameworkPackage(workspaceRoot) {
+  const packageRoot = resolve(workspaceRoot, 'node_modules', 'pitch-framework');
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    resolve(packageRoot, 'package.json'),
+    `${JSON.stringify({
+      name: 'pitch-framework',
+      type: 'module',
+      exports: {
+        './package.json': './package.json',
+      },
+    }, null, 2)}\n`
+  );
+}
+
 function fillBrief(projectRoot) {
   writeFileSync(
     resolve(projectRoot, 'brief.md'),
@@ -146,6 +161,29 @@ test('project shim fails with repair guidance when the package is not resolvable
   assert.match(result.stderr, /Unable to resolve "pitch-framework\/presentation-cli"/);
   assert.match(result.stderr, /Repair guidance:/);
   assert.match(result.stderr, /install|link/i);
+});
+
+test('project shim fails with repair guidance when installed pitch-framework is incompatible with the presentation-cli entrypoint', async (t) => {
+  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const workspaceRoot = createTempProjectRoot();
+  const projectRoot = resolve(workspaceRoot, 'external-project');
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  installIncompatibleFrameworkPackage(workspaceRoot);
+
+  const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
+  const result = spawnSync(process.execPath, [shimPath, 'status', '--format', 'json'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /pitch-framework\/presentation-cli/);
+  assert.match(result.stderr, /incompatible|does not expose/i);
+  assert.match(result.stderr, /Repair guidance:/);
+  assert.match(result.stderr, /update|upgrade|install|link/i);
 });
 
 test('project shim executes when pitch-framework is resolvable through standard package resolution', async (t) => {
