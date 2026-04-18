@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
 import {
   LONG_DECK_OUTLINE_THRESHOLD,
   createPresentationTarget,
@@ -61,6 +62,15 @@ function resolveDeliveryFacet({
   return 'finalized_current';
 }
 
+function hasRecordedFinalizedPdf(projectRootAbs, artifacts) {
+  const finalizedPdfRel = String(artifacts?.finalized?.pdf?.path || '').trim();
+  return Boolean(
+    artifacts?.finalized?.exists
+    && finalizedPdfRel
+    && existsSync(resolve(projectRootAbs, finalizedPdfRel))
+  );
+}
+
 export function classifyPolicyErrorMessage(message = '') {
   const text = String(message || '');
   if (!text.includes('Deck policy violation')) {
@@ -120,10 +130,11 @@ export function getProjectState(projectRootInput) {
     }
   }
 
-  const pdfReady = existsSync(outputs.pdfAbs);
+  const recordedFinalizedPdfReady = hasRecordedFinalizedPdf(paths.projectRootAbs, artifacts);
+  const pdfReady = recordedFinalizedPdfReady || existsSync(outputs.pdfAbs);
   const reportReady = existsSync(outputs.reportAbs);
   const summaryReady = existsSync(outputs.summaryAbs);
-  const finalizedOutputsReady = pdfReady && reportReady && summaryReady;
+  const finalizedOutputsReady = recordedFinalizedPdfReady;
   const validationError = getValidationError(paths);
   const policyCategory = validationError ? classifyPolicyErrorMessage(validationError) : null;
   const sourceComplete = briefComplete

@@ -773,7 +773,7 @@ export async function finalizePresentation(targetInput, options = {}) {
       generatedAt,
       sourceFingerprint,
       markFinalized: status === 'pass',
-      preservedFinalized: status === 'pass' ? undefined : preservedArtifacts.finalized,
+      preservedFinalized: status === 'pass' ? undefined : null,
     });
   } else {
     writeArtifacts(sourcePaths.projectRootAbs, {

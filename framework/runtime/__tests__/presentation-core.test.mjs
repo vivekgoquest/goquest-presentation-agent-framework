@@ -12,6 +12,40 @@ function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-presentation-core-'));
 }
 
+function fillBrief(projectRoot) {
+  writeFileSync(
+    resolve(projectRoot, 'brief.md'),
+    [
+      '# Presentation Core Brief',
+      '',
+      '## Goal',
+      '',
+      'Exercise presentation-core finalize and status semantics.',
+      '',
+      '## Audience',
+      '',
+      'Framework maintainers.',
+      '',
+      '## Tone',
+      '',
+      'Operational and concise.',
+      '',
+      '## Must Include',
+      '',
+      '- Core-owned finalize status checks.',
+      '',
+      '## Constraints',
+      '',
+      '- none',
+      '',
+      '## Open Questions',
+      '',
+      '- none',
+      '',
+    ].join('\n')
+  );
+}
+
 test('presentation core exposes semantic query and operation entrypoints', () => {
   const core = createPresentationCore();
   assert.equal(typeof core.initProject, 'function');
@@ -80,6 +114,36 @@ test('presentation core inspectPackage returns manifest, evidence, and status', 
     '.presentation/runtime/render-state.json',
     '.presentation/runtime/artifacts.json',
   ]);
+});
+
+test('presentation core status and inspect report finalized after a successful root-pdf finalize', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const core = createPresentationCore();
+  const finalizeResult = await core.finalize(projectRoot);
+  assert.equal(finalizeResult.status, 'pass');
+
+  const status = await core.getStatus(projectRoot);
+  const inspection = await core.inspectPackage(projectRoot);
+
+  assert.equal(status.workflow, 'finalized');
+  assert.deepEqual(status.facets, {
+    delivery: 'finalized_current',
+    evidence: 'current',
+  });
+  assert.equal(status.nextBoundary, 'maintain');
+  assert.equal(inspection.status.workflow, 'finalized');
+  assert.deepEqual(inspection.status.facets, {
+    delivery: 'finalized_current',
+    evidence: 'current',
+  });
+  assert.equal(inspection.status.nextBoundary, 'maintain');
+  assert.equal(inspection.artifacts.finalized.exists, true);
+
 });
 
 test('presentation CLI delegates package status through the core facade', async (t) => {

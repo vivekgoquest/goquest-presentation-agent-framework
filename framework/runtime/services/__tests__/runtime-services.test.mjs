@@ -509,6 +509,52 @@ test('soft-failed canonical pdf export does not resurrect deleted legacy finaliz
   assert.deepEqual(runtimeArtifacts.slides, []);
 });
 
+test('soft-failed full-deck canonical refresh clears prior finalized evidence while keeping the new root pdf as latest export', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation, finalizePresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const initialFinalize = await finalizePresentation({ projectRoot });
+  assert.equal(initialFinalize.status, 'pass');
+
+  for (const slideDir of ['010-intro', '020-close']) {
+    writeFileSync(
+      resolve(projectRoot, 'slides', slideDir, 'slide.html'),
+      `<div class="slide"><h2>${slideDir}</h2><script>console.error('soft-fail refresh ${slideDir}')</script></div>`
+    );
+  }
+
+  const result = await exportPresentation(
+    { projectRoot },
+    { format: 'pdf', slideIds: ['intro', 'close'], selectionMode: 'full-deck' }
+  );
+  const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const rootPdfRel = toProjectRelativePath(projectRoot, result.outputPath);
+
+  assert.equal(result.status, 'fail');
+  assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
+  assert.deepEqual(result.outputPaths.map((outputPath) => toProjectRelativePath(projectRoot, outputPath)), [rootPdfRel]);
+  assert.match(result.issues.join('\n'), /Browser console errors were detected/i);
+  assert.equal(runtimeArtifacts.finalized.exists, false);
+  assert.equal(runtimeArtifacts.finalized.pdf, null);
+  assert.equal(runtimeArtifacts.latestExport.exists, true);
+  assert.equal(runtimeArtifacts.latestExport.format, 'pdf');
+  assert.equal(runtimeArtifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(runtimeArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
+  assert.equal(runtimeArtifacts.outputDir, '');
+  assert.equal(runtimeArtifacts.pdf.path, rootPdfRel);
+});
+
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
   const [
     { createProjectScaffold },
