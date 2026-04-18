@@ -172,13 +172,13 @@ test('presentation core marks finalized delivery stale after authored source cha
     delivery: 'finalized_stale',
     evidence: 'stale',
   });
-  assert.deepEqual(status.nextFocus, ['presentation finalize', rootPdfRel]);
+  assert.deepEqual(status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
   });
-  assert.deepEqual(inspection.status.nextFocus, ['presentation finalize', rootPdfRel]);
+  assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
 });
 
@@ -213,7 +213,7 @@ test('presentation core keeps stale finalized status after an explicit non-canon
     delivery: 'finalized_stale',
     evidence: 'stale',
   });
-  assert.deepEqual(inspection.status.nextFocus, ['presentation finalize', rootPdfRel]);
+  assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
   assert.equal(inspection.artifacts.finalized.pdf.path, rootPdfRel);
   assert.equal(inspection.artifacts.latestExport.pdf.path, 'outputs/exports/manual/review-copy.pdf');

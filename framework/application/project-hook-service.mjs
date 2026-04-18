@@ -29,13 +29,6 @@ function shouldSkipHook(projectRoot, metadata) {
   return !existsSync(slidesDir);
 }
 
-function maybeCheckpointProject(projectRoot, metadata) {
-  if ((metadata?.historyPolicy || 'checkpointed') === 'manual') {
-    return { committed: false, commit: '' };
-  }
-  return checkpointProjectGit(projectRoot);
-}
-
 function buildCommitSummary(projectRoot) {
   const diff = execFileSync('git', ['diff', '--cached', '--name-only'], {
     cwd: projectRoot,
@@ -141,7 +134,7 @@ export async function runProjectStopHookWorkflow(projectRoot) {
       };
     }
 
-    const checkpoint = maybeCheckpointProject(projectRoot, metadata);
+    const checkpoint = checkpointProjectGit(projectRoot);
     return {
       status: 'pass',
       messages: [],

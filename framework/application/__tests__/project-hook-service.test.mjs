@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -90,6 +91,32 @@ test('project stop hook workflow checkpoints a clean project', async (t) => {
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+
+  const commitsBefore = gitRevCount(projectRoot);
+  const result = await runProjectStopHookWorkflow(projectRoot);
+  const commitsAfter = gitRevCount(projectRoot);
+
+  assert.equal(result.status, 'pass');
+  assert.deepEqual(result.messages, []);
+  assert.equal(result.checkpoint.committed, true);
+  assert.ok(result.checkpoint.commit);
+  assert.equal(commitsAfter, commitsBefore + 1);
+});
+
+test('project stop hook workflow ignores legacy manual historyPolicy and still checkpoints', async (t) => {
+  const [{ createProjectScaffold }, { runProjectStopHookWorkflow }] = await Promise.all([
+    import('../project-scaffold-service.mjs'),
+    import('../project-hook-service.mjs'),
+  ]);
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const metadataPath = resolve(projectRoot, '.presentation', 'project.json');
+  const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
+  writeFileSync(metadataPath, `${JSON.stringify({ ...metadata, historyPolicy: 'manual' }, null, 2)}\n`);
 
   const commitsBefore = gitRevCount(projectRoot);
   const result = await runProjectStopHookWorkflow(projectRoot);

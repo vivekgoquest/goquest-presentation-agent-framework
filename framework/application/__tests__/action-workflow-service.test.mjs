@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 function createTempProjectRoot() {
   return mkdtempSync(resolve(tmpdir(), 'pf-action-workflow-'));
@@ -80,6 +80,19 @@ function createValidationFailureSlideHtml(title) {
     '</div>',
     '',
   ].join('\n');
+}
+
+function getCanonicalPdfName(projectRoot) {
+  return `${basename(projectRoot)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')}.pdf`;
+}
+
+function getCanonicalPdfPath(projectRoot) {
+  return resolve(projectRoot, getCanonicalPdfName(projectRoot));
 }
 
 function createWorkflowContext(projectRoot, overrides = {}) {
@@ -217,7 +230,9 @@ test('fix validation issues workflow prepares canonical project truth before inv
   assert.match(agentCalls[0].workflow.prompt, /package\.generated\.json/);
   assert.match(agentCalls[0].workflow.prompt, /render-state\.json/);
   assert.match(agentCalls[0].workflow.prompt, /artifacts\.json/);
-  assert.match(agentCalls[0].workflow.prompt, /outputs\/finalized/);
+  assert.match(agentCalls[0].workflow.prompt, /Canonical delivery artifact/i);
+  assert.match(agentCalls[0].workflow.prompt, new RegExp(getCanonicalPdfName(projectRoot).replace('.', '\\.')));
+  assert.doesNotMatch(agentCalls[0].workflow.prompt, /outputs\/finalized/);
   assert.doesNotMatch(agentCalls[0].workflow.prompt, /last-good|Last good checkpoint/i);
 });
 
@@ -356,7 +371,7 @@ test('visual review workflow exports a fresh PDF before invoking the agent adapt
   assert.equal(result.status, 'started');
   assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json'));
   assert.deepEqual(calls[0], ['availability', 'review_visual_presentation']);
-  assert.deepEqual(calls[1], ['exportPdf', projectRoot, resolve(projectRoot, 'outputs', 'deck.pdf')]);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getCanonicalPdfPath(projectRoot)]);
   assert.deepEqual(calls[2], ['agent', 'review_visual_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'visual', 'visual-review-issues.json')]);
 });
 
@@ -406,7 +421,7 @@ test('narrative review workflow exports a fresh PDF before invoking the agent ad
   assert.equal(result.status, 'started');
   assert.equal(result.outputPath, resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json'));
   assert.deepEqual(calls[0], ['availability', 'review_narrative_presentation']);
-  assert.deepEqual(calls[1], ['exportPdf', projectRoot, resolve(projectRoot, 'outputs', 'deck.pdf')]);
+  assert.deepEqual(calls[1], ['exportPdf', projectRoot, getCanonicalPdfPath(projectRoot)]);
   assert.deepEqual(calls[2], ['agent', 'review_narrative_presentation', resolve(projectRoot, '.presentation', 'runtime', 'reviews', 'narrative', 'narrative-review-issues.json')]);
 });
 

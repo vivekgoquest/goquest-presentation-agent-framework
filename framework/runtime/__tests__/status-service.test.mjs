@@ -17,10 +17,10 @@ test('derivePackageStatus returns authoring with stale finalized outputs when so
     delivery: 'finalized_stale',
     evidence: 'current',
   });
-  assert.deepEqual(status.nextFocus, ['presentation finalize', 'deck.pdf']);
+  assert.deepEqual(status.nextFocus, ['presentation export', 'deck.pdf']);
 });
 
-test('derivePackageStatus returns ready_for_finalize when blockers are absent and evidence is current', () => {
+test('derivePackageStatus returns ready_for_finalize with export-focused guidance when blockers are absent and evidence is current', () => {
   const status = derivePackageStatus({
     sourceComplete: true,
     blockerCount: 0,
@@ -33,7 +33,7 @@ test('derivePackageStatus returns ready_for_finalize when blockers are absent an
     delivery: 'not_finalized',
     evidence: 'current',
   });
-  assert.deepEqual(status.nextFocus, ['presentation finalize']);
+  assert.deepEqual(status.nextFocus, ['presentation export']);
 });
 
 test('derivePackageStatus returns blocked when a hard blocker is present', () => {
@@ -51,7 +51,7 @@ test('derivePackageStatus returns blocked when a hard blocker is present', () =>
   });
 });
 
-test('derivePackageStatus returns finalized when finalized delivery is current', () => {
+test('derivePackageStatus returns finalized with the canonical root pdf as the next focus', () => {
   const status = derivePackageStatus({
     sourceComplete: true,
     blockerCount: 0,
@@ -83,4 +83,16 @@ test('derivePackageStatus does not promote finalized delivery to finalized when 
     evidence: 'missing',
   });
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
+});
+
+test('derivePackageStatus keeps onboarding focused on brief.md and slides without outline.md guidance', () => {
+  const status = derivePackageStatus({
+    sourceComplete: false,
+    blockerCount: 0,
+    delivery: 'not_finalized',
+    evidence: 'missing',
+  });
+
+  assert.equal(status.workflow, 'onboarding');
+  assert.deepEqual(status.nextFocus, ['brief.md', 'slides/']);
 });

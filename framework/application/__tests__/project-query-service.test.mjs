@@ -43,10 +43,11 @@ function fillBrief(projectRoot) {
 }
 
 test('project query service creates, opens, and previews a project through application-owned queries', async (t) => {
-  const [{ createProjectQueryService }, { createProjectScaffold }, { writeRenderState }] = await Promise.all([
+  const [{ createProjectQueryService }, { createProjectScaffold }, { writeRenderState }, { computeSourceFingerprint }] = await Promise.all([
     import('../project-query-service.mjs'),
     import('../project-scaffold-service.mjs'),
     import('../../runtime/presentation-runtime-state.js'),
+    import('../../runtime/source-fingerprint.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
@@ -64,14 +65,18 @@ test('project query service creates, opens, and previews a project through appli
   writeRenderState(projectRoot, {
     status: 'pass',
     slideIds: ['intro', 'close'],
+    sourceFingerprint: computeSourceFingerprint(projectRoot),
     lastCheckedAt: '2026-03-22T00:00:00.000Z',
   });
 
   const state = service.getState();
   assert.equal(state.packageStateAvailable, true);
   assert.equal(state.runtimeEvidenceAvailable, true);
+  assert.equal(state.status, 'ready_to_finalize');
   assert.equal(state.lastRenderStatus, 'pass');
   assert.equal(state.lastCheckedAt, '2026-03-22T00:00:00.000Z');
+  assert.deepEqual(state.nextFocus, ['presentation export']);
+  assert.match(state.nextStep, /presentation export/i);
 
   const previewMeta = service.getPreviewMeta();
   assert.equal(previewMeta.kind, 'slides');
@@ -147,14 +152,14 @@ test('project query service reads package state and preview through the protecte
           },
           status: {
             workflow: 'ready_for_finalize',
-            summary: 'Ready to finalize.',
+            summary: 'Ready to export.',
             blockers: [],
             facets: {
               delivery: 'not_finalized',
               evidence: 'current',
             },
             nextBoundary: 'finalize',
-            nextFocus: ['presentation finalize'],
+            nextFocus: ['presentation export'],
           },
         };
       },
@@ -164,14 +169,14 @@ test('project query service reads package state and preview through the protecte
           kind: 'presentation-status',
           projectRoot: projectRootInput,
           workflow: 'ready_for_finalize',
-          summary: 'Ready to finalize.',
+          summary: 'Ready to export.',
           blockers: [],
           facets: {
             delivery: 'not_finalized',
             evidence: 'current',
           },
           nextBoundary: 'finalize',
-          nextFocus: ['presentation finalize'],
+          nextFocus: ['presentation export'],
           evidence: [
             '.presentation/runtime/render-state.json',
             '.presentation/runtime/artifacts.json',
@@ -250,7 +255,7 @@ test('project query preview fails closed when a copied framework canvas drifts f
   const openResult = service.openProject({ projectRoot });
 
   assert.equal(openResult.meta.frameworkMode, 'copied');
-  assert.equal(openResult.meta.historyPolicy, 'checkpointed');
+  assert.equal('historyPolicy' in openResult.meta, false);
 
   const preview = service.getPreviewDocument();
   assert.notEqual(preview.kind, 'slides');

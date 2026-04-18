@@ -66,16 +66,16 @@ function toLegacyProjectStatus(workflow = '') {
 
 function buildNextStep(status = {}) {
   if (status.workflow === 'blocked') {
-    return 'Fix the current policy violation before preview, export, or finalize.';
+    return 'Run presentation audit all and fix the reported issues before preview or export.';
   }
   if (status.facets?.delivery === 'finalized_stale') {
-    return 'Run finalize again to refresh the canonical outputs for the latest source.';
+    return 'Run presentation export again to refresh the canonical root PDF for the latest source.';
   }
   if (status.workflow === 'ready_for_finalize') {
-    return 'Run finalize to generate the deck outputs.';
+    return 'Run presentation export to generate the canonical root PDF.';
   }
   if (status.workflow === 'finalized') {
-    return 'Review or export the canonical finalized outputs.';
+    return 'Review the canonical root PDF or export updated artifacts as needed.';
   }
 
   const nextFocus = Array.isArray(status.nextFocus) ? status.nextFocus.filter(Boolean) : [];
@@ -224,7 +224,6 @@ export function createProjectQueryService(options = {}) {
       frameworkVersion: activeProjectPaths.metadata.frameworkVersion,
       frameworkCopiedAt: compatibilityMetadata.frameworkCopiedAt,
       canvasPolicy: activeProjectPaths.metadata.canvasPolicy,
-      historyPolicy: compatibilityMetadata.historyPolicy,
       packageModel: 'deterministic',
       outputsPath: activeProjectPaths.outputsDirAbs,
     };

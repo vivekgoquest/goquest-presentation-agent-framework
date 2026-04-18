@@ -3,7 +3,6 @@ import { resolve } from 'path';
 import {
   LONG_DECK_OUTLINE_THRESHOLD,
   createPresentationTarget,
-  getPresentationOutputPaths,
   getProjectPaths,
 } from './deck-paths.js';
 import { ensurePresentationPackageFiles } from './presentation-package.js';
@@ -118,7 +117,6 @@ export function getProjectState(projectRootInput) {
   const { manifest } = ensurePresentationPackageFiles(paths.projectRootAbs);
   const renderState = readRenderState(paths.projectRootAbs);
   const artifacts = readArtifacts(paths.projectRootAbs);
-  const outputs = getPresentationOutputPaths(target);
   const slideEntries = listSlideSourceEntries(paths).filter((entry) => entry.isValidName);
 
   const briefContent = readIfExists(paths.briefAbs);
@@ -150,9 +148,11 @@ export function getProjectState(projectRootInput) {
 
   const currentSourceFingerprint = computeSourceFingerprint(paths.projectRootAbs);
   const recordedFinalizedPdfReady = hasRecordedFinalizedPdf(paths.projectRootAbs, artifacts);
-  const pdfReady = recordedFinalizedPdfReady || existsSync(outputs.pdfAbs);
-  const reportReady = existsSync(outputs.reportAbs);
-  const summaryReady = existsSync(outputs.summaryAbs);
+  const reportPath = String(artifacts?.report?.path || '').trim();
+  const summaryPath = String(artifacts?.summary?.path || '').trim();
+  const pdfReady = recordedFinalizedPdfReady || existsSync(paths.rootPdfAbs);
+  const reportReady = Boolean(reportPath && existsSync(resolve(paths.projectRootAbs, reportPath)));
+  const summaryReady = Boolean(summaryPath && existsSync(resolve(paths.projectRootAbs, summaryPath)));
   const finalizedOutputsReady = recordedFinalizedPdfReady;
   const validationError = getValidationError(paths);
   const policyCategory = validationError ? classifyPolicyErrorMessage(validationError) : null;
@@ -179,21 +179,21 @@ export function getProjectState(projectRootInput) {
   const workflow = packageStatus.workflow;
   const status = toLegacyProjectStatus(packageStatus);
 
-  let nextStep = 'Run finalize to generate the deck outputs.';
+  let nextStep = 'Run presentation export to generate the canonical root PDF.';
   if (!briefComplete) {
     nextStep = 'Complete brief.md with the normalized user request.';
   } else if (!outlineComplete) {
-    nextStep = 'Complete outline.md before continuing the long-deck build.';
+    nextStep = 'Complete the remaining long-deck source materials before exporting.';
   } else if (remainingSlides.length > 0) {
     nextStep = `Finish the remaining slide sources: ${remainingSlides.map((slide) => slide.slideDir).join(', ')}.`;
   } else if (workflow === 'blocked') {
-    nextStep = 'Fix the current policy violation before preview, export, or finalize.';
+    nextStep = 'Run presentation audit all and fix the current policy violation before preview or export.';
   } else if (packageStatus.facets.delivery === 'finalized_stale') {
-    nextStep = 'Run finalize again to refresh the canonical outputs for the latest source.';
+    nextStep = 'Run presentation export again to refresh the canonical root PDF for the latest source.';
   } else if (packageStatus.facets.evidence !== 'current') {
     nextStep = renderState?.status === 'fail'
-      ? 'Fix the current render or validation issues before finalize.'
-      : 'Run presentation audit all before finalize so the runtime evidence is current.';
+      ? 'Fix the current render or validation issues, then rerun presentation audit all.'
+      : 'Run presentation audit all before export so the runtime evidence is current.';
   }
 
   return {

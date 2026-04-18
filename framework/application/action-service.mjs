@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
+import { getProjectPaths } from '../runtime/deck-paths.js';
 import { listSlideSourceEntries } from '../runtime/deck-source.js';
 import { ensurePresentationPackageFiles } from '../runtime/presentation-package.js';
 import { readPresentationIntent, validatePresentationIntent } from '../runtime/presentation-intent.js';
@@ -554,16 +555,14 @@ function buildProjectTruthPrompt(definition, truth, options = {}) {
     `- ${paths.renderStateRel}`,
     `- ${paths.artifactsRel}`,
     '',
-    'Canonical output roots:',
-    `- ${paths.finalizedOutputDirRel}`,
-    `- ${paths.exportsOutputDirRel}`,
+    `Canonical delivery artifact: ${paths.rootPdfRel}`,
     '',
     `Slides discovered: ${manifest.counts?.slidesTotal || 0}`,
     `Valid slide folders: ${slideEntries.map((entry) => entry.dirName).join(', ') || 'none'}`,
     `Current render status: ${renderState?.status || 'pending'}`,
     `Current validation failures: ${Array.isArray(renderState?.failures) ? renderState.failures.length : 0}`,
-    `Current PDF artifact: ${artifacts?.pdf?.path || 'none'}`,
-    `Current finalized summary artifact: ${artifacts?.summary?.path || 'none'}`,
+    `Current canonical PDF artifact: ${artifacts?.finalized?.pdf?.path || 'none'}`,
+    `Latest export PDF artifact: ${artifacts?.latestExport?.pdf?.path || 'none'}`,
   ];
 
   if (options.preflight) {
@@ -589,10 +588,11 @@ function buildProjectTruthPrompt(definition, truth, options = {}) {
 function resolveReviewLanePaths(projectRoot, frameworkRoot, laneConfig) {
   const reviewBankRoot = resolve(frameworkRoot, 'framework', 'runtime', 'review', laneConfig.laneId);
   const reviewersRoot = resolve(reviewBankRoot, 'reviewers');
+  const projectPaths = getProjectPaths(projectRoot);
   return {
     briefPath: resolve(projectRoot, 'brief.md'),
     outlinePath: resolve(projectRoot, 'outline.md'),
-    freshPdfPath: resolve(projectRoot, 'outputs', 'deck.pdf'),
+    freshPdfPath: projectPaths.rootPdfAbs,
     reviewBankRoot,
     sharedProtocolPath: resolve(reviewBankRoot, 'shared-protocol.md'),
     reviewerFilePaths: laneConfig.reviewerIds.map((reviewerId) => resolve(reviewersRoot, `${reviewerId}.md`)),
@@ -860,8 +860,7 @@ async function invokeAgentWorkflow(definition, base, adapters, options = {}) {
       intentPath: truth.paths.intentRel,
       renderStatePath: truth.paths.renderStateRel,
       artifactsPath: truth.paths.artifactsRel,
-      finalizedOutputDirPath: truth.paths.finalizedOutputDirRel,
-      exportsOutputDirPath: truth.paths.exportsOutputDirRel,
+      canonicalPdfPath: truth.paths.rootPdfRel,
     },
     prompt: '',
   };

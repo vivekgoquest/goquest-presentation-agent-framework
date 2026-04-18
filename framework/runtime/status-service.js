@@ -48,18 +48,18 @@ function buildSummary(workflow, facets) {
     case 'onboarding':
       return 'Author the required source files before the package can enter the normal workflow.';
     case 'blocked':
-      return 'A hard blocker is preventing reliable forward progress toward finalize.';
+      return 'A hard blocker is preventing reliable forward progress until the package passes presentation audit all.';
     case 'finalized':
-      return 'Canonical finalized outputs are present and aligned with the latest known source evidence.';
+      return 'The canonical root PDF is present and aligned with the latest known source evidence.';
     case 'ready_for_finalize':
-      return 'Source is complete, no hard blockers are active, and current evidence says the package is ready to finalize.';
+      return 'Source is complete, no hard blockers are active, and current evidence says the package is ready for presentation export.';
     case 'authoring':
     default:
       if (facets.delivery === 'finalized_stale') {
-        return 'Authoring is still active because the latest source has moved beyond the finalized outputs.';
+        return 'Authoring is still active because the latest source has moved beyond the canonical root PDF.';
       }
       if (facets.evidence !== 'current') {
-        return 'Authoring is still active because runtime evidence is not current enough to trust the finalize boundary.';
+        return 'Authoring is still active because runtime evidence is not current enough to trust presentation export.';
       }
       return 'Authoring is still in progress.';
   }
@@ -83,19 +83,19 @@ function buildNextFocus(workflow, facets, facts = {}) {
 
   switch (workflow) {
     case 'onboarding':
-      return ['brief.md', 'outline.md', 'slides/'];
+      return ['brief.md', 'slides/'];
     case 'blocked':
       return ['presentation audit all'];
     case 'ready_for_finalize':
-      return ['presentation finalize'];
+      return ['presentation export'];
     case 'finalized':
-      return canonicalPdfFocus.length > 0 ? canonicalPdfFocus : ['presentation finalize'];
+      return canonicalPdfFocus.length > 0 ? canonicalPdfFocus : ['presentation export'];
     case 'authoring':
     default:
       if (facets.delivery === 'finalized_stale') {
         return canonicalPdfFocus.length > 0
-          ? ['presentation finalize', ...canonicalPdfFocus]
-          : ['presentation finalize'];
+          ? ['presentation export', ...canonicalPdfFocus]
+          : ['presentation export'];
       }
       if (facets.evidence !== 'current') {
         return ['presentation audit all'];
