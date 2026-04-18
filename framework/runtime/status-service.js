@@ -73,7 +73,14 @@ function buildNextBoundary(workflow) {
   return 'finalize';
 }
 
-function buildNextFocus(workflow, facets) {
+function getCanonicalPdfFocus(facts = {}) {
+  const canonicalPdfPath = String(facts.canonicalPdfPath || '').trim();
+  return canonicalPdfPath ? [canonicalPdfPath] : [];
+}
+
+function buildNextFocus(workflow, facets, facts = {}) {
+  const canonicalPdfFocus = getCanonicalPdfFocus(facts);
+
   switch (workflow) {
     case 'onboarding':
       return ['brief.md', 'outline.md', 'slides/'];
@@ -82,11 +89,13 @@ function buildNextFocus(workflow, facets) {
     case 'ready_for_finalize':
       return ['presentation finalize'];
     case 'finalized':
-      return ['outputs/finalized'];
+      return canonicalPdfFocus.length > 0 ? canonicalPdfFocus : ['presentation finalize'];
     case 'authoring':
     default:
       if (facets.delivery === 'finalized_stale') {
-        return ['presentation finalize', 'outputs/finalized'];
+        return canonicalPdfFocus.length > 0
+          ? ['presentation finalize', ...canonicalPdfFocus]
+          : ['presentation finalize'];
       }
       if (facets.evidence !== 'current') {
         return ['presentation audit all'];
@@ -121,7 +130,7 @@ export function derivePackageStatus(facts = {}) {
     blockers,
     facets,
     nextBoundary: buildNextBoundary(workflow),
-    nextFocus: buildNextFocus(workflow, facets),
+    nextFocus: buildNextFocus(workflow, facets, facts),
   };
 }
 

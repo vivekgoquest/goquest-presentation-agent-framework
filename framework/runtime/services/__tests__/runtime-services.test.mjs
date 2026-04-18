@@ -555,6 +555,57 @@ test('soft-failed full-deck canonical refresh clears prior finalized evidence wh
   assert.equal(runtimeArtifacts.pdf.path, rootPdfRel);
 });
 
+test('non-canonical pdf exports preserve the prior finalized fingerprint while recording the new latest export', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation, finalizePresentation },
+    { computeSourceFingerprint },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+    import('../../source-fingerprint.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  const slideHtmlPath = resolve(projectRoot, 'slides', '010-intro', 'slide.html');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const initialFinalize = await finalizePresentation({ projectRoot });
+  assert.equal(initialFinalize.status, 'pass');
+
+  const artifactsBeforeExport = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const originalSlideHtml = readFileSync(slideHtmlPath, 'utf8');
+  writeFileSync(slideHtmlPath, `${originalSlideHtml}\n<!-- stale after finalize -->\n`);
+
+  const currentSourceFingerprint = computeSourceFingerprint(projectRoot);
+  const exported = await exportPresentation(
+    { projectRoot },
+    {
+      format: 'pdf',
+      slideIds: ['intro', 'close'],
+      selectionMode: 'full-deck',
+      outputDir: resolve(projectRoot, 'outputs', 'exports', 'manual'),
+      outputFile: 'review-copy.pdf',
+    }
+  );
+  const artifactsAfterExport = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.equal(exported.status, 'pass');
+  assert.equal(artifactsAfterExport.finalized.exists, true);
+  assert.equal(artifactsAfterExport.finalized.pdf.path, artifactsBeforeExport.finalized.pdf.path);
+  assert.equal(artifactsAfterExport.sourceFingerprint, artifactsBeforeExport.sourceFingerprint);
+  assert.notEqual(artifactsAfterExport.sourceFingerprint, currentSourceFingerprint);
+  assert.equal(artifactsAfterExport.latestExport.exists, true);
+  assert.equal(artifactsAfterExport.latestExport.pdf.path, 'outputs/exports/manual/review-copy.pdf');
+  assert.deepEqual(
+    artifactsAfterExport.latestExport.artifacts.map((artifact) => artifact.path),
+    ['outputs/exports/manual/review-copy.pdf']
+  );
+});
+
 test('failed finalize before pdf refresh preserves the prior finalized fingerprint instead of restamping stale finalize evidence', async (t) => {
   const [
     { createProjectScaffold },

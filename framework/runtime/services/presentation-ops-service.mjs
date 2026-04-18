@@ -462,10 +462,19 @@ function writePdfExportArtifacts(projectRootInput, projectPaths, outputPath, opt
   const preservedFinalized = Object.prototype.hasOwnProperty.call(options, 'preservedFinalized')
     ? options.preservedFinalized
     : previousArtifacts?.finalized;
+  const currentSourceFingerprint = options.sourceFingerprint || computeSourceFingerprint(projectPaths.projectRootAbs);
+  const preservedFinalizedExists = Boolean(
+    !options.markFinalized
+    && preservedFinalized?.exists
+    && preservedFinalized?.pdf?.path
+  );
+  const finalizedSourceFingerprint = preservedFinalizedExists
+    ? String(previousArtifacts?.sourceFingerprint || '').trim()
+    : currentSourceFingerprint;
 
   return writeArtifacts(projectRootInput, {
     generatedAt: options.generatedAt || new Date().toISOString(),
-    sourceFingerprint: options.sourceFingerprint || computeSourceFingerprint(projectPaths.projectRootAbs),
+    sourceFingerprint: finalizedSourceFingerprint,
     finalized: options.markFinalized
       ? {
         exists: true,

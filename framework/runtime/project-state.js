@@ -174,6 +174,7 @@ export function getProjectState(projectRootInput) {
     delivery,
     evidence,
     blockers: validationError ? [validationError] : [],
+    canonicalPdfPath: paths.rootPdfRel,
   });
   const workflow = packageStatus.workflow;
   const status = toLegacyProjectStatus(packageStatus);

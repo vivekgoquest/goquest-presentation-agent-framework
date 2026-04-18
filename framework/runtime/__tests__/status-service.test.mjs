@@ -9,6 +9,7 @@ test('derivePackageStatus returns authoring with stale finalized outputs when so
     blockerCount: 0,
     delivery: 'finalized_stale',
     evidence: 'current',
+    canonicalPdfPath: 'deck.pdf',
   });
 
   assert.equal(status.workflow, 'authoring');
@@ -16,6 +17,7 @@ test('derivePackageStatus returns authoring with stale finalized outputs when so
     delivery: 'finalized_stale',
     evidence: 'current',
   });
+  assert.deepEqual(status.nextFocus, ['presentation finalize', 'deck.pdf']);
 });
 
 test('derivePackageStatus returns ready_for_finalize when blockers are absent and evidence is current', () => {
@@ -31,6 +33,7 @@ test('derivePackageStatus returns ready_for_finalize when blockers are absent an
     delivery: 'not_finalized',
     evidence: 'current',
   });
+  assert.deepEqual(status.nextFocus, ['presentation finalize']);
 });
 
 test('derivePackageStatus returns blocked when a hard blocker is present', () => {
@@ -54,6 +57,7 @@ test('derivePackageStatus returns finalized when finalized delivery is current',
     blockerCount: 0,
     delivery: 'finalized_current',
     evidence: 'current',
+    canonicalPdfPath: 'deck.pdf',
   });
 
   assert.equal(status.workflow, 'finalized');
@@ -61,4 +65,5 @@ test('derivePackageStatus returns finalized when finalized delivery is current',
     delivery: 'finalized_current',
     evidence: 'current',
   });
+  assert.deepEqual(status.nextFocus, ['deck.pdf']);
 });

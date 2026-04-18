@@ -126,6 +126,7 @@ test('presentation core status and inspect report finalized after a successful r
   const core = createPresentationCore();
   const finalizeResult = await core.finalize(projectRoot);
   assert.equal(finalizeResult.status, 'pass');
+  const rootPdfRel = finalizeResult.outputs.pdf;
 
   const status = await core.getStatus(projectRoot);
   const inspection = await core.inspectPackage(projectRoot);
@@ -136,12 +137,14 @@ test('presentation core status and inspect report finalized after a successful r
     evidence: 'current',
   });
   assert.equal(status.nextBoundary, 'maintain');
+  assert.deepEqual(status.nextFocus, [rootPdfRel]);
   assert.equal(inspection.status.workflow, 'finalized');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
   });
   assert.equal(inspection.status.nextBoundary, 'maintain');
+  assert.deepEqual(inspection.status.nextFocus, [rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
 });
 
@@ -156,6 +159,7 @@ test('presentation core marks finalized delivery stale after authored source cha
   const core = createPresentationCore();
   const finalizeResult = await core.finalize(projectRoot);
   assert.equal(finalizeResult.status, 'pass');
+  const rootPdfRel = finalizeResult.outputs.pdf;
 
   const originalSlideHtml = readFileSync(slideHtmlPath, 'utf8');
   writeFileSync(slideHtmlPath, `${originalSlideHtml}\n<!-- post-finalize source change -->\n`);
@@ -168,12 +172,51 @@ test('presentation core marks finalized delivery stale after authored source cha
     delivery: 'finalized_stale',
     evidence: 'stale',
   });
+  assert.deepEqual(status.nextFocus, ['presentation finalize', rootPdfRel]);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
   });
+  assert.deepEqual(inspection.status.nextFocus, ['presentation finalize', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
+});
+
+test('presentation core keeps stale finalized status after an explicit non-canonical pdf export', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const slideHtmlPath = resolve(projectRoot, 'slides', '010-intro', 'slide.html');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const core = createPresentationCore();
+  const finalizeResult = await core.finalize(projectRoot);
+  assert.equal(finalizeResult.status, 'pass');
+  const rootPdfRel = finalizeResult.outputs.pdf;
+
+  const originalSlideHtml = readFileSync(slideHtmlPath, 'utf8');
+  writeFileSync(slideHtmlPath, `${originalSlideHtml}\n<!-- stale after finalize -->\n`);
+
+  const exportResult = await core.exportPresentation(projectRoot, {
+    target: 'pdf',
+    outputDir: resolve(projectRoot, 'outputs', 'exports', 'manual'),
+    outputFile: 'review-copy.pdf',
+  });
+  assert.equal(exportResult.status, 'pass');
+  assert.equal(exportResult.outputDir, 'outputs/exports/manual');
+  assert.deepEqual(exportResult.artifacts, ['outputs/exports/manual/review-copy.pdf']);
+
+  const inspection = await core.inspectPackage(projectRoot);
+  assert.equal(inspection.status.workflow, 'authoring');
+  assert.deepEqual(inspection.status.facets, {
+    delivery: 'finalized_stale',
+    evidence: 'stale',
+  });
+  assert.deepEqual(inspection.status.nextFocus, ['presentation finalize', rootPdfRel]);
+  assert.equal(inspection.artifacts.finalized.exists, true);
+  assert.equal(inspection.artifacts.finalized.pdf.path, rootPdfRel);
+  assert.equal(inspection.artifacts.latestExport.pdf.path, 'outputs/exports/manual/review-copy.pdf');
 });
 
 test('presentation core does not treat failed validation evidence as ready for finalize', async (t) => {
