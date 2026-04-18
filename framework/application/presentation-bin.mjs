@@ -9,8 +9,8 @@ import { createProjectScaffold, parseNewDeckCliArgs } from './project-scaffold-s
 
 const INIT_USAGE = 'Usage: presentation init --project /abs/path [--slides <count>] [--copy-framework]';
 
-function createBinResult(stdout = '', stderr = '', exitCode = 0) {
-  return { stdout, stderr, exitCode };
+function createBinResult(stdout = '', stderr = '', exitCode = 0, holdOpen = null) {
+  return { stdout, stderr, exitCode, holdOpen };
 }
 
 function runInitCommand(argv = []) {
@@ -38,7 +38,7 @@ export async function runPresentationBin(argv = process.argv.slice(2)) {
   }
 
   const result = await runPresentationCli(argv);
-  return createBinResult(result.stdout, '', result.exitCode);
+  return createBinResult(result.stdout, '', result.exitCode, result.holdOpen || null);
 }
 
 function isDirectCliInvocation() {
@@ -57,5 +57,8 @@ if (isDirectCliInvocation()) {
   const result = await runPresentationBin(process.argv.slice(2));
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+  if (result.holdOpen) {
+    await result.holdOpen;
+  }
   process.exit(result.exitCode);
 }

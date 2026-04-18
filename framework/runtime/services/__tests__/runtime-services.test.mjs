@@ -247,6 +247,30 @@ test('project shim executes when pitch-framework is resolvable through standard 
   assert.equal(realpathSync(json.scope.projectRoot), realpathSync(projectRoot));
 });
 
+test('project shim keeps preview serve alive until terminated when pitch-framework is resolvable', async (t) => {
+  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const workspaceRoot = createTempProjectRoot();
+  const projectRoot = resolve(workspaceRoot, 'external-project');
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2 });
+  installResolvableFrameworkPackage(workspaceRoot);
+
+  const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
+  const startedAt = Date.now();
+  const result = spawnSync(process.execPath, [shimPath, 'preview', 'serve'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+    timeout: 1200,
+  });
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.ok(elapsedMs >= 1000, `preview serve exited too quickly (${elapsedMs}ms)`);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Preview server started\./);
+  assert.match(result.stdout, /previewUrl:/);
+});
+
 test('application scaffold rejects unsupported long-deck v1 projects before writing files', async (t) => {
   const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();

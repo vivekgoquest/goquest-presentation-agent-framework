@@ -89,3 +89,36 @@ test('public presentation bin rejects unsupported long-deck init requests clearl
   assert.equal(existsSync(resolve(projectRoot, 'outline.md')), false);
   assert.equal(existsSync(projectRoot), false);
 });
+
+test('public presentation bin keeps preview serve alive until terminated', (t) => {
+  const outsideCwd = createTempRoot('pf-public-preview-serve-');
+  const projectRoot = resolve(outsideCwd, 'preview-project');
+  t.after(() => rmSync(outsideCwd, { recursive: true, force: true }));
+
+  const initResult = spawnSync(
+    process.execPath,
+    [PRESENTATION_BIN_PATH, 'init', '--project', projectRoot, '--slides', '2'],
+    {
+      cwd: outsideCwd,
+      encoding: 'utf8',
+    }
+  );
+  assert.equal(initResult.status, 0, initResult.stderr);
+
+  const startedAt = Date.now();
+  const result = spawnSync(
+    process.execPath,
+    [PRESENTATION_BIN_PATH, 'preview', 'serve', '--project', projectRoot],
+    {
+      cwd: outsideCwd,
+      encoding: 'utf8',
+      timeout: 1200,
+    }
+  );
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.ok(elapsedMs >= 1000, `preview serve exited too quickly (${elapsedMs}ms)`);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Preview server started\./);
+  assert.match(result.stdout, /previewUrl:/);
+});

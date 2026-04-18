@@ -124,6 +124,9 @@ if (isDirectCliInvocation()) {
       '--project', projectRoot,
     ]);
     process.stdout.write(result.stdout);
+    if (result.holdOpen) {
+      await result.holdOpen;
+    }
     process.exit(result.exitCode);
   } catch (error) {
     process.stderr.write(\`\${error?.message || String(error)}\\n\`);

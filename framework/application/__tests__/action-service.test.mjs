@@ -143,6 +143,43 @@ test('action service lists stable product actions with enablement derived from p
   assert.equal(applyVisual.enabled, true);
 });
 
+test('action service keeps export enabled for stale finalized projects', async () => {
+  const actionService = createActionService({
+    projectService: {
+      ...createProjectService('in_progress'),
+      getState() {
+        return {
+          kind: 'project',
+          status: 'in_progress',
+          facets: {
+            delivery: 'finalized_stale',
+            evidence: 'current',
+          },
+          briefComplete: true,
+          outlineRequired: false,
+          outlineComplete: true,
+          slidesTotal: 3,
+          slidesComplete: 3,
+          pdfReady: true,
+          lastPolicyError: '',
+          nextStep: 'Run presentation export again to refresh the canonical root PDF for the latest source.',
+        };
+      },
+    },
+    terminalService: {},
+    presentationAdapter: { invoke: async () => ({}) },
+    agentAdapter: { invoke: async () => ({}) },
+    emitEvent: () => {},
+  });
+
+  const actions = await actionService.listActions();
+  const exportAction = actions.find((action) => action.id === 'export_presentation');
+
+  assert(exportAction);
+  assert.equal(exportAction.enabled, true);
+  assert.equal(exportAction.reasonDisabled, '');
+});
+
 test('action service routes presentation and deterministic-fix agent actions to separate adapters while agent launcher owns terminal trace output', async () => {
   const [{ createProjectScaffold }] = await Promise.all([
     import('../project-scaffold-service.mjs'),

@@ -164,6 +164,7 @@ export function createActionLifecycleEvent({
 // -----------------------------------------------------------------------------
 
 const READY_PROJECT_STATUSES = new Set(['ready_to_finalize', 'finalized']);
+const EXPORT_ENABLED_DELIVERY_FACETS = new Set(['finalized_stale']);
 
 function resolveBaseDisableReason(meta) {
   if (!meta?.active) {
@@ -175,7 +176,8 @@ function resolveBaseDisableReason(meta) {
 
 function resolveReadinessDisableReason(projectState) {
   const status = projectState?.status || '';
-  if (READY_PROJECT_STATUSES.has(status)) {
+  const deliveryFacet = projectState?.facets?.delivery || '';
+  if (READY_PROJECT_STATUSES.has(status) || EXPORT_ENABLED_DELIVERY_FACETS.has(deliveryFacet)) {
     return '';
   }
 
