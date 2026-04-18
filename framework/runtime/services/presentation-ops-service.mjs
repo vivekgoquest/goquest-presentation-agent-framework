@@ -1,6 +1,5 @@
 import { chromium } from 'playwright';
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
@@ -27,6 +26,7 @@ import {
   selectDeckSlides,
 } from '../deck-runtime.js';
 import { validateRenderedCanvasContract } from '../rendered-canvas-contract.mjs';
+import { computeSourceFingerprint } from '../source-fingerprint.js';
 
 // -----------------------------------------------------------------------------
 // Capture Primitives
@@ -477,60 +477,6 @@ function writePdfExportArtifacts(projectRootInput, projectPaths, outputPath, opt
   });
 }
 
-function collectFingerprintFiles(projectRootAbs, relativePath, files) {
-  const targetAbs = resolve(projectRootAbs, relativePath);
-  const stats = statSync(targetAbs, { throwIfNoEntry: false });
-  if (!stats) {
-    return;
-  }
-
-  if (stats.isDirectory()) {
-    const entries = readdirSync(targetAbs, { withFileTypes: true })
-      .sort((left, right) => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-      const childRel = `${relativePath}/${entry.name}`;
-      if (entry.isDirectory()) {
-        collectFingerprintFiles(projectRootAbs, childRel, files);
-      } else if (entry.isFile()) {
-        files.push(childRel);
-      }
-    }
-    return;
-  }
-
-  if (stats.isFile()) {
-    files.push(relativePath);
-  }
-}
-
-function computeSourceFingerprint(projectRootAbs) {
-  const hash = createHash('sha256');
-  const files = [];
-  const roots = [
-    'brief.md',
-    'outline.md',
-    'theme.css',
-    'assets',
-    'slides',
-    '.presentation/intent.json',
-    '.presentation/framework/base',
-    '.presentation/framework/overrides',
-  ];
-
-  for (const relativePath of roots) {
-    collectFingerprintFiles(projectRootAbs, relativePath, files);
-  }
-
-  files.sort();
-  for (const relativePath of files) {
-    hash.update(`${relativePath}\n`);
-    hash.update(readFileSync(resolve(projectRootAbs, relativePath)));
-    hash.update('\n');
-  }
-
-  return `sha256:${hash.digest('hex')}`;
-}
-
 // -----------------------------------------------------------------------------
 // Validate Flow
 // -----------------------------------------------------------------------------
@@ -543,8 +489,12 @@ export async function validatePresentation(targetInput, options = {}) {
   const report = await capturePresentation(target, outputDir);
   const failures = buildFailures(report);
   const status = failures.length > 0 ? 'fail' : 'pass';
+  const generatedAt = new Date().toISOString();
+  const sourceFingerprint = computeSourceFingerprint(targetPaths.projectRootAbs);
 
   writeRenderState(targetPaths.projectRootAbs, {
+    generatedAt,
+    sourceFingerprint,
     producer: 'validate',
     status,
     slideIds: report.slideIds,
@@ -553,7 +503,7 @@ export async function validatePresentation(targetInput, options = {}) {
     consoleErrorCount: report.consoleErrors.length,
     overflowSlides: report.consistency.slidesWithOverflow,
     failures,
-    lastCheckedAt: new Date().toISOString(),
+    lastCheckedAt: generatedAt,
   });
 
   return {
@@ -776,9 +726,13 @@ export async function finalizePresentation(targetInput, options = {}) {
       preservedFinalized: status === 'pass' ? undefined : null,
     });
   } else {
+    const preservedSourceFingerprint = String(previousArtifacts?.sourceFingerprint || '').trim();
+
     writeArtifacts(sourcePaths.projectRootAbs, {
       generatedAt,
-      sourceFingerprint,
+      sourceFingerprint: preservedArtifacts.finalized?.exists || preservedArtifacts.latestExport?.exists
+        ? preservedSourceFingerprint
+        : sourceFingerprint,
       finalized: preservedArtifacts.finalized,
       latestExport: preservedArtifacts.latestExport,
       ...clearLegacyArtifactAliases(),

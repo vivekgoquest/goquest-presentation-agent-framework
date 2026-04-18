@@ -555,6 +555,45 @@ test('soft-failed full-deck canonical refresh clears prior finalized evidence wh
   assert.equal(runtimeArtifacts.pdf.path, rootPdfRel);
 });
 
+test('failed finalize before pdf refresh preserves the prior finalized fingerprint instead of restamping stale finalize evidence', async (t) => {
+  const [
+    { createProjectScaffold },
+    { finalizePresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: true });
+  fillBrief(projectRoot);
+
+  const initialFinalize = await finalizePresentation({ projectRoot });
+  assert.equal(initialFinalize.status, 'pass');
+
+  const artifactsBeforeFailure = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const copiedCanvasCss = resolve(projectRoot, '.presentation', 'framework', 'base', 'canvas', 'canvas.css');
+  const originalCanvasCss = readFileSync(copiedCanvasCss, 'utf8');
+  writeFileSync(
+    copiedCanvasCss,
+    originalCanvasCss.replace('--slide-ratio: 16 / 9;', '--slide-ratio: 4 / 3;')
+  );
+
+  const failedFinalize = await finalizePresentation({ projectRoot });
+  assert.equal(failedFinalize.status, 'fail');
+
+  const artifactsAfterFailure = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const renderStateAfterFailure = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
+
+  assert.equal(artifactsAfterFailure.finalized.exists, true);
+  assert.equal(artifactsAfterFailure.finalized.pdf.path, artifactsBeforeFailure.finalized.pdf.path);
+  assert.equal(artifactsAfterFailure.sourceFingerprint, artifactsBeforeFailure.sourceFingerprint);
+  assert.notEqual(renderStateAfterFailure.sourceFingerprint, artifactsAfterFailure.sourceFingerprint);
+  assert.equal(renderStateAfterFailure.status, 'fail');
+});
+
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
   const [
     { createProjectScaffold },

@@ -11,6 +11,7 @@ import { readArtifacts, readRenderState } from './presentation-runtime-state.js'
 import { derivePackageStatus, toLegacyProjectStatus } from './status-service.js';
 import { validateSlideDeckWorkspace } from './deck-policy.js';
 import { listSlideSourceEntries } from './deck-source.js';
+import { computeSourceFingerprint } from './source-fingerprint.js';
 
 const TODO_MARKER_RE = /\[\[TODO_[A-Z0-9_]+\]\]/;
 
@@ -35,14 +36,32 @@ function getValidationError(paths) {
   }
 }
 
-function resolveEvidenceFacet(renderState) {
-  return renderState ? 'current' : 'missing';
+function resolveEvidenceFacet(renderState, currentSourceFingerprint) {
+  if (!renderState) {
+    return 'missing';
+  }
+
+  const renderStatus = String(renderState?.status || '').trim().toLowerCase();
+  if (!renderStatus || renderStatus === 'pending') {
+    return 'missing';
+  }
+
+  if (renderStatus !== 'pass') {
+    return 'stale';
+  }
+
+  const renderFingerprint = String(renderState?.sourceFingerprint || '').trim();
+  if (!renderFingerprint || !currentSourceFingerprint) {
+    return 'stale';
+  }
+
+  return renderFingerprint === currentSourceFingerprint ? 'current' : 'stale';
 }
 
 function resolveDeliveryFacet({
   finalizedOutputsReady,
   blockerCount,
-  renderState,
+  currentSourceFingerprint,
   artifacts,
 }) {
   if (blockerCount > 0) {
@@ -54,8 +73,7 @@ function resolveDeliveryFacet({
   }
 
   const finalizedFingerprint = artifacts?.finalized?.exists ? String(artifacts?.sourceFingerprint || '').trim() : '';
-  const renderFingerprint = String(renderState?.sourceFingerprint || '').trim();
-  if (finalizedFingerprint && renderFingerprint && finalizedFingerprint !== renderFingerprint) {
+  if (!finalizedFingerprint || !currentSourceFingerprint || finalizedFingerprint !== currentSourceFingerprint) {
     return 'finalized_stale';
   }
 
@@ -130,6 +148,7 @@ export function getProjectState(projectRootInput) {
     }
   }
 
+  const currentSourceFingerprint = computeSourceFingerprint(paths.projectRootAbs);
   const recordedFinalizedPdfReady = hasRecordedFinalizedPdf(paths.projectRootAbs, artifacts);
   const pdfReady = recordedFinalizedPdfReady || existsSync(outputs.pdfAbs);
   const reportReady = existsSync(outputs.reportAbs);
@@ -145,10 +164,10 @@ export function getProjectState(projectRootInput) {
   const delivery = resolveDeliveryFacet({
     finalizedOutputsReady,
     blockerCount,
-    renderState,
+    currentSourceFingerprint,
     artifacts,
   });
-  const evidence = resolveEvidenceFacet(renderState);
+  const evidence = resolveEvidenceFacet(renderState, currentSourceFingerprint);
   const packageStatus = derivePackageStatus({
     sourceComplete,
     blockerCount,
@@ -170,6 +189,10 @@ export function getProjectState(projectRootInput) {
     nextStep = 'Fix the current policy violation before preview, export, or finalize.';
   } else if (packageStatus.facets.delivery === 'finalized_stale') {
     nextStep = 'Run finalize again to refresh the canonical outputs for the latest source.';
+  } else if (packageStatus.facets.evidence !== 'current') {
+    nextStep = renderState?.status === 'fail'
+      ? 'Fix the current render or validation issues before finalize.'
+      : 'Run presentation audit all before finalize so the runtime evidence is current.';
   }
 
   return {

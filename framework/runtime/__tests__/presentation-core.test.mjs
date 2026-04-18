@@ -143,7 +143,71 @@ test('presentation core status and inspect report finalized after a successful r
   });
   assert.equal(inspection.status.nextBoundary, 'maintain');
   assert.equal(inspection.artifacts.finalized.exists, true);
+});
 
+test('presentation core marks finalized delivery stale after authored source changes', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  const slideHtmlPath = resolve(projectRoot, 'slides', '010-intro', 'slide.html');
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const core = createPresentationCore();
+  const finalizeResult = await core.finalize(projectRoot);
+  assert.equal(finalizeResult.status, 'pass');
+
+  const originalSlideHtml = readFileSync(slideHtmlPath, 'utf8');
+  writeFileSync(slideHtmlPath, `${originalSlideHtml}\n<!-- post-finalize source change -->\n`);
+
+  const status = await core.getStatus(projectRoot);
+  const inspection = await core.inspectPackage(projectRoot);
+
+  assert.equal(status.workflow, 'authoring');
+  assert.deepEqual(status.facets, {
+    delivery: 'finalized_stale',
+    evidence: 'stale',
+  });
+  assert.equal(inspection.status.workflow, 'authoring');
+  assert.deepEqual(inspection.status.facets, {
+    delivery: 'finalized_stale',
+    evidence: 'stale',
+  });
+  assert.equal(inspection.artifacts.finalized.exists, true);
+});
+
+test('presentation core does not treat failed validation evidence as ready for finalize', async (t) => {
+  const [{ validatePresentation }] = await Promise.all([
+    import('../services/presentation-ops-service.mjs'),
+  ]);
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+
+  writeFileSync(
+    resolve(projectRoot, 'slides', '010-intro', 'slide.html'),
+    `<div class="slide"><h2>Broken validate deck</h2><script>console.error('validation fail')</script></div>\n`
+  );
+
+  const validation = await validatePresentation(
+    { projectRoot },
+    { outputDir: resolve(projectRoot, '.artifacts', 'failed-check') }
+  );
+  assert.equal(validation.status, 'fail');
+
+  const core = createPresentationCore();
+  const status = await core.getStatus(projectRoot);
+  const inspection = await core.inspectPackage(projectRoot);
+
+  assert.equal(status.workflow, 'authoring');
+  assert.deepEqual(status.facets, {
+    delivery: 'not_finalized',
+    evidence: 'stale',
+  });
+  assert.equal(inspection.renderState.status, 'fail');
+  assert.equal(inspection.status.workflow, 'authoring');
 });
 
 test('presentation CLI delegates package status through the core facade', async (t) => {
