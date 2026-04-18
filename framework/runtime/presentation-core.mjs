@@ -302,6 +302,7 @@ function toExportRequestCoreError(error, scope) {
     || message === 'Select at least one slide to export.'
     || message === 'Choose a destination folder before exporting.'
     || message.startsWith('Unknown slide selections: ')
+    || message.startsWith('Slide-filtered PDF exports require --output-dir or --output-file.')
   ) {
     return createCoreError(message, {
       status: 'invalid-request',
@@ -551,6 +552,7 @@ export function createPresentationCore(deps = {}) {
               {
                 format,
                 slideIds,
+                selectionMode: requestedSlideIds.length > 0 ? 'filtered' : 'full-deck',
                 outputDir,
                 outputFile,
               },

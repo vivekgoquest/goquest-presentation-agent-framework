@@ -104,6 +104,42 @@ function readJson(absPath) {
   return JSON.parse(readFileSync(absPath, 'utf8'));
 }
 
+function seedLegacyFinalizedAliases(projectRoot) {
+  const finalizedDir = resolve(projectRoot, 'outputs', 'finalized');
+  mkdirSync(resolve(finalizedDir, 'slides'), { recursive: true });
+  writeFileSync(resolve(finalizedDir, 'deck.pdf'), '%PDF-legacy\n');
+  writeFileSync(resolve(finalizedDir, 'report.json'), '{}\n');
+  writeFileSync(resolve(finalizedDir, 'summary.md'), '# Legacy summary\n');
+  writeFileSync(resolve(finalizedDir, 'full-page.png'), 'legacy-full-page\n');
+  writeFileSync(resolve(finalizedDir, 'slides', 'slide-intro.png'), 'legacy-slide\n');
+
+  writeFileSync(
+    resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      kind: 'artifacts',
+      sourceFingerprint: 'sha256:legacy',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      finalized: {
+        exists: true,
+        pdf: { path: 'outputs/finalized/deck.pdf' },
+      },
+      latestExport: {
+        exists: true,
+        format: 'pdf',
+        pdf: { path: 'outputs/finalized/deck.pdf' },
+        artifacts: [{ path: 'outputs/finalized/deck.pdf' }],
+      },
+      outputDir: 'outputs/finalized',
+      pdf: { path: 'outputs/finalized/deck.pdf' },
+      report: { path: 'outputs/finalized/report.json' },
+      summary: { path: 'outputs/finalized/summary.md' },
+      fullPage: { path: 'outputs/finalized/full-page.png' },
+      slides: [{ path: 'outputs/finalized/slides/slide-intro.png' }],
+    }, null, 2)}\n`
+  );
+}
+
 test('application scaffold creates the shell-less v1 layout for a 3-slide project', async (t) => {
   const [
     { createProjectScaffold },
@@ -366,6 +402,63 @@ test('runtime export service can export selected slides to one pdf or individual
   assert.equal(runtimeArtifacts.latestExport.pdf.path, toProjectRelativePath(projectRoot, pdfResult.outputPath));
   assert.deepEqual(runtimeArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [toProjectRelativePath(projectRoot, pdfResult.outputPath)]);
   assert.equal(runtimeArtifacts.finalized.exists, false);
+});
+
+test('runtime export service rejects slide-filtered canonical pdf requests instead of finalizing partial output', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation, finalizePresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  await assert.rejects(
+    () => exportPresentation({ projectRoot }, { format: 'pdf', slideIds: ['close'] }),
+    /Slide-filtered PDF exports require --output-dir or --output-file/i
+  );
+  await assert.rejects(
+    () => finalizePresentation({ projectRoot }, { slideIds: ['close'] }),
+    /Finalize only supports the full deck/i
+  );
+
+  const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  assert.equal(runtimeArtifacts.finalized.exists, false);
+  assert.equal(runtimeArtifacts.latestExport.exists, false);
+  assert.equal(existsSync(resolve(projectRoot, `${projectRoot.split('/').at(-1)}.pdf`)), false);
+});
+
+test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportDeckPdf },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+  seedLegacyFinalizedAliases(projectRoot);
+
+  const exported = await exportDeckPdf({ projectRoot });
+  const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.ok(existsSync(exported.outputPath));
+  assert.equal(runtimeArtifacts.pdf.path, toProjectRelativePath(projectRoot, exported.outputPath));
+  assert.equal(runtimeArtifacts.report, null);
+  assert.equal(runtimeArtifacts.summary, null);
+  assert.equal(runtimeArtifacts.fullPage, null);
+  assert.deepEqual(runtimeArtifacts.slides, []);
 });
 
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {

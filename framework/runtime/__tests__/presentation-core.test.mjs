@@ -218,6 +218,7 @@ test('presentation core exportPresentation defaults to the root pdf deliverable 
     request: {
       format: 'pdf',
       slideIds: [exportCalls[0].request.slideIds[0]],
+      selectionMode: 'full-deck',
       outputDir: '',
       outputFile: '',
     },
@@ -229,6 +230,44 @@ test('presentation core exportPresentation defaults to the root pdf deliverable 
   assert.equal(result.outputDir, '');
   assert.deepEqual(result.artifacts, [rootPdfRel]);
   assert.deepEqual(result.evidenceUpdated, ['.presentation/runtime/artifacts.json']);
+});
+
+test('presentation core forwards explicit slide selections as filtered export requests and surfaces canonical-root rejections', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  const exportCalls = [];
+  const core = createPresentationCore({
+    async exportPresentation(target, request) {
+      exportCalls.push({ target, request });
+      throw new Error(
+        'Slide-filtered PDF exports require --output-dir or --output-file. The canonical root PDF is reserved for full-deck finalize/export.'
+      );
+    },
+  });
+
+  await assert.rejects(
+    () => core.exportPresentation(projectRoot, { target: 'pdf', slideIds: ['intro'] }),
+    (error) => {
+      assert.ok(error instanceof PresentationCoreError);
+      assert.equal(error.status, 'invalid-request');
+      assert.match(error.message, /Slide-filtered PDF exports require --output-dir or --output-file/i);
+      return true;
+    }
+  );
+
+  assert.deepEqual(exportCalls, [{
+    target: { projectRoot },
+    request: {
+      format: 'pdf',
+      slideIds: ['intro'],
+      selectionMode: 'filtered',
+      outputDir: '',
+      outputFile: '',
+    },
+  }]);
 });
 
 test('presentation core exportPresentation rejects out-of-project output directories before invoking the exporter', async (t) => {

@@ -378,8 +378,31 @@ function toProjectArtifactPath(projectPaths, pathValue) {
   }
 }
 
+const SLIDE_FILTERED_ROOT_PDF_EXPORT_ERROR = 'Slide-filtered PDF exports require --output-dir or --output-file. The canonical root PDF is reserved for full-deck finalize/export.';
+const FINALIZE_SLIDE_FILTER_ERROR = 'Finalize only supports the full deck. Remove slide filters or export the selected slides to an explicit PDF destination.';
+
 function getDefaultPdfExportOutputPath(target) {
   return getPresentationPaths(target).rootPdfAbs;
+}
+
+function isFilteredPdfSelection(slideIds = [], selectionMode = '') {
+  const normalizedMode = String(selectionMode || '').trim().toLowerCase();
+  if (normalizedMode === 'filtered') {
+    return true;
+  }
+  if (normalizedMode === 'full-deck') {
+    return false;
+  }
+  return Array.isArray(slideIds) && slideIds.length > 0;
+}
+
+function clearLegacyArtifactAliases() {
+  return {
+    report: null,
+    summary: null,
+    fullPage: null,
+    slides: [],
+  };
 }
 
 function buildPdfLatestExport(projectPaths, outputPath) {
@@ -406,10 +429,7 @@ function writePdfExportArtifacts(projectRootInput, projectPaths, outputPath, opt
       }
       : previousArtifacts?.finalized,
     latestExport,
-    report: previousArtifacts?.report,
-    summary: previousArtifacts?.summary,
-    fullPage: previousArtifacts?.fullPage,
-    slides: previousArtifacts?.slides,
+    ...clearLegacyArtifactAliases(),
   });
 }
 
@@ -515,17 +535,24 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
     ? resolve(cwd, outputFile)
     : getDefaultPdfExportOutputPath(target);
   const shouldRecordArtifacts = options.recordArtifacts !== false;
+  const slideIds = options.slideIds || options.pdfOptions?.slideIds || [];
+  const filteredSelection = isFilteredPdfSelection(slideIds, options.selectionMode);
+  const writesCanonicalRootPdf = resolve(outputPath) === projectPaths.rootPdfAbs;
+
+  if (writesCanonicalRootPdf && filteredSelection) {
+    throw new Error(SLIDE_FILTERED_ROOT_PDF_EXPORT_ERROR);
+  }
 
   mkdirSync(dirname(outputPath), { recursive: true });
   const pdfBuffer = await generatePDF(target, {
     ...(options.pdfOptions || {}),
-    slideIds: options.slideIds || options.pdfOptions?.slideIds || [],
+    slideIds,
   });
   writeFileSync(outputPath, pdfBuffer);
 
   if (shouldRecordArtifacts) {
     writePdfExportArtifacts(projectPaths.projectRootAbs, projectPaths, outputPath, {
-      markFinalized: resolve(outputPath) === projectPaths.rootPdfAbs,
+      markFinalized: writesCanonicalRootPdf,
     });
   }
 
@@ -544,6 +571,7 @@ export async function exportPresentation(targetInput, request = {}, options = {}
   const slideIds = Array.isArray(request.slideIds)
     ? request.slideIds.map((slideId) => String(slideId || '').trim()).filter(Boolean)
     : [];
+  const selectionMode = String(request.selectionMode || '').trim().toLowerCase();
   const outputDirRaw = String(request.outputDir || '').trim();
   const outputFileRaw = String(request.outputFile || '').trim();
   const projectPaths = getPresentationPaths(target);
@@ -556,8 +584,18 @@ export async function exportPresentation(targetInput, request = {}, options = {}
   }
 
   if (format === 'pdf') {
+    const filteredSelection = isFilteredPdfSelection(slideIds, selectionMode);
+
     if (!outputDirRaw && !outputFileRaw) {
-      const finalized = await finalizePresentation(target, options);
+      if (filteredSelection) {
+        throw new Error(SLIDE_FILTERED_ROOT_PDF_EXPORT_ERROR);
+      }
+
+      const finalized = await finalizePresentation(target, {
+        ...options,
+        slideIds: [],
+        selectionMode: 'full-deck',
+      });
       const delivered = finalized.outputs?.artifacts?.length > 0;
       const outputPath = delivered ? projectPaths.rootPdfAbs : '';
 
@@ -588,6 +626,7 @@ export async function exportPresentation(targetInput, request = {}, options = {}
       ...options,
       recordArtifacts: false,
       slideIds,
+      selectionMode: filteredSelection ? 'filtered' : 'full-deck',
       pdfOptions: request.pdfOptions || options.pdfOptions || {},
     });
 
@@ -650,6 +689,10 @@ export async function finalizePresentation(targetInput, options = {}) {
   const previousArtifacts = readArtifacts(sourcePaths.projectRootAbs);
   const captureDir = mkdtempSync(resolve(tmpdir(), 'pf-finalize-'));
 
+  if (isFilteredPdfSelection(options.slideIds || [], options.selectionMode)) {
+    throw new Error(FINALIZE_SLIDE_FILTER_ERROR);
+  }
+
   rmSync(legacyOutputPaths.finalizedOutputDirAbs, { recursive: true, force: true });
 
   let status = 'pass';
@@ -691,10 +734,7 @@ export async function finalizePresentation(targetInput, options = {}) {
       sourceFingerprint,
       finalized: previousArtifacts?.finalized,
       latestExport: previousArtifacts?.latestExport,
-      report: previousArtifacts?.report,
-      summary: previousArtifacts?.summary,
-      fullPage: previousArtifacts?.fullPage,
-      slides: previousArtifacts?.slides,
+      ...clearLegacyArtifactAliases(),
     });
   }
 

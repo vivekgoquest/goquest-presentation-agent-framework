@@ -115,6 +115,42 @@ function getProjectPdfRel(projectRoot) {
   return `${metadata.projectSlug}.pdf`;
 }
 
+function seedLegacyFinalizedAliases(projectRoot) {
+  const finalizedDir = resolve(projectRoot, 'outputs', 'finalized');
+  mkdirSync(resolve(finalizedDir, 'slides'), { recursive: true });
+  writeFileSync(resolve(finalizedDir, 'deck.pdf'), '%PDF-legacy\n');
+  writeFileSync(resolve(finalizedDir, 'report.json'), '{}\n');
+  writeFileSync(resolve(finalizedDir, 'summary.md'), '# Legacy summary\n');
+  writeFileSync(resolve(finalizedDir, 'full-page.png'), 'legacy-full-page\n');
+  writeFileSync(resolve(finalizedDir, 'slides', 'slide-intro.png'), 'legacy-slide\n');
+
+  writeFileSync(
+    resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      kind: 'artifacts',
+      sourceFingerprint: 'sha256:legacy',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      finalized: {
+        exists: true,
+        pdf: { path: 'outputs/finalized/deck.pdf' },
+      },
+      latestExport: {
+        exists: true,
+        format: 'pdf',
+        pdf: { path: 'outputs/finalized/deck.pdf' },
+        artifacts: [{ path: 'outputs/finalized/deck.pdf' }],
+      },
+      outputDir: 'outputs/finalized',
+      pdf: { path: 'outputs/finalized/deck.pdf' },
+      report: { path: 'outputs/finalized/report.json' },
+      summary: { path: 'outputs/finalized/summary.md' },
+      fullPage: { path: 'outputs/finalized/full-page.png' },
+      slides: [{ path: 'outputs/finalized/slides/slide-intro.png' }],
+    }, null, 2)}\n`
+  );
+}
+
 function installResolvableFrameworkPackage(workspaceRoot) {
   const packageRoot = resolve(workspaceRoot, 'node_modules', 'pitch-framework');
   mkdirSync(resolve(packageRoot, 'framework', 'runtime'), { recursive: true });
@@ -146,6 +182,7 @@ test('export CLI writes the canonical root pdf and simplified runtime evidence',
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
+  seedLegacyFinalizedAliases(projectRoot);
 
   const rootPdfRel = getProjectPdfRel(projectRoot);
   const exportResult = runExportCliDetailed(projectRoot);
@@ -162,8 +199,50 @@ test('export CLI writes the canonical root pdf and simplified runtime evidence',
   assert.equal(artifacts.latestExport.format, 'pdf');
   assert.equal(artifacts.latestExport.pdf.path, rootPdfRel);
   assert.deepEqual(artifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
+  assert.equal(artifacts.report, null);
+  assert.equal(artifacts.summary, null);
+  assert.equal(artifacts.fullPage, null);
+  assert.deepEqual(artifacts.slides, []);
   assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
   assert.equal(readFileSync(resolve(projectRoot, rootPdfRel)).subarray(0, 4).toString(), '%PDF');
+});
+
+test('presentation CLI rejects slide-filtered canonical pdf exports instead of finalizing a partial pdf', async (t) => {
+  const { createProjectScaffold } = await import('../project-scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const result = spawnSync(
+    'node',
+    [
+      'framework/runtime/presentation-cli.mjs',
+      'export',
+      'pdf',
+      '--project',
+      projectRoot,
+      '--slide',
+      'close',
+      '--format',
+      'json',
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 3, result.stderr);
+  const json = parseTrailingCliJson(result.stdout);
+  const artifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+
+  assert.equal(json.status, 'invalid-request');
+  assert.match(json.summary, /Slide-filtered PDF exports require --output-dir or --output-file/i);
+  assert.equal(existsSync(resolve(projectRoot, getProjectPdfRel(projectRoot))), false);
+  assert.equal(artifacts.finalized.exists, false);
+  assert.equal(artifacts.latestExport.exists, false);
 });
 
 test('finalize writes the canonical root pdf and resets runtime evidence to the v1 delivery shape', async (t) => {
