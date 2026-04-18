@@ -118,7 +118,7 @@ export function derivePackageStatus(facts = {}) {
     workflow = 'onboarding';
   } else if (blockerCount > 0 || facets.delivery === 'finalize_blocked') {
     workflow = 'blocked';
-  } else if (facets.delivery === 'finalized_current') {
+  } else if (facets.delivery === 'finalized_current' && facets.evidence === 'current') {
     workflow = 'finalized';
   } else if (facets.evidence === 'current' && facets.delivery !== 'finalized_stale') {
     workflow = 'ready_for_finalize';

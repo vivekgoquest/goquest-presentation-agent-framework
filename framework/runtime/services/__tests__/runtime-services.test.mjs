@@ -434,6 +434,58 @@ test('runtime export service rejects slide-filtered canonical pdf requests inste
   assert.equal(existsSync(resolve(projectRoot, `${projectRoot.split('/').at(-1)}.pdf`)), false);
 });
 
+test('explicit canonical pdf destinations keep finalize capture semantics instead of taking the manual export path', async (t) => {
+  const [
+    { createProjectScaffold },
+    { exportPresentation },
+  ] = await Promise.all([
+    import('../../../application/project-scaffold-service.mjs'),
+    import('../presentation-ops-service.mjs'),
+  ]);
+
+  for (const request of [
+    (projectRoot, rootPdfRel) => ({ outputFile: rootPdfRel }),
+    (projectRoot) => ({ outputDir: projectRoot }),
+  ]) {
+    const projectRoot = createTempProjectRoot();
+    t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+    await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+    fillBrief(projectRoot);
+
+    const projectMetadata = readJson(resolve(projectRoot, '.presentation', 'project.json'));
+    const rootPdfRel = `${projectMetadata.projectSlug}.pdf`;
+
+    for (const slideDir of ['010-intro', '020-close']) {
+      writeFileSync(
+        resolve(projectRoot, 'slides', slideDir, 'slide.html'),
+        `<div class="slide"><h2>${slideDir}</h2><script>console.error('explicit canonical finalize ${slideDir}')</script></div>`
+      );
+    }
+
+    const result = await exportPresentation(
+      { projectRoot },
+      {
+        format: 'pdf',
+        slideIds: ['intro', 'close'],
+        selectionMode: 'full-deck',
+        ...request(projectRoot, rootPdfRel),
+      }
+    );
+    const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+    const renderState = readJson(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json'));
+
+    assert.equal(result.status, 'fail');
+    assert.equal(result.outputPath, resolve(projectRoot, rootPdfRel));
+    assert.match(result.issues.join('\n'), /Browser console errors were detected/i);
+    assert.equal(runtimeArtifacts.finalized.exists, false);
+    assert.equal(runtimeArtifacts.latestExport.exists, true);
+    assert.equal(runtimeArtifacts.latestExport.pdf.path, rootPdfRel);
+    assert.equal(renderState.producer, 'finalize');
+    assert.equal(renderState.status, 'fail');
+  }
+});
+
 test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', async (t) => {
   const [
     { createProjectScaffold },

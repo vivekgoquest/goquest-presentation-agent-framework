@@ -67,3 +67,20 @@ test('derivePackageStatus returns finalized when finalized delivery is current',
   });
   assert.deepEqual(status.nextFocus, ['deck.pdf']);
 });
+
+test('derivePackageStatus does not promote finalized delivery to finalized when evidence is missing', () => {
+  const status = derivePackageStatus({
+    sourceComplete: true,
+    blockerCount: 0,
+    delivery: 'finalized_current',
+    evidence: 'missing',
+    canonicalPdfPath: 'deck.pdf',
+  });
+
+  assert.equal(status.workflow, 'authoring');
+  assert.deepEqual(status.facets, {
+    delivery: 'finalized_current',
+    evidence: 'missing',
+  });
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
+});

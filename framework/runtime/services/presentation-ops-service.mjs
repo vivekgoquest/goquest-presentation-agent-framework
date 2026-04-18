@@ -567,6 +567,25 @@ export async function exportDeckPdf(targetInput, outputFile = null, options = {}
   };
 }
 
+function buildCanonicalPdfExportResult(target, projectPaths, slideIds, finalized) {
+  const delivered = finalized.outputs?.artifacts?.length > 0;
+  const outputPath = delivered ? projectPaths.rootPdfAbs : '';
+
+  return {
+    format: 'pdf',
+    target,
+    workspace: getPresentationId(target),
+    slideIds,
+    outputDir: projectPaths.projectRootAbs,
+    outputPath,
+    outputPaths: outputPath ? [outputPath] : [],
+    bytes: outputPath ? statSync(outputPath).size : 0,
+    status: finalized.status,
+    issues: finalized.issues || [],
+    evidenceUpdated: [projectPaths.renderStateRel, projectPaths.artifactsRel],
+  };
+}
+
 export async function exportPresentation(targetInput, request = {}, options = {}) {
   const target = createPresentationTarget(targetInput);
   const cwd = options.cwd || process.cwd();
@@ -599,22 +618,8 @@ export async function exportPresentation(targetInput, request = {}, options = {}
         slideIds: [],
         selectionMode: 'full-deck',
       });
-      const delivered = finalized.outputs?.artifacts?.length > 0;
-      const outputPath = delivered ? projectPaths.rootPdfAbs : '';
 
-      return {
-        format,
-        target,
-        workspace: getPresentationId(target),
-        slideIds,
-        outputDir: projectPaths.projectRootAbs,
-        outputPath,
-        outputPaths: outputPath ? [outputPath] : [],
-        bytes: outputPath ? statSync(outputPath).size : 0,
-        status: finalized.status,
-        issues: finalized.issues || [],
-        evidenceUpdated: [projectPaths.renderStateRel, projectPaths.artifactsRel],
-      };
+      return buildCanonicalPdfExportResult(target, projectPaths, slideIds, finalized);
     }
 
     const outputDir = outputDirRaw
@@ -623,6 +628,20 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     const outputPath = outputFileRaw
       ? resolve(outputDir, outputFileRaw)
       : resolve(outputDir, getSuggestedPdfName(target));
+
+    if (resolve(outputPath) === projectPaths.rootPdfAbs) {
+      if (filteredSelection) {
+        throw new Error(SLIDE_FILTERED_ROOT_PDF_EXPORT_ERROR);
+      }
+
+      const finalized = await finalizePresentation(target, {
+        ...options,
+        slideIds: [],
+        selectionMode: 'full-deck',
+      });
+
+      return buildCanonicalPdfExportResult(target, projectPaths, slideIds, finalized);
+    }
 
     mkdirSync(dirname(outputPath), { recursive: true });
     const result = await exportDeckPdf(target, outputPath, {
@@ -634,7 +653,7 @@ export async function exportPresentation(targetInput, request = {}, options = {}
     });
 
     writePdfExportArtifacts(projectPaths.projectRootAbs, projectPaths, result.outputPath, {
-      markFinalized: resolve(result.outputPath) === projectPaths.rootPdfAbs,
+      markFinalized: false,
     });
 
     return {
