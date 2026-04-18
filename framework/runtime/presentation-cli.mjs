@@ -391,10 +391,13 @@ async function runExportCommand(parsed, command, core) {
     outputFile: parsed.outputFile,
   });
 
+  const failed = result.status === 'fail';
   const payload = {
     command,
     status: result.status || 'pass',
-    summary: 'Requested export artifacts were produced.',
+    summary: failed
+      ? 'Requested export completed with issues.'
+      : 'Requested export artifacts were produced.',
     outputs: {
       outputDir: result.outputDir,
       artifacts: result.artifacts || [],
@@ -404,7 +407,7 @@ async function runExportCommand(parsed, command, core) {
     scope: result.scope,
   };
 
-  return finalizeResult(payload, parsed.format, EXIT_CODE_OK);
+  return finalizeResult(payload, parsed.format, failed ? EXIT_CODE_VIOLATIONS : EXIT_CODE_OK);
 }
 
 async function dispatchPresentationCli(argv = process.argv.slice(2), options = {}) {

@@ -527,6 +527,49 @@ test('presentation CLI treats finalize as a thin export alias in v1', async (t) 
   ]]);
 });
 
+test('presentation CLI returns violations for export and finalize soft-fail results', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  for (const family of ['export', 'finalize']) {
+    const result = await runPresentationCli([family, '--project', projectRoot, '--format', 'json'], {
+      core: {
+        async exportPresentation(input, options = {}) {
+          assert.equal(input, projectRoot);
+          assert.deepEqual(options, {
+            target: 'pdf',
+            slideIds: [],
+            outputDir: '',
+            outputFile: '',
+          });
+          return {
+            kind: 'presentation-export',
+            projectRoot: input,
+            status: 'fail',
+            outputDir: '',
+            artifacts: [`${basename(input)}.pdf`],
+            evidenceUpdated: ['.presentation/runtime/artifacts.json'],
+            issues: ['Browser console errors were detected: 1.'],
+            scope: {
+              kind: 'export',
+              format: 'pdf',
+              projectRoot: input,
+            },
+          };
+        },
+      },
+    });
+
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.payload.status, 'fail');
+    assert.equal(result.payload.summary, 'Requested export completed with issues.');
+    assert.notEqual(result.payload.summary, 'Requested export artifacts were produced.');
+    assert.deepEqual(result.payload.issues, ['Browser console errors were detected: 1.']);
+  }
+});
+
 test('presentation CLI rejects finalize positionals instead of silently exporting pdf', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));

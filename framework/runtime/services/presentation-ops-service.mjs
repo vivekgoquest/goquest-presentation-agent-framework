@@ -459,6 +459,9 @@ function buildPdfLatestExport(projectPaths, outputPath) {
 function writePdfExportArtifacts(projectRootInput, projectPaths, outputPath, options = {}) {
   const previousArtifacts = readArtifacts(projectRootInput);
   const latestExport = buildPdfLatestExport(projectPaths, outputPath);
+  const preservedFinalized = Object.prototype.hasOwnProperty.call(options, 'preservedFinalized')
+    ? options.preservedFinalized
+    : previousArtifacts?.finalized;
 
   return writeArtifacts(projectRootInput, {
     generatedAt: options.generatedAt || new Date().toISOString(),
@@ -468,7 +471,7 @@ function writePdfExportArtifacts(projectRootInput, projectPaths, outputPath, opt
         exists: true,
         pdf: latestExport.pdf,
       }
-      : previousArtifacts?.finalized,
+      : preservedFinalized,
     latestExport,
     ...clearLegacyArtifactAliases(),
   });
@@ -763,15 +766,16 @@ export async function finalizePresentation(targetInput, options = {}) {
   const sourceFingerprint = computeSourceFingerprint(sourcePaths.projectRootAbs);
   const failures = report ? buildFailures(report) : issues;
 
+  const preservedArtifacts = sanitizeArtifactsAfterLegacyRefreshFailure(previousArtifacts, legacyOutputPaths);
+
   if (pdfOutputPath) {
     writePdfExportArtifacts(sourcePaths.projectRootAbs, sourcePaths, pdfOutputPath, {
       generatedAt,
       sourceFingerprint,
       markFinalized: status === 'pass',
+      preservedFinalized: status === 'pass' ? undefined : preservedArtifacts.finalized,
     });
   } else {
-    const preservedArtifacts = sanitizeArtifactsAfterLegacyRefreshFailure(previousArtifacts, legacyOutputPaths);
-
     writeArtifacts(sourcePaths.projectRootAbs, {
       generatedAt,
       sourceFingerprint,

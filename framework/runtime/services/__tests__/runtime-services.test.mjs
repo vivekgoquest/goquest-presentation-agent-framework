@@ -461,7 +461,7 @@ test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', a
   assert.deepEqual(runtimeArtifacts.slides, []);
 });
 
-test('failed canonical pdf export does not resurrect deleted legacy finalized aliases', async (t) => {
+test('soft-failed canonical pdf export does not resurrect deleted legacy finalized aliases', async (t) => {
   const [
     { createProjectScaffold },
     { exportPresentation },
@@ -474,26 +474,35 @@ test('failed canonical pdf export does not resurrect deleted legacy finalized al
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  fillBrief(projectRoot);
   seedLegacyFinalizedAliases(projectRoot);
+
+  for (const slideDir of ['010-intro', '020-close']) {
+    writeFileSync(
+      resolve(projectRoot, 'slides', slideDir, 'slide.html'),
+      `<div class="slide"><h2>${slideDir}</h2><script>console.error('soft-fail ${slideDir}')</script></div>`
+    );
+  }
 
   const result = await exportPresentation(
     { projectRoot },
     { format: 'pdf', slideIds: ['intro', 'close'], selectionMode: 'full-deck' }
   );
   const runtimeArtifacts = readJson(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'));
+  const rootPdfRel = toProjectRelativePath(projectRoot, result.outputPath);
 
   assert.equal(result.status, 'fail');
-  assert.equal(result.outputPath, '');
-  assert.deepEqual(result.outputPaths, []);
-  assert.match(result.issues.join('\n'), /brief\.md|Deck policy violation|TODO/i);
+  assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
+  assert.deepEqual(result.outputPaths.map((outputPath) => toProjectRelativePath(projectRoot, outputPath)), [rootPdfRel]);
+  assert.match(result.issues.join('\n'), /Browser console errors were detected/i);
   assert.equal(existsSync(resolve(projectRoot, 'outputs', 'finalized', 'deck.pdf')), false);
   assert.equal(runtimeArtifacts.finalized.exists, false);
   assert.equal(runtimeArtifacts.finalized.pdf, null);
-  assert.equal(runtimeArtifacts.latestExport.exists, false);
-  assert.equal(runtimeArtifacts.latestExport.pdf, null);
-  assert.deepEqual(runtimeArtifacts.latestExport.artifacts, []);
+  assert.equal(runtimeArtifacts.latestExport.exists, true);
+  assert.equal(runtimeArtifacts.latestExport.pdf.path, rootPdfRel);
+  assert.deepEqual(runtimeArtifacts.latestExport.artifacts.map((artifact) => artifact.path), [rootPdfRel]);
   assert.equal(runtimeArtifacts.outputDir, '');
-  assert.equal(runtimeArtifacts.pdf, null);
+  assert.equal(runtimeArtifacts.pdf.path, rootPdfRel);
   assert.equal(runtimeArtifacts.report, null);
   assert.equal(runtimeArtifacts.summary, null);
   assert.equal(runtimeArtifacts.fullPage, null);
