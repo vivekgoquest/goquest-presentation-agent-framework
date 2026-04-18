@@ -4,7 +4,7 @@ description: Run the artifact-only narrative review swarm and write one canonica
 user-invocable: false
 ---
 
-Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
 If the launcher prompt includes application-prepared workflow context, treat it
 as the canonical review workflow and use this skill only as execution guidance.
 

@@ -64,6 +64,54 @@ test('scaffold package avoids removed project-shim command guidance in copied Cl
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export screenshots --output-dir/);
 });
 
+test('scaffolded Claude packet points agents to the in-packet AGENTS contract instead of a missing root file', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const packetFiles = [
+    '.claude/CLAUDE.md',
+    '.claude/rules/authoring-rules.md',
+    '.claude/rules/file-boundaries.md',
+    '.claude/rules/framework.md',
+    '.claude/skills/apply-narrative-review-changes/SKILL.md',
+    '.claude/skills/apply-visual-review-changes/SKILL.md',
+    '.claude/skills/fix-validation-issues/SKILL.md',
+    '.claude/skills/new-deck/SKILL.md',
+    '.claude/skills/review-narrative-presentation/SKILL.md',
+    '.claude/skills/review-visual-presentation/SKILL.md',
+  ];
+
+  for (const packetFile of packetFiles) {
+    const content = readFileSync(resolve(projectRoot, packetFile), 'utf8');
+    assert.doesNotMatch(content, /\.\.\/AGENTS\.md/);
+    assert.doesNotMatch(content, /\/abs\/path-to-project\/AGENTS\.md/);
+    assert.doesNotMatch(content, /project-root `AGENTS\.md`/);
+    assert.doesNotMatch(content, /Read AGENTS\.md first, then CLAUDE\.md/);
+  }
+
+  const claudeContent = readFileSync(resolve(projectRoot, '.claude', 'CLAUDE.md'), 'utf8');
+  assert.match(claudeContent, /AGENTS\.md in this directory|\.claude\/AGENTS\.md/);
+  const newDeckContent = readFileSync(resolve(projectRoot, '.claude', 'skills', 'new-deck', 'SKILL.md'), 'utf8');
+  assert.match(newDeckContent, /\.claude\/AGENTS\.md/);
+});
+
+test('scaffolded new-deck guidance keeps v1 long-deck behavior aligned with init limits', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const newDeckContent = readFileSync(resolve(projectRoot, '.claude', 'skills', 'new-deck', 'SKILL.md'), 'utf8');
+  assert.match(newDeckContent, /supports 1(?:-| to )10 slides/i);
+  assert.doesNotMatch(newDeckContent, /If the deck needs more than 10 slides, run:/);
+  assert.match(newDeckContent, /If the project later grows beyond 10 slides/i);
+  assert.match(newDeckContent, /outline\.md/);
+});
+
 test('scaffold package resolves its source files from the installed package root instead of cwd', async (t) => {
   const outsideCwd = createTempProjectRoot();
   const scaffoldPackageUrl = pathToFileURL(resolve(import.meta.dirname, '..', 'scaffold-package.mjs')).href;

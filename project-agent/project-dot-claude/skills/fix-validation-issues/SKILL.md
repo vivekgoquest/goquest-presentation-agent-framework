@@ -4,7 +4,7 @@ description: Fix deterministic validation failures in a presentation project. Us
 user-invocable: true
 ---
 
-Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
 If the launcher prompt includes application-prepared workflow context, treat it
 as the canonical fix-validation workflow and use this skill only as execution guidance.
 

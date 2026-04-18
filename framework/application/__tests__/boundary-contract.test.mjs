@@ -205,9 +205,12 @@ test('package scripts expose one desktop launch path and four deterministic runt
 test('project-local framework cli delegates through the presentation cli with injected project scope', () => {
   const content = readFileSync(resolve(REPO_ROOT, 'framework', 'runtime', 'project-cli-shim.mjs'), 'utf8');
   assert.match(content, /PRESENTATION_CLI_SPECIFIER = 'pitch-framework\/presentation-cli'/);
-  assert.match(content, /resolve\(frameworkRoot, 'framework', 'runtime', 'presentation-cli\.mjs'\)/);
-  assert.match(content, /const \{ runPresentationCli \} = await import\(presentationCliModuleUrl\)/);
+  assert.match(content, /import\.meta\.resolve\(PRESENTATION_CLI_SPECIFIER\)/);
+  assert.match(content, /Repair guidance:/);
+  assert.match(content, /await import\(moduleUrl\)/);
   assert.match(content, /\.\.\.process\.argv\.slice\(2\),\s*'--project', projectRoot/);
+  assert.doesNotMatch(content, /resolve\(frameworkRoot, 'framework', 'runtime', 'presentation-cli\.mjs'\)/);
+  assert.doesNotMatch(content, /FALLBACK_/);
   assert.doesNotMatch(content, /check: 'framework\/runtime\/check-deck\.mjs'/);
   assert.doesNotMatch(content, /<check\|capture\|export\|finalize>/);
 });

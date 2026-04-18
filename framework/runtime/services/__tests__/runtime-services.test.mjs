@@ -1,12 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-native-host-'));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function installResolvableFrameworkPackage(workspaceRoot) {
+  const packageRoot = resolve(workspaceRoot, 'node_modules', 'pitch-framework');
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    resolve(packageRoot, 'package.json'),
+    `${JSON.stringify({
+      name: 'pitch-framework',
+      type: 'module',
+      exports: {
+        './presentation-cli': './presentation-cli.mjs',
+      },
+    }, null, 2)}\n`
+  );
+  writeFileSync(
+    resolve(packageRoot, 'presentation-cli.mjs'),
+    `export { runPresentationCli } from ${JSON.stringify(pathToFileURL(resolve(process.cwd(), 'framework', 'runtime', 'presentation-cli.mjs')).href)};\n`
+  );
 }
 
 function fillBrief(projectRoot) {
@@ -95,7 +119,7 @@ test('application scaffold creates the shell-less v1 layout for a 3-slide projec
   }
 });
 
-test('project shim executes from a real temp project outside the repo', async (t) => {
+test('project shim fails with repair guidance when the package is not resolvable from a real temp project outside the repo', async (t) => {
   const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'external-project');
@@ -106,9 +130,34 @@ test('project shim executes from a real temp project outside the repo', async (t
   const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
   const source = readFileSync(shimPath, 'utf8');
   assert.match(source, /pitch-framework\/presentation-cli/);
+  assert.match(source, /import\.meta\.resolve\(PRESENTATION_CLI_SPECIFIER\)/);
   assert.match(source, /'--project', projectRoot/);
   assert.doesNotMatch(source, /execFileSync/);
+  assert.doesNotMatch(source, /FALLBACK_/);
+  assert.doesNotMatch(source, new RegExp(escapeRegExp(process.cwd())));
 
+  const result = spawnSync(process.execPath, [shimPath, 'status', '--format', 'json'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Unable to resolve "pitch-framework\/presentation-cli"/);
+  assert.match(result.stderr, /Repair guidance:/);
+  assert.match(result.stderr, /install|link/i);
+});
+
+test('project shim executes when pitch-framework is resolvable through standard package resolution', async (t) => {
+  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const workspaceRoot = createTempProjectRoot();
+  const projectRoot = resolve(workspaceRoot, 'external-project');
+  t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
+
+  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  installResolvableFrameworkPackage(workspaceRoot);
+
+  const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
   const result = spawnSync(process.execPath, [shimPath, 'status', '--format', 'json'], {
     cwd: projectRoot,
     encoding: 'utf8',

@@ -1,6 +1,6 @@
 # Claude Adapter
 
-In a scaffolded project, read `../AGENTS.md` first.
+In a scaffolded project, read AGENTS.md in this directory first.
 
 This `.claude/` directory contains Claude-specific workflow helpers:
 

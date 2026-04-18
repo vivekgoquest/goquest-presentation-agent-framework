@@ -1,6 +1,6 @@
 # Framework Spec
 
-Read the project-root `AGENTS.md` first.
+Read `.claude/AGENTS.md` first.
 
 This file is a Claude-specific helper layer. The presentation package itself is
 the source of truth.
@@ -37,9 +37,9 @@ Interpretation:
 
 ## Presentation Package
 
-Use `AGENTS.md` plus `.presentation/*` for presentation package truth:
+Use `.claude/AGENTS.md` plus `.presentation/*` for presentation package truth:
 
-- `AGENTS.md` defines universal startup order, edit lanes, and required commands
+- `.claude/AGENTS.md` defines universal startup order, edit lanes, and required commands
 - `.presentation/project.json` is stable system identity
 - `.presentation/intent.json` is editable authoring intent
 - `.presentation/package.generated.json` is deterministic structure generated from source
@@ -89,7 +89,7 @@ Deck work should usually:
 - keep local layout or one-off styling in optional `slides/<NNN-slide-id>/slide.css`
 - edit `.presentation/intent.json` when audience, purpose, or per-slide intent needs to change
 - consume existing canvas utilities instead of redefining them
-- treat `AGENTS.md` as the first project contract before using Claude-specific helpers
+- treat `.claude/AGENTS.md` as the first project contract before using Claude-specific helpers
 
 Deck work should not:
 - bypass `/preview/` and edit hand-crafted HTML outside the slide folders

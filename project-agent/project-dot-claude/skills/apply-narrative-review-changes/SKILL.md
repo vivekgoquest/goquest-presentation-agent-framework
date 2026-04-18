@@ -4,7 +4,7 @@ description: Read the canonical narrative review issue file and implement the re
 user-invocable: false
 ---
 
-Read AGENTS.md first, then CLAUDE.md for Claude-specific workflow help.
+Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
 If the launcher prompt includes application-prepared workflow context, treat it
 as the canonical apply workflow and use this skill only as execution guidance.
 

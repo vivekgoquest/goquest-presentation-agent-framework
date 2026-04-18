@@ -4,25 +4,26 @@ description: Create a new presentation from a plain-English request. Use when th
 user-invocable: true
 ---
 
-After scaffolding the project, read /abs/path-to-project/AGENTS.md first, then /abs/path-to-project/.claude/CLAUDE.md for Claude-specific workflow help.
+After scaffolding the project, read /abs/path-to-project/.claude/AGENTS.md first, then /abs/path-to-project/.claude/CLAUDE.md for Claude-specific workflow help.
 Run npm run setup if dependencies are not installed yet.
 Create a new presentation project for this request.
 Choose a good absolute folder path and run:
 npm run new -- --project /abs/path-to-project
-If the deck needs more than 10 slides, run:
+If you want a different initial size within the supported v1 range, use:
 npm run new -- --project /abs/path-to-project --slides <count>
+Shell-less v1 init currently supports 1-10 slides. If the project later grows beyond 10 slides, add /abs/path-to-project/outline.md before validation and continue buildout in batches of 5.
 If the project needs a vendored framework snapshot, add:
 --copy-framework
 
 Then:
-- follow /abs/path-to-project/AGENTS.md as the project contract and /abs/path-to-project/.claude/CLAUDE.md as the Claude adapter
+- follow /abs/path-to-project/.claude/AGENTS.md as the project contract and /abs/path-to-project/.claude/CLAUDE.md as the Claude adapter
 - convert my request into /abs/path-to-project/brief.md
-- for decks with more than 10 slides, replace every TODO marker in /abs/path-to-project/outline.md before building slides
+- if the project later grows beyond 10 slides, add /abs/path-to-project/outline.md, lock the story there, and remove any TODO markers before validation
 - design the theme first: finalize /abs/path-to-project/theme.css with the full visual system (palette, typography, components) before writing any slide HTML
-- design each slide: for every slide in the outline, decide how it will look — which primitives, how it differs from neighbors, whether it needs images; record design notes in the outline
-- do not start building slide HTML until the theme is finalized and every slide in the outline has a design decision
+- design each planned slide before implementation: decide which primitives it will use, how it differs from neighbors, and whether it needs images; if an outline exists, record the design notes there
+- do not start building slide HTML until the theme is finalized and every planned slide has a design decision
 - build the source slides in /abs/path-to-project/slides/<NNN-id>/slide.html following the per-slide design decisions
-- for decks with more than 10 slides, build in batches of 5 and run node .presentation/framework-cli.mjs audit all after each batch
+- if the project later grows beyond 10 slides, build in batches of 5 and run node .presentation/framework-cli.mjs audit all after each batch
 - use optional /abs/path-to-project/slides/<NNN-id>/slide.css only when a slide needs local CSS
 - keep assets either deck-shared in /abs/path-to-project/assets/ or slide-local in each slide folder
 - keep framework changes out of scope unless truly necessary
