@@ -44,3 +44,22 @@ test('shell-less public surface drops shell-era scripts and package dependencies
   assert.equal(dependencies['@xterm/addon-search'], undefined);
   assert.equal(dependencies['@xterm/addon-web-links'], undefined);
 });
+
+test('shell-less public surface removes shell-era docs and desktop workflow references', () => {
+  const readme = readFileSync(repoPath('README.md'), 'utf8');
+  const startHere = readFileSync(repoPath('START-HERE.md'), 'utf8');
+
+  assert.doesNotMatch(readme, /electron-native/i);
+  assert.doesNotMatch(readme, /npm run start/i);
+  assert.doesNotMatch(readme, /desktop app/i);
+
+  assert.doesNotMatch(startHere, /desktop app workflow/i);
+  assert.doesNotMatch(startHere, /Click\s+\*\*New\*\*/i);
+  assert.doesNotMatch(startHere, /Click\s+\*\*Open\*\*/i);
+  assert.doesNotMatch(startHere, /Click New/i);
+  assert.doesNotMatch(startHere, /Click Open/i);
+
+  assert.equal(existsSync(repoPath('docs', 'electron-operator-agent-playbook.md')), false);
+  assert.equal(existsSync(repoPath('docs', 'electron-operator-cli.md')), false);
+  assert.equal(existsSync(repoPath('docs', 'electron-operator-guide.md')), false);
+});

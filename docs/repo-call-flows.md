@@ -1,304 +1,310 @@
 # Repository Call Flows
 
-**Use this when:** you need a maintainer mental model of what calls what across the repository.
+**Use this when:** you need a maintainer mental model of what calls what in the shell-less package.
 
 **Read this after:** `docs/repo-architecture-overview.md`.
 
 **Do not confuse with:**
-- `docs/repo-action-trace-export-presentation.md` — one specific action trace
-- `docs/repo-trace-project-creation.md` — one specific scaffold trace
+- `docs/repo-trace-project-creation.md` — the detailed scaffold trace
+- `docs/prd-human-agent.md` — operator-facing product requirements
 
 **Key files:**
-- `electron/main.mjs`
-- `electron/worker/host.mjs`
-- `framework/application/electron-request-service.mjs`
-- `framework/application/action-service.mjs`
-- `framework/application/project-query-service.mjs`
-- `framework/runtime/deck-assemble.js`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
+- `framework/runtime/services/scaffold-service.mjs`
+- `framework/runtime/presentation-package.js`
+- `framework/runtime/project-state.js`
+- `framework/runtime/preview-server.mjs`
+- `framework/runtime/runtime-app.js`
 - `framework/runtime/services/presentation-ops-service.mjs`
-- `project-agent/agent-launcher.mjs`
+- `framework/shared/project-claude-scaffold-package.mjs`
 
-**Verification:** use this doc to find the right files, then run lane-specific verification from `docs/repo-change-impact-matrix.md`.
+**Verification:** use this doc to find the right files, then run `npm test` plus a focused CLI smoke.
 
 ---
 
 ## One-line mental model
 
-The stack is:
+The package is:
 
 ```text
-Renderer UI -> Electron main -> worker host -> application service -> runtime or agent adapter -> project state / outputs / events -> back to UI
+presentation CLI or project-local shim -> runtime core -> package/state/policy/preview/export services -> project files
 ```
 
-## Flow 1: UI request path
+## Flow 1: public CLI request path
 
-This is the default path for most user-triggered operations in the desktop app.
+This is the common entry for installed-package usage.
 
 ```text
-electron/renderer/app.js
-  -> window.electron.* bridge from preload
-  -> electron/main.mjs ipc handler
-  -> electron/worker/host.mjs handleRequest
-  -> framework/application/electron-request-service.mjs
-  -> either:
-       a) framework/application/project-query-service.mjs
-       b) framework/application/action-service.mjs
-       c) terminal service methods
+presentation <family> ...
+  -> framework/runtime/presentation-cli.mjs
+  -> parsePresentationCliArgs(...)
+  -> createPresentationCore(...)
+  -> dispatch to init / inspect / status / audit / preview / export / finalize
+  -> structured text or JSON envelope
 ```
 
 ### Why it matters
-The renderer should not invent product logic. It should ask the application layer to do named things.
+The CLI owns command parsing and output envelopes. It should stay thin.
 
-## Flow 2: Project query path
+## Flow 2: project-local shim path
 
-Used for:
-- open project
-- create project
-- get project meta
-- get project state
-- get file tree
-- get slides
-- get preview document
+This is the common entry once a project already exists.
 
 ```text
-renderer request
-  -> main ipc
-  -> worker host
-  -> electron-request-service
-  -> project-query-service
-       -> project-state
-       -> presentation-package ensure/read
-       -> deck-assemble for preview
-       -> project-tree builder
-```
-
-Key files:
-- `framework/application/project-query-service.mjs`
-- `framework/runtime/project-state.js`
-- `framework/runtime/presentation-package.js`
-- `framework/runtime/deck-assemble.js`
-
-## Flow 3: Named product action path
-
-Used for actions like:
-- Export presentation
-- Validate presentation
-- Capture screenshots
-- Review visuals
-- Apply narrative fixes
-
-```text
-renderer button/menu click
-  -> app.js runProductAction(...)
-  -> action invoke bridge
-  -> main ipc
-  -> worker host
-  -> electron-request-service ACTION_INVOKE
-  -> framework/application/action-service.mjs
-       -> action availability check
-       -> workflow lookup
-       -> lifecycle events emitted
-       -> one of:
-            a) presentation-action-adapter
-            b) agent-action-adapter
-```
-
-### Important consequence
-If a new named action is needed, start in `framework/application/action-service.mjs`, not in the renderer.
-
-## Flow 4: Presentation runtime action path
-
-Used for:
-- `export_presentation`
-- `export_presentation_artifacts`
-- `validate_presentation`
-- `capture_screenshots`
-
-```text
-action-service
-  -> createActionWorkflowService(...)
-  -> invokePresentationWorkflow(...)
-  -> presentation-action-adapter
-  -> framework/runtime/services/presentation-ops-service.mjs
-       -> deck assembly
-       -> runtime app / Playwright / PDF export
-       -> runtime evidence writes
-```
-
-Key files:
-- `framework/application/presentation-action-adapter.mjs`
-- `framework/runtime/services/presentation-ops-service.mjs`
-
-## Flow 5: Agent action path
-
-Used for:
-- fix validation issues
-- review visuals
-- apply visual fixes
-- review narrative
-- apply narrative fixes
-
-```text
-action-service
-  -> createActionWorkflowService(...)
-  -> invokeAgentWorkflow / invokeReviewWorkflow / invokeApplyReviewWorkflow
-  -> application-prepared workflow prompt and truth context
-  -> agent-action-adapter
-  -> project-agent/agent-launcher.mjs
-  -> Claude CLI process
-```
-
-### Important consequence
-The launcher does not define the product workflow meaning. The application layer prepares the workflow and the launcher executes it.
-
-## Flow 6: Preview assembly path
-
-This is the shared path behind preview, validation, capture, export, and finalize.
-
-```text
-project target
-  -> framework/runtime/presentation-package.js ensure files
-  -> framework/runtime/deck-policy.js validate authored workspace
-  -> framework/runtime/deck-source.js list valid slide folders
-  -> framework/runtime/deck-assemble.js build virtual deck HTML
-  -> served by either:
-       a) Electron custom protocol
-       b) runtime Express server
+node .presentation/framework-cli.mjs <family> ...
+  -> .presentation/framework-cli.mjs
+  -> resolve pitch-framework/presentation-cli through normal Node resolution
+  -> inject --project <project-root>
+  -> runPresentationCli(...)
 ```
 
 ### Why it matters
-If preview assembly changes, many downstream workflows change too.
+The shim is a local adapter. It should stay portable and avoid hard-coded framework paths.
 
-## Flow 7: Electron preview document path
+## Flow 3: init path
+
+Used for:
+- `presentation init --project /abs/path`
+- `node framework/runtime/presentation-cli.mjs init --project /abs/path`
 
 ```text
-preview iframe src = presentation://preview/current
-  -> electron/main.mjs protocol.handle('presentation')
-  -> worker invoke('preview:getDocument')
-  -> project-query-service.getPreviewDocument()
-  -> deck-assemble.js renderPresentationHtml(...)
-  -> HTML returned to Electron
+presentation-cli runInitCommand(...)
+  -> core.initProject(projectRoot, options)
+  -> framework/runtime/services/scaffold-service.mjs createPresentationScaffold(...)
+       -> validate empty target directory and slide count
+       -> write authored root files from framework/templates/
+       -> write .presentation/project.json
+       -> write .presentation/intent.json
+       -> write .presentation/package.generated.json
+       -> write .presentation/runtime/render-state.json
+       -> write .presentation/runtime/artifacts.json
+       -> write .presentation/framework-cli.mjs
+       -> optionally copy .presentation/framework/{base,overrides}
+       -> scaffold .claude/* via framework/shared/project-claude-scaffold-package.mjs
+       -> initialize git when available
+  -> created file list + next steps returned to CLI
 ```
 
-Project assets and framework assets then flow through:
-- `presentation://project-files/...`
-- `presentation://project-framework/...`
+### Important consequence
+If project shape changes, start in `scaffold-service.mjs`, not in CLI envelope code.
 
-## Flow 8: Runtime server path for check/capture/export/finalize
+## Flow 4: inspect path
+
+Used for:
+- `presentation inspect package`
 
 ```text
-presentation-ops-service capture/validate/finalize
-  -> withRuntimeServer(...)
-  -> framework/runtime/runtime-app.js Express server
-  -> /preview/
-  -> renderPresentationHtml(...)
-  -> Playwright visits the preview URL
-  -> capture/report/export operations run on that served document
+presentation-cli runInspectCommand(...)
+  -> core.inspectPackage(projectRoot, { target: 'package' })
+  -> ensurePresentationPackageFiles(...)
+       -> ensure .presentation/intent.json exists
+       -> regenerate .presentation/package.generated.json
+       -> ensure runtime-state files exist
+  -> read render-state + artifacts
+  -> getProjectState(...)
+  -> return raw manifest/data + interpreted status summary
 ```
 
 ### Why it matters
-The repository has two delivery surfaces for preview HTML:
-- Electron protocol delivery
-- runtime Express delivery
+`inspect package` is the raw package inventory view.
 
-Both depend on the same assembly logic.
+## Flow 5: status path
 
-## Flow 9: File change and preview refresh path
-
-```text
-file save
-  -> electron/worker/watch-service.mjs detects change
-  -> worker host emits watch/project/preview events
-  -> renderer app listens
-  -> preview iframe refreshed
-  -> project panels refreshed
-```
-
-This is how external file edits propagate into the desktop app.
-
-## Flow 10: Terminal path
+Used for:
+- `presentation status`
 
 ```text
-renderer terminal UI
-  -> preload bridge
-  -> worker host terminal channels
-  -> electron/worker/terminal-service.mjs
-  -> framework/runtime/terminal-core.mjs
-       -> node-pty or python pty bridge
+presentation-cli runStatusCommand(...)
+  -> core.getStatus(projectRoot)
+  -> getProjectState(projectRoot)
+       -> ensure package files exist
+       -> inspect authored source completeness
+       -> classify policy blockers
+       -> compare source fingerprint to render/artifact evidence
+       -> derive workflow + nextFocus via status-service.js
+  -> return workflow, blockers, facets, nextBoundary, nextFocus
 ```
 
-### Important consequence
-Terminal vendor logic must not leak into `framework/runtime/terminal-core.mjs`.
+### Why it matters
+If workflow guidance is wrong, debug `project-state.js` and `status-service.js`.
 
-## Flow 11: Stop-hook path
+## Flow 6: audit path
 
-Scaffolded project local hook wrapper:
-- `project-agent/project-dot-claude/hooks/run-presentation-stop-workflow.mjs`
-
-Delegates to framework-owned workflow:
+Used for:
+- `presentation audit all`
+- `presentation audit theme`
+- `presentation audit canvas`
+- `presentation audit boundaries`
 
 ```text
-project-local hook wrapper
-  -> load frameworkSource from .presentation/project.json
-  -> import framework/application/project-hook-service.mjs
-  -> runProjectStopHookWorkflow(projectRoot)
-       -> ensure package files
-       -> validate intent
-       -> run validate action in hook mode
-       -> maybe checkpoint git
+presentation-cli runAuditCommand(...)
+  -> core.runAudit(projectRoot, options)
+  -> select audit runner in framework/runtime/audit-service.js
+  -> inspect authored files and package structure
+  -> return deterministic issue list
+  -> CLI exits 1 only for hard violations
 ```
 
-### Important consequence
-Project-local hooks are wrapper entrypoints only. The framework owns the actual workflow logic.
+### Why it matters
+Audit is the deterministic validation path. It diagnoses authored content without silently editing it.
 
-## Flow 12: Project scaffolding path
+## Flow 7: preview path
 
-High level:
+Used for:
+- `presentation preview serve`
+- `presentation preview open`
 
 ```text
-project create request
-  -> project-query-service.createProject(...)
-  -> project-scaffold-service.createProjectScaffold(...)
-       -> runtime scaffold-service.createPresentationScaffold(...)
-       -> project-agent scaffold-package.writeProjectAgentScaffoldPackage(...)
-       -> initialize project git history
-  -> set active project
-  -> emit project and preview changed events
+presentation-cli runPreviewCommand(...)
+  -> core.previewPresentation(projectRoot, { mode })
+  -> framework/runtime/preview-server.mjs previewPresentation(...)
+       -> createRuntimeApp({ currentTarget })
+       -> start temporary HTTP server
+       -> serve /preview/
+       -> runtime-app renders through deck-assemble.js
+       -> optionally open preview URL in default browser
+       -> keep server alive until stopped
 ```
 
-For the detailed trace, read `docs/repo-trace-project-creation.md`.
+### Why it matters
+Preview is a runtime server concern now. There is one preview-serving path.
+
+## Flow 8: package assembly path
+
+This is the shared path behind preview, export, and finalize.
+
+```text
+project root
+  -> ensurePresentationPackageFiles(...)
+  -> deck-policy.js validates authored workspace
+  -> deck-source.js lists valid slide folders
+  -> deck-assemble.js builds the virtual presentation HTML
+  -> runtime-app or capture/export consumers serve or render that result
+```
+
+### Why it matters
+If assembly or policy changes, preview and delivery change together.
+
+## Flow 9: export path
+
+Used for:
+- `presentation export pdf`
+- `presentation export pdf --output-dir ... --output-file ...`
+- `presentation export screenshots --output-dir ...`
+
+```text
+presentation-cli runExportCommand(...)
+  -> core.exportPresentation(projectRoot, request)
+  -> inspect package to normalize slide selections
+  -> choose one of:
+       a) canonical full-deck PDF path
+       b) explicit extra PDF path
+       c) screenshot export path
+```
+
+### 9a. Canonical full-deck PDF export
+
+```text
+core.exportPresentation(... target='pdf' with no explicit output path)
+  -> presentation-ops-service finalizePresentation(...)
+  -> writes <project-slug>.pdf at project root
+  -> updates .presentation/runtime/render-state.json
+  -> updates .presentation/runtime/artifacts.json
+```
+
+### 9b. Explicit extra PDF export
+
+```text
+core.exportPresentation(... target='pdf' with output path)
+  -> presentation-ops-service exportDeckPdf(...)
+  -> writes requested PDF inside the project
+  -> updates latestExport in artifacts.json
+  -> does not replace authored files
+```
+
+### 9c. Screenshot export
+
+```text
+core.exportPresentation(... target='screenshots')
+  -> presentation-ops-service capturePresentation(...)
+  -> captures selected slide PNGs into the requested output directory
+```
+
+### Why it matters
+`export` is for explicit artifact emission. Canonical full-deck PDF export reuses the finalize path.
+
+## Flow 10: finalize path
+
+Used for:
+- `presentation finalize`
+
+```text
+presentation-cli runFinalizeCommand(...)
+  -> core.finalize(projectRoot)
+  -> presentation-ops-service finalizePresentation(...)
+       -> capture assembled deck through withRuntimeServer(...)
+       -> compute issues from rendered output
+       -> write canonical root PDF
+       -> refresh render-state.json
+       -> refresh artifacts.json
+  -> CLI returns pass/fail + artifact list
+```
+
+### Why it matters
+`finalize` is the canonical delivery path, not a general-purpose wrapper around arbitrary export destinations.
+
+## Flow 11: Claude scaffold source path
+
+Used during `init` only.
+
+```text
+scaffold-service.mjs
+  -> framework/shared/project-claude-scaffold-package.mjs
+  -> copy source files from project-agent/
+  -> write .claude/AGENTS.md, .claude/CLAUDE.md, hooks, rules, skills, settings
+```
+
+### Why it matters
+`project-agent/` provides scaffold source. It is not a separate runtime control plane.
 
 ## Fast file-routing map by flow
 
-### If the bug is in action routing
+### If the bug is in command parsing or envelope shape
 Read:
-- `framework/application/action-service.mjs`
-- `framework/application/electron-request-service.mjs`
-- `electron/worker/host.mjs`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/__tests__/presentation-cli.test.mjs`
 
-### If the bug is in preview rendering
+### If the bug is in project status or package truth
 Read:
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-policy.js`
+- `framework/runtime/project-state.js`
+- `framework/runtime/status-service.js`
+- `framework/runtime/presentation-package.js`
+
+### If the bug is in preview serving
+Read:
+- `framework/runtime/preview-server.mjs`
 - `framework/runtime/runtime-app.js`
-- `electron/main.mjs`
+- `framework/runtime/deck-assemble.js`
 
-### If the bug is in agent workflow launch
+### If the bug is in export or finalize
 Read:
-- `framework/application/action-service.mjs`
-- `project-agent/agent-launcher.mjs`
-- `project-agent/agent-capabilities.mjs`
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/runtime/presentation-runtime-state.js`
+- `framework/runtime/pdf-export.js`
 
-### If the bug is in terminal behavior
+### If the bug is in init or scaffolded project contents
 Read:
-- `electron/worker/terminal-service.mjs`
-- `framework/runtime/terminal-core.mjs`
+- `framework/runtime/services/scaffold-service.mjs`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `project-agent/`
 
 ## What not to bypass
 
-Do not bypass these layers:
+Do not bypass these seams:
 
-- do not bypass the application layer from the renderer for named product actions
-- do not bypass runtime policy when changing preview assembly assumptions
-- do not bypass package/runtime ownership by hand-editing generated JSON files
-- do not bypass application-prepared workflow context by letting launcher semantics drift
+- do not bypass `presentation-cli.mjs` for public command-shape changes
+- do not bypass `presentation-core.mjs` when changing command semantics
+- do not bypass `presentation-package.js` when refreshing deterministic structure
+- do not bypass policy/assembly when changing preview or export assumptions
+- do not bypass the project-local shim by hard-coding framework source paths into scaffolded projects

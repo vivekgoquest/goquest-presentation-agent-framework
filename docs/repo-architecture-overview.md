@@ -1,232 +1,184 @@
 # Repository Architecture Overview
 
-**Use this when:** you need a one-page mental model of the repository before editing anything.
+**Use this when:** you need a one-page mental model of the current repository before editing.
 
-**Read this after:** `AGENTS.md`, `README.md`.
+**Read this after:** `AGENTS.md`, `README.md`, `START-HERE.md`.
 
 **Do not confuse with:**
-- `docs/base-canvas-contract.md` — structural canvas contract
-- `docs/presentation-package-spec.md` — scaffolded project package contract
+- `docs/base-canvas-contract.md` — the canvas ownership contract
+- `docs/repo-call-flows.md` — command-by-command execution paths
+- `docs/repo-trace-project-creation.md` — the detailed `presentation init` trace
 
 **Key files:**
-- `electron/main.mjs`
-- `framework/application/action-service.mjs`
-- `framework/application/project-query-service.mjs`
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-policy.js`
+- `package.json`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
+- `framework/runtime/services/scaffold-service.mjs`
+- `framework/runtime/project-state.js`
+- `framework/runtime/presentation-package.js`
+- `framework/runtime/preview-server.mjs`
 - `framework/runtime/services/presentation-ops-service.mjs`
-- `project-agent/agent-launcher.mjs`
+- `framework/shared/project-claude-scaffold-package.mjs`
 
-**Verification:** `npm test`, plus project lifecycle smoke commands from `AGENTS.md`.
+**Verification:** `npm test`, plus an init/status/preview/finalize smoke when you change package behavior.
 
 ---
 
 ## What this repository is
 
-This repository is the **framework product**, not a single presentation project.
+This repository is the framework product for a shell-less presentation package.
 
-It provides:
+The public surface is:
 
-- an Electron desktop app
-- project-folder scaffolding
-- deterministic preview, validation, capture, export, and finalize workflows
-- a scaffolded `.claude/` and `AGENTS.md` package for presentation projects
+- the installed `presentation` CLI
+- the generated project-local shim at `.presentation/framework-cli.mjs`
+- deterministic project/package state under `.presentation/`
+- scaffolded Claude adapter assets under `.claude/`
 
-The product is built around independent presentation projects created with:
+The repository does **not** ship a separate host shell anymore. The package itself is the product.
 
-```bash
-npm run new -- --project /abs/path
-```
+## The current architectural shape
 
-## The four architectural domains
+Think about the repo in four layers.
 
-### 1. Electron shell — `electron/`
+### 1. Public package surface
 
-This domain owns desktop UI and host integration.
+Files:
+- `package.json`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
 
-It is responsible for:
-- window creation
-- protocol handling
-- renderer UI
-- terminal pane integration
-- file-watch event delivery into the UI
+Responsibilities:
+- define the public `presentation` bin
+- parse command families and flags
+- format text/JSON envelopes
+- dispatch to the runtime core
+- preserve the shell-less contract for `init`, `inspect`, `status`, `audit`, `preview`, `export`, and `finalize`
 
-It must not own runtime service logic or project-agent workflow logic directly.
+This layer should stay thin. It owns command shape and output shape, not deck semantics.
 
-Important files:
-- `electron/main.mjs`
-- `electron/renderer/app.js`
-- `electron/renderer/ui-model.js`
-- `electron/worker/host.mjs`
-- `electron/worker/terminal-service.mjs`
-- `electron/worker/watch-service.mjs`
+### 2. Project model and state
 
-### 2. Application layer — `framework/application/`
-
-This domain owns product actions, workflow routing, project queries, and hook orchestration.
-
-It is the only Electron-facing execution layer for named actions.
-
-It is responsible for:
-- action definitions and availability
-- Electron request routing
-- project creation and opening
-- hook workflows and git checkpoint policy
-- bridging UI actions to runtime actions or agent actions
-
-Important files:
-- `framework/application/action-service.mjs`
-- `framework/application/project-query-service.mjs`
-- `framework/application/presentation-action-adapter.mjs`
-- `framework/application/project-scaffold-service.mjs`
-- `framework/application/project-hook-service.mjs`
-- `framework/application/electron-request-service.mjs`
-
-### 3. Presentation runtime — `framework/runtime/`, `framework/client/`, `framework/templates/`
-
-This domain owns the deterministic presentation engine.
-
-It is responsible for:
-- assembling authored slide source into runtime HTML
-- validating authored source and rendered behavior
-- capture, export, and finalize workflows
-- package and runtime state files in `.presentation/`
-- browser-side deck behavior such as navigation and counters
-- scaffold templates for new projects
-
-Important files:
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-policy.js`
-- `framework/runtime/services/presentation-ops-service.mjs`
+Files:
+- `framework/runtime/deck-paths.js`
 - `framework/runtime/presentation-package.js`
 - `framework/runtime/presentation-runtime-state.js`
 - `framework/runtime/project-state.js`
-- `framework/client/nav.js`
-- `framework/client/counter.js`
+- `framework/runtime/status-service.js`
+
+Responsibilities:
+- define what a valid project looks like
+- resolve root, hidden, and artifact paths
+- regenerate deterministic package structure
+- read and write runtime evidence
+- classify workflow state such as `onboarding`, `authoring`, `blocked`, `ready_for_finalize`, and `finalized`
+
+This layer is the source of truth for package semantics.
+
+### 3. Runtime engine
+
+Files:
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/deck-policy.js`
+- `framework/runtime/audit-service.js`
+- `framework/runtime/preview-server.mjs`
+- `framework/runtime/runtime-app.js`
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/client/*`
+- `framework/canvas/*`
+
+Responsibilities:
+- enforce authoring policy
+- assemble authored source into preview HTML
+- serve previews
+- capture rendered slides
+- export PDFs and screenshots
+- refresh `.presentation/runtime/*.json`
+- preserve the `content < theme < canvas` ownership contract
+
+This layer owns the deterministic delivery pipeline.
+
+### 4. Scaffold sources
+
+Files:
+- `framework/runtime/services/scaffold-service.mjs`
 - `framework/templates/*`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `project-agent/*`
 
-### 4. Agent layer — `project-agent/`
+Responsibilities:
+- create new project folders
+- write initial authored files
+- write `.presentation/` metadata, intent, generated structure, and runtime-state placeholders
+- write `.presentation/framework-cli.mjs`
+- scaffold `.claude/AGENTS.md`, `.claude/CLAUDE.md`, hooks, rules, skills, and settings
+- optionally vendor a framework snapshot under `.presentation/framework/`
 
-This domain owns agent-specific scaffolding and launcher behavior.
+`project-agent/` is scaffold source, not a live runtime shell.
 
-It is responsible for:
-- agent capability definitions
-- launcher prompt construction
-- project-local `AGENTS.md` scaffold content
-- project-local `.claude/` rules, skills, hooks, and settings
+## High-level dependency direction
 
-Important files:
-- `project-agent/agent-capabilities.mjs`
-- `project-agent/agent-launcher.mjs`
-- `project-agent/scaffold-package.mjs`
-- `project-agent/project-agents-md.md`
-- `project-agent/project-claude-md.md`
-- `project-agent/project-dot-claude/*`
-
-## Dependency direction
-
-The allowed dependency direction is:
+The current dependency direction is simple:
 
 ```text
-electron -> framework/application
-framework/application -> framework/runtime
-framework/application -> project-agent
-electron/worker/terminal-service -> framework/runtime/terminal-core
+presentation CLI -> runtime core -> package/state/runtime services
+runtime scaffold service -> templates + shared Claude scaffold package
+shared Claude scaffold package -> project-agent scaffold source files
 ```
 
-The forbidden dependency direction is:
+The important negative rule is:
 
 ```text
-electron -> framework/runtime/services/*
-electron -> project-agent/*
-framework/runtime -> electron
-framework/runtime -> project-agent
-framework/runtime/terminal-core -> vendor agent launch logic
+Runtime package behavior must not depend on an extra host shell or router layer.
 ```
 
-Boundary tests in `framework/application/__tests__/boundary-contract.test.mjs` enforce these rules.
+## The project model the package creates
 
-## The core project model
+A scaffolded project separates four concerns:
 
-The framework assumes that each presentation is a standalone project folder.
+1. authored source at the root
+2. hidden package machinery in `.presentation/`
+3. project-local Claude adapter files in `.claude/`
+4. the canonical delivered PDF at the project root after export/finalize
 
-A scaffolded project contains six lanes:
+In practice that means:
 
-1. authored source
-2. stable package identity
-3. editable authoring intent
-4. deterministic generated structure
-5. deterministic runtime evidence
-6. git-backed history
-
-The ownership model is:
-
-- authored source is editable
-- `.presentation/intent.json` is editable
+- `brief.md`, `theme.css`, `slides/`, and `assets/` are the authored workspace
+- `.presentation/intent.json` is authorable package intent
 - `.presentation/package.generated.json` is deterministic structure
-- `.presentation/runtime/*.json` is deterministic runtime evidence
-- git is the history lane
+- `.presentation/runtime/render-state.json` and `.presentation/runtime/artifacts.json` are deterministic runtime evidence
+- `.presentation/framework-cli.mjs` is the project-local entrypoint into the installed package
+- `.claude/` is helper scaffolding, not structural deck truth
 
-For canonical details, read `docs/presentation-package-spec.md`.
+## The shared delivery path
 
-## The CSS ownership model
+Preview, export, and finalize all share the same core path:
 
-The framework uses the ownership model:
+1. read project source
+2. ensure package files exist and generated structure is current
+3. enforce deck policy
+4. assemble deck HTML
+5. either serve that HTML for preview or render it through capture/export flows
+6. write runtime evidence back to `.presentation/runtime/*.json`
 
-```text
-content < theme < canvas
-```
-
-Interpretation:
-- `canvas` owns structural primitives and stage behavior
-- `theme` owns deck-level visual identity
-- `content` owns slide-local markup and optional slide-scoped CSS
-
-This is enforced by runtime policy, not just by guidance.
-
-For canonical details, read `docs/base-canvas-contract.md`.
-
-## High-level execution model
-
-### Desktop actions
-The Electron app never directly runs runtime services or agent logic.
-
-Instead it:
-1. sends a request to the worker
-2. the worker routes it to the application layer
-3. the application layer invokes either:
-   - a presentation runtime operation
-   - an agent capability via the launcher
-
-### Preview and runtime operations
-Preview, validation, capture, export, and finalize all depend on the same deterministic presentation assembly path.
-
-The key sequence is:
-1. project source is read
-2. package files are ensured or regenerated
-3. deck policy is enforced
-4. deck HTML is assembled
-5. runtime server or Electron protocol serves preview HTML
-6. Playwright or PDF generation operates on that assembled result
-
-### Agent actions
-Agent actions do not originate in `project-agent/` alone.
-
-The application layer prepares the workflow context and then asks the project-agent launcher to start the correct capability. The launcher is an execution helper, not the owner of the product workflow semantics.
+Because of that shared path, changes in policy or assembly can affect every major command family.
 
 ## Fast routing guide
 
 If the task is about:
 
-- desktop UI → start in `electron/`
-- action definitions or routing → start in `framework/application/action-service.mjs`
-- deck assembly or policy → start in `framework/runtime/`
-- structural stage semantics → start in `framework/canvas/`
-- scaffold defaults → start in `framework/templates/` and `project-agent/`
-- project-local Claude adapter behavior → start in `project-agent/`
+- CLI flags or envelopes → start in `framework/runtime/presentation-cli.mjs`
+- command semantics or mutation boundaries → start in `framework/runtime/presentation-core.mjs`
+- project shape or init behavior → start in `framework/runtime/services/scaffold-service.mjs`
+- hidden package files or workflow state → start in `framework/runtime/presentation-package.js`, `presentation-runtime-state.js`, and `project-state.js`
+- policy and audits → start in `framework/runtime/deck-policy.js` and `framework/runtime/audit-service.js`
+- preview serving → start in `framework/runtime/preview-server.mjs` and `framework/runtime/runtime-app.js`
+- PDF/screenshot delivery → start in `framework/runtime/services/presentation-ops-service.mjs`
+- scaffolded Claude assets → start in `framework/shared/project-claude-scaffold-package.mjs` and `project-agent/`
 
 ## Read next
 
-- For a guided reading path: `docs/repo-onboarding-reading-order.md`
-- For deciding edit lanes: `docs/repo-change-impact-matrix.md`
-- For the cross-layer call graph: `docs/repo-call-flows.md`
+- `docs/repo-architecture-index.md`
+- `docs/repo-call-flows.md`
+- `docs/repo-trace-project-creation.md`
+- `docs/prd-human-agent.md`

@@ -1,320 +1,293 @@
-# Trace: Project Creation and Activation
+# Trace: Project Creation
 
-**Use this when:** you need to understand or change how a new presentation project is created and loaded into the desktop app.
+**Use this when:** you need to understand or change how `presentation init` creates a new project.
 
 **Read this after:** `docs/repo-call-flows.md` and `docs/repo-architecture-overview.md`.
 
 **Do not confuse with:**
-- normal project opening flow for an already initialized project
-- runtime deck assembly or finalize flow
+- later authoring inside an existing project
+- preview/export/finalize flows after scaffolding is complete
 
 **Key files:**
-- `electron/renderer/app.js`
-- `framework/application/project-query-service.mjs`
-- `framework/application/project-scaffold-service.mjs`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
 - `framework/runtime/services/scaffold-service.mjs`
-- `project-agent/scaffold-package.mjs`
+- `framework/runtime/deck-paths.js`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `framework/templates/*`
+- `project-agent/*`
 
 **Verification:**
 - `npm test`
-- `npm run new -- --project /abs/path`
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
+- `node framework/runtime/presentation-cli.mjs init --project /abs/path --format json`
+- when the project can resolve the installed `pitch-framework` package: `node /abs/path/.presentation/framework-cli.mjs status --format json`
+- when the project can resolve the installed `pitch-framework` package: `node /abs/path/.presentation/framework-cli.mjs preview serve`
 
 ---
 
 ## What this flow is responsible for
 
-Project creation is responsible for producing a complete, independent presentation project folder that contains:
+Project creation must produce a complete shell-less presentation project that contains:
 
-- authored source files
-- deterministic `.presentation/` package files
-- project-local `AGENTS.md`
-- project-local `.claude/` adapter files
-- optional copied framework snapshot
-- initial git history when available
-
-It also activates the new project inside the Electron app.
+- authored source files at the root
+- hidden package state in `.presentation/`
+- a project-local CLI entrypoint at `.presentation/framework-cli.mjs`
+- a scaffolded Claude adapter package in `.claude/`
+- a git repository when available
 
 ## The full trace
 
-## 1. The user starts project creation in the Electron UI
+## 1. The operator invokes `init`
+
+Typical commands:
+
+```bash
+presentation init --project /abs/path/to/my-deck --slides 3
+```
+
+Or from this repository checkout:
+
+```bash
+node framework/runtime/presentation-cli.mjs init --project /abs/path/to/my-deck --slides 3
+```
+
+## 2. The CLI parses arguments
 
 Primary file:
-- `electron/renderer/app.js`
+- `framework/runtime/presentation-cli.mjs`
 
-Entry points:
-- toolbar New button
-- welcome panel New button
+Entry path:
+- `parsePresentationCliArgs(argv)`
+- `runInitCommand(parsed, command, core)`
 
-The UI flow is:
-1. choose a directory
-2. read requested slide count from the UI
-3. call `window.electron.project.create(...)`
-4. start the terminal in the new project
+What it validates:
+- a command family exists
+- `--project` is present
+- `--slides` is a whole number when provided
+- `--copy-framework` is a boolean flag
 
-## 2. The directory chooser runs
+## 3. The runtime core receives the request
 
-In the renderer:
-- `choosePath()` asks the Electron bridge to choose a directory
+Primary file:
+- `framework/runtime/presentation-core.mjs`
 
-In Electron main:
-- `presentation:choose-directory` opens the native directory picker
-
-The selected directory is returned to the renderer.
-
-## 3. The renderer invokes project creation
-
-Still in `electron/renderer/app.js`:
-- `createProject()`
-- `window.electron.project.create({ projectRoot: chosen, slideCount: n })`
-
-The UI does not scaffold files directly.
-
-## 4. The request reaches the worker host
-
-Path:
-- renderer bridge
-- Electron main IPC
-- `electron/worker/host.mjs`
-- `framework/application/electron-request-service.mjs`
-
-The request channel is:
-- `project:create`
-
-## 5. The project query service owns the create request
-
-File:
-- `framework/application/project-query-service.mjs`
-
-Method:
-- `createProject(payload = {})`
+Entry path:
+- `core.initProject(projectRoot, options)`
 
 What it does:
-1. normalize and validate the target folder path
-2. validate slide count
-3. resolve `copyFramework` flag if present
-4. call `createProjectScaffold(...)`
-5. mark the project as active
-6. return meta, state, slides, and file tree
+- forwards to the scaffold service
+- keeps CLI semantics separate from scaffold implementation details
 
-## 6. The framework-level scaffold orchestrator runs
+## 4. The scaffold service validates the target
 
-File:
-- `framework/application/project-scaffold-service.mjs`
-
-Method:
-- `createProjectScaffold(targetInput, options = {}, dependencies = {})`
-
-What it does:
-1. call the runtime scaffold service to create the presentation project files
-2. call the project-agent scaffold package writer to add `AGENTS.md` and `.claude/`
-3. initialize git history with an initial commit if git is available
-
-This file is the join point between runtime scaffold files and agent scaffold files.
-
-## 7. The runtime scaffold service builds the presentation project
-
-File:
+Primary file:
 - `framework/runtime/services/scaffold-service.mjs`
 
-Primary entry:
-- `createPresentationScaffold(targetInput, options = {})`
+Entry path:
+- `createPresentationScaffold({ projectRoot }, options)`
 
-High-level internal sequence:
-1. build pending project paths
-2. ensure the target directory exists and is empty
-3. compute deck slug and title
-4. compute slide plan
-5. create directories and authored source files
-6. create `.presentation/` files
-7. optionally copy framework snapshot
-8. create `.gitignore`
-9. return scaffold result metadata
+Important checks:
+- the target directory must be empty or absent
+- current v1 scaffolding supports 1-10 slides only
 
-## 8. The slide plan is generated
+If the directory is not empty, init fails before writing files.
 
-Still in `scaffold-service.mjs`.
+## 5. Project paths are computed
 
-The slide plan logic:
-- slide folders use sparse numbering: `010`, `020`, `030`, ...
-- the first slide is scaffolded as intro
-- the last slide is scaffolded as close
-- interior slides use a generic slide template
-- decks with more than 10 slides are treated as long decks and require outline support
+Still in `scaffold-service.mjs`:
+- `createPendingProjectPaths(...)`
 
-This step determines the initial `slides/<NNN-id>/slide.html` files that will exist.
+What this computes:
+- project root paths
+- root authored file paths
+- `.presentation/` file paths
+- optional copied-framework paths
+- slug and title derived from the target directory name
 
-## 9. Authored source files are created
+## 6. The initial slide plan is created
 
-The runtime scaffold writes:
-- `theme.css`
+Still in `scaffold-service.mjs`:
+- `createSlidePlan(slideCount)`
+
+Behavior:
+- slide folders use sparse numbering (`010`, `020`, `030`, ...)
+- 1 slide creates only an intro slide
+- 2 slides create intro + close
+- 3+ slides create intro, middle generic slides, and close
+
+This determines the initial `slides/<NNN-name>/slide.html` files.
+
+## 7. Authored root files are written
+
+Still in `scaffold-service.mjs`:
+- `scaffoldIntoPaths(paths, options)`
+
+Files written from `framework/templates/`:
 - `brief.md`
-- `outline.md` if required
+- `theme.css`
+- `slides/<NNN-name>/slide.html`
 - `assets/.gitkeep`
-- `outputs/.gitkeep`
-- `slides/<NNN-id>/slide.html`
-- `.gitignore`
 
-Templates come from:
-- `framework/templates/theme.css`
-- `framework/templates/brief.md`
-- `framework/templates/outline.md`
-- `framework/templates/slides/*`
+Notes:
+- current init does not scaffold `outline.md`
+- slide-local `slide.css` files are optional and authored later when needed
 
-## 10. `.presentation/` files are created
+## 8. Hidden package files are written
 
-The runtime scaffold also creates:
+The scaffold service also writes:
+
 - `.presentation/project.json`
 - `.presentation/intent.json`
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
 - `.presentation/framework-cli.mjs`
 
-This makes the project self-describing and runnable.
+This is what makes the project self-describing and locally runnable.
 
-## 11. Linked or copied framework mode is recorded
+## 9. The project-local CLI shim is rendered
 
-The runtime scaffold writes project metadata with:
-- `frameworkMode: linked` by default
-- `frameworkMode: copied` if `--copy-framework` or equivalent is chosen
+Primary file:
+- `framework/runtime/project-cli-shim.mjs`
 
-If copied mode is enabled, framework files are copied into:
+What the shim does:
+- resolves `pitch-framework/presentation-cli`
+- injects the project root automatically
+- keeps the project portable by avoiding hard-coded framework source paths
+
+Normal usage after init, once the project can resolve the installed `pitch-framework` package, is:
+
+```bash
+cd /abs/path/to/my-deck
+node .presentation/framework-cli.mjs status --format json
+```
+
+## 10. Copied-framework mode is recorded when requested
+
+If `--copy-framework` is passed, init also writes:
+
 - `.presentation/framework/base/`
 - `.presentation/framework/overrides/`
 
-Framework asset resolution later uses these locations before falling back to the shared framework source.
+The copied snapshot comes from:
+- `framework/canvas/`
+- `framework/client/`
+- `framework/runtime/`
+- `framework/templates/`
 
-## 12. The project-agent scaffold package is written
+Without `--copy-framework`, the project stays in linked mode.
 
-File:
-- `project-agent/scaffold-package.mjs`
+## 11. The Claude adapter package is scaffolded
 
-This writes project-local agent files such as:
-- `AGENTS.md`
-- `.claude/settings.json`
+Primary file:
+- `framework/shared/project-claude-scaffold-package.mjs`
+
+Source material comes from:
+- `project-agent/project-agents-md.md`
+- `project-agent/project-claude-md.md`
+- `project-agent/project-dot-claude/*`
+
+Files written into the project:
+- `.claude/AGENTS.md`
 - `.claude/CLAUDE.md`
+- `.claude/settings.json`
 - `.claude/hooks/*`
 - `.claude/rules/*`
 - `.claude/skills/*`
 
-This is what gives each project its own AI-agent operating package.
+Important detail:
+- the scaffold writes `.claude/AGENTS.md`
+- it does **not** write a root-level `AGENTS.md`
 
-## 13. Initial git history is created when possible
+## 12. Git is initialized when possible
 
-Back in:
-- `framework/application/project-scaffold-service.mjs`
+Still in `scaffold-service.mjs`:
+- `initializeProjectGitDirectory(projectRoot)`
 
-It attempts:
-- `git init`
-- `git add -A`
-- `git commit -m "Scaffold: <slug>"`
+Behavior:
+- attempts `git init`
+- reports whether `.git/` was created
+- does not fail the whole scaffold if `git` is unavailable
 
-If git is unavailable, project creation still succeeds.
+## 13. The CLI returns a created-project envelope
 
-## 14. The new project becomes the active project
+Back in `presentation-cli.mjs`, `runInitCommand(...)` returns:
 
-Back in:
-- `framework/application/project-query-service.mjs`
+- `status: created`
+- `projectRoot`
+- `slideCount`
+- the full created file list
+- `nextSteps`
+- git initialization status
 
-Method:
-- `setActiveProject(projectRootAbs)`
-
-What this does:
-- create the active project target
-- compute active project paths
-- call the project-changed callback
-
-## 15. Project activation updates terminal and file watch services
-
-In the worker host:
-- `onProjectChanged(...)` stops the current terminal session
-- sets terminal project context
-- points the watch service at the new project root
-- emits project-changed and preview-changed events
-
-This ensures the desktop app now points at the new project.
-
-## 16. The renderer refreshes state and starts the shell
-
-Back in `electron/renderer/app.js`:
-- project panels are refreshed
-- preview is loaded
-- `startShellSession()` runs
-
-The integrated terminal now starts in the new project directory.
-
-## 17. Preview becomes available
-
-Once the project is active, preview requests flow through:
-- `project-query-service.getPreviewDocument()`
-- `framework/runtime/deck-assemble.js`
-
-That means even the very first preview depends on the same deterministic assembly and policy path as later validation and finalize actions.
+That response is the machine-readable summary of the scaffold result.
 
 ## Resulting project shape
 
 A newly created project contains:
 
-### Authored source
+### Authored workspace at the root
 - `brief.md`
 - `theme.css`
-- optional `outline.md`
 - `slides/*/slide.html`
-- assets and outputs dirs
+- `assets/`
 
-### Package truth
+### Hidden package state
 - `.presentation/project.json`
 - `.presentation/intent.json`
 - `.presentation/package.generated.json`
-
-### Runtime evidence placeholders
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
+- `.presentation/framework-cli.mjs`
 
-### Project-local agent package
-- `AGENTS.md`
-- `.claude/*`
+### Project-local Claude adapter package
+- `.claude/AGENTS.md`
+- `.claude/CLAUDE.md`
+- `.claude/settings.json`
+- `.claude/hooks/*`
+- `.claude/rules/*`
+- `.claude/skills/*`
+
+### Repository support files
+- `.gitignore`
+- `.git/` when available
 
 ## What to change for common project-creation requests
 
-### Change default brief/theme/slide templates
+### Change default authored files or slide templates
 Edit:
 - `framework/templates/*`
 
-### Change file layout or generated package files
+### Change file layout or hidden package files
 Edit:
 - `framework/runtime/services/scaffold-service.mjs`
+- `framework/runtime/deck-paths.js`
 - `framework/runtime/presentation-package.js`
-- related runtime state modules if needed
+- `framework/runtime/presentation-runtime-state.js`
 
-### Change project-local Claude scaffold contents
+### Change the project-local shim
 Edit:
-- `project-agent/scaffold-package.mjs`
+- `framework/runtime/project-cli-shim.mjs`
+
+### Change scaffolded Claude assets
+Edit:
+- `framework/shared/project-claude-scaffold-package.mjs`
 - `project-agent/project-agents-md.md`
 - `project-agent/project-claude-md.md`
 - `project-agent/project-dot-claude/*`
 
-### Change activation behavior after creation
-Edit:
-- `framework/application/project-query-service.mjs`
-- `electron/worker/host.mjs`
-- possibly `electron/renderer/app.js`
-
 ## What not to do
 
-- do not scaffold project files directly from the renderer
-- do not make Electron own project package semantics
-- do not split project truth between runtime and project-agent in inconsistent ways
-- do not forget that scaffolded `.claude/` is adapter glue, not the project’s structural source of truth
+- do not make `init` depend on an extra host shell
+- do not hard-code framework source paths into generated projects
+- do not move authored content into `.presentation/`
+- do not treat `.claude/` as structural package truth
+- do not write a root-level `AGENTS.md` unless the product contract changes intentionally
 
 ## Minimal verification after changes in this flow
 
 1. `npm test`
-2. `npm run new -- --project /abs/path`
-3. inspect generated project structure
-4. `npm run check -- --project /abs/path`
-5. `npm run finalize -- --project /abs/path`
+2. `node framework/runtime/presentation-cli.mjs init --project /abs/path --format json`
+3. inspect the generated project tree
+4. if the project can resolve the installed package: `node /abs/path/.presentation/framework-cli.mjs status --format json`
+5. if the project can resolve the installed package: `node /abs/path/.presentation/framework-cli.mjs audit all --format json`

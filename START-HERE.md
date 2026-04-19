@@ -1,44 +1,141 @@
 # Start Here
 
-You only need the desktop app workflow.
+This repository now ships a shell-less CLI-first presentation package.
 
-## 1) Launch
+Use either:
+
+- the installed public command: `presentation ...`
+- the repo-local source entrypoint: `node framework/runtime/presentation-cli.mjs ...`
+- the project-local shim inside a scaffolded project: `node .presentation/framework-cli.mjs ...`
+
+## 1) Install dependencies in this repository
 
 ```bash
 npm run setup
-npm run start
 ```
 
-## 2) Create or open a project
+## 2) Scaffold a project
 
-- Click **New** to scaffold a presentation project
-- Or click **Open** for an existing project folder
+From this repo checkout:
 
-## 3) Build with Claude
+```bash
+node framework/runtime/presentation-cli.mjs init --project /abs/path/to/my-deck --slides 3
+```
 
-1. In the integrated terminal, run `claude`
-2. Tell Claude what presentation you want
-3. Claude works inside that project folder and starts from the project `AGENTS.md` contract
-4. Claude then uses the project `.claude/` adapter for vendor-specific hooks and skills
+Equivalent public command when the package is installed:
 
-## 4) Outputs
+```bash
+presentation init --project /abs/path/to/my-deck --slides 3
+```
 
-After finalize, look in:
+Current v1 scaffolding supports 1-10 slides.
 
-- `outputs/deck.pdf`
-- `outputs/slides/`
-- `outputs/report.json`
-- `outputs/summary.md`
+## 3) Author the project root
 
-The project also keeps presentation package state in `.presentation/`:
+After `init`, edit the authored workspace:
 
-- `project.json` for stable package identity
-- `intent.json` for authorable deck intent
-- `package.generated.json` for deterministic structural truth
-- `runtime/` for render state, artifacts, and last-good evidence
+- `brief.md`
+- `theme.css`
+- `slides/<NNN-id>/slide.html`
+- optional `slides/<NNN-id>/slide.css`
+- `assets/`
 
-The `.claude/` directory is adapter glue, not the source of project truth.
-Its hook scripts are local entrypoints that delegate to framework-owned
-workflow orchestration.
+Hidden package state lives in `.presentation/`.
+Claude adapter files live in `.claude/`.
 
-This repo no longer supports browser operator mode or legacy `--deck` / `--example` targets.
+## 4) Use the project-local shim while working
+
+If the project can resolve the installed `pitch-framework` package, change into the project root and use:
+
+```bash
+node .presentation/framework-cli.mjs inspect package --format json
+node .presentation/framework-cli.mjs status --format json
+node .presentation/framework-cli.mjs audit all --format json
+```
+
+If you are only working from this repository checkout and have not installed or linked the package for that project yet, keep using:
+
+```bash
+node framework/runtime/presentation-cli.mjs inspect package --project /abs/path/to/my-deck --format json
+node framework/runtime/presentation-cli.mjs status --project /abs/path/to/my-deck --format json
+node framework/runtime/presentation-cli.mjs audit all --project /abs/path/to/my-deck --format json
+```
+
+Use `inspect package` for raw manifest and runtime-state facts.
+Use `status` for interpreted workflow guidance.
+Use `audit all` for deterministic validation.
+
+## 5) Preview the assembled deck
+
+With the project-local shim:
+
+```bash
+node .presentation/framework-cli.mjs preview serve
+node .presentation/framework-cli.mjs preview open
+```
+
+Or from the repo checkout surface:
+
+```bash
+node framework/runtime/presentation-cli.mjs preview serve --project /abs/path/to/my-deck
+node framework/runtime/presentation-cli.mjs preview open --project /abs/path/to/my-deck
+```
+
+## 6) Export artifacts
+
+With the project-local shim:
+
+```bash
+node .presentation/framework-cli.mjs finalize --format json
+node .presentation/framework-cli.mjs export pdf --format json
+node .presentation/framework-cli.mjs export pdf --output-dir outputs/manual-export --output-file deck.pdf
+node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture
+```
+
+Or from the repo checkout surface:
+
+```bash
+node framework/runtime/presentation-cli.mjs finalize --project /abs/path/to/my-deck --format json
+node framework/runtime/presentation-cli.mjs export pdf --project /abs/path/to/my-deck --format json
+```
+
+## 7) Project layout to expect
+
+```text
+<project-root>/
+  brief.md
+  theme.css
+  slides/
+  assets/
+  <project-slug>.pdf              # after export/finalize
+  .presentation/
+    project.json
+    intent.json
+    package.generated.json
+    runtime/
+      render-state.json
+      artifacts.json
+    framework-cli.mjs
+  .claude/
+    AGENTS.md
+    CLAUDE.md
+    hooks/
+    rules/
+    skills/
+    settings.json
+```
+
+The important split is:
+
+- authored source at the root
+- deterministic package/runtime state in `.presentation/`
+- project-local adapter helpers in `.claude/`
+- local command entrypoint at `.presentation/framework-cli.mjs`
+
+## 8) Verify the framework itself
+
+From the repository root:
+
+```bash
+npm test
+```
