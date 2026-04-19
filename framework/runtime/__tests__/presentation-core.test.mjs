@@ -4,12 +4,36 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
+import { getProjectClaudeScaffoldPackage } from '../../shared/project-claude-scaffold-package.mjs';
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 import { createPresentationCore, PresentationCoreError } from '../presentation-core.mjs';
 import { runPresentationCli } from '../presentation-cli.mjs';
 
+const runtimeClaudeScaffoldPackage = getProjectClaudeScaffoldPackage({ frameworkRoot: process.cwd() });
+const runtimeClaudeScaffoldSmokePaths = [
+  '.claude/settings.json',
+  '.claude/hooks/run-presentation-stop-workflow.mjs',
+  '.claude/rules/framework.md',
+  '.claude/skills/new-deck/SKILL.md',
+];
+
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-presentation-core-'));
+}
+
+function assertProjectClaudeScaffold(projectRoot, createdFiles = []) {
+  for (const requiredPath of runtimeClaudeScaffoldSmokePaths) {
+    assert.equal(existsSync(resolve(projectRoot, requiredPath)), true, `missing required scaffold smoke path: ${requiredPath}`);
+    assert.ok(createdFiles.includes(requiredPath), `missing created scaffold smoke file entry: ${requiredPath}`);
+  }
+
+  for (const requiredPath of runtimeClaudeScaffoldPackage.requiredPaths) {
+    assert.equal(existsSync(resolve(projectRoot, requiredPath)), true, `missing required scaffold path: ${requiredPath}`);
+  }
+
+  for (const entry of runtimeClaudeScaffoldPackage.entries) {
+    assert.ok(createdFiles.includes(entry.targetRel), `missing created scaffold file entry: ${entry.targetRel}`);
+  }
 }
 
 function fillBrief(projectRoot) {
@@ -69,11 +93,11 @@ test('presentation core initProject creates the full shell-less project scaffold
   assert.equal(result.status, 'created');
   assert.equal(result.slideCount, 2);
   assert.ok(result.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.files.includes('.claude/settings.json'));
   assert.ok(result.files.includes('.claude/AGENTS.md'));
   assert.ok(result.files.includes('.claude/CLAUDE.md'));
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assertProjectClaudeScaffold(projectRoot, result.files);
   assert.equal(existsSync(resolve(projectRoot, '.git')), true);
 });
 

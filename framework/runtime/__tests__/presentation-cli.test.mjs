@@ -5,13 +5,36 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { getProjectClaudeScaffoldPackage } from '../../shared/project-claude-scaffold-package.mjs';
 import { parsePresentationCliArgs, runPresentationCli } from '../presentation-cli.mjs';
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 
 const CLI_PATH = resolve(process.cwd(), 'framework/runtime/presentation-cli.mjs');
+const runtimeClaudeScaffoldPackage = getProjectClaudeScaffoldPackage({ frameworkRoot: process.cwd() });
+const runtimeClaudeScaffoldSmokePaths = [
+  '.claude/settings.json',
+  '.claude/hooks/run-presentation-stop-workflow.mjs',
+  '.claude/rules/framework.md',
+  '.claude/skills/new-deck/SKILL.md',
+];
 
 function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-presentation-cli-'));
+}
+
+function assertProjectClaudeScaffold(projectRoot, createdFiles = []) {
+  for (const requiredPath of runtimeClaudeScaffoldSmokePaths) {
+    assert.equal(existsSync(resolve(projectRoot, requiredPath)), true, `missing required scaffold smoke path: ${requiredPath}`);
+    assert.ok(createdFiles.includes(requiredPath), `missing created scaffold smoke file entry: ${requiredPath}`);
+  }
+
+  for (const requiredPath of runtimeClaudeScaffoldPackage.requiredPaths) {
+    assert.equal(existsSync(resolve(projectRoot, requiredPath)), true, `missing required scaffold path: ${requiredPath}`);
+  }
+
+  for (const entry of runtimeClaudeScaffoldPackage.entries) {
+    assert.ok(createdFiles.includes(entry.targetRel), `missing created scaffold file entry: ${entry.targetRel}`);
+  }
 }
 
 function runCli(args) {
@@ -151,7 +174,7 @@ test('runtime presentation cli supports direct shebang execution from an externa
   assert.equal(json.status, 'created');
   assert.equal(json.slideCount, 2);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+  assertProjectClaudeScaffold(projectRoot, json.files);
 });
 
 test('runtime presentation cli direct-entry guard works through a symlinked bin path', {
@@ -178,7 +201,7 @@ test('runtime presentation cli direct-entry guard works through a symlinked bin 
   assert.equal(json.status, 'created');
   assert.equal(json.slideCount, 2);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assertProjectClaudeScaffold(projectRoot, json.files);
 });
 
 test('presentation-cli init creates the full shell-less project scaffold', async (t) => {
@@ -192,12 +215,12 @@ test('presentation-cli init creates the full shell-less project scaffold', async
   assert.equal(result.payload.projectRoot, projectRoot);
   assert.ok(result.payload.files.includes('.presentation/project.json'));
   assert.ok(result.payload.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.payload.files.includes('.claude/settings.json'));
   assert.ok(result.payload.files.includes('.claude/AGENTS.md'));
   assert.ok(result.payload.files.includes('.claude/CLAUDE.md'));
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
-  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assertProjectClaudeScaffold(projectRoot, result.payload.files);
   assert.equal(existsSync(resolve(projectRoot, '.git')), true);
 });
 

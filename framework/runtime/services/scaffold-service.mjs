@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { writeProjectClaudeScaffoldPackage } from '../../shared/project-claude-scaffold-package.mjs';
 import {
   PROJECT_LOCAL_FRAMEWORK_CLI_REL,
   formatProjectFrameworkCliCommand,
@@ -180,59 +181,6 @@ function copyFrameworkSnapshot(projectPaths) {
   for (const overrideDir of ['client', 'runtime', 'templates']) {
     mkdirSync(resolve(projectPaths.frameworkOverridesAbs, overrideDir), { recursive: true });
   }
-}
-
-function listScaffoldDirectoryEntries(sourceDirAbs, targetDirRel) {
-  const entries = [];
-  for (const entry of readdirSync(sourceDirAbs, { withFileTypes: true })) {
-    const sourceAbs = resolve(sourceDirAbs, entry.name);
-    const targetRel = `${targetDirRel}/${entry.name}`;
-    if (entry.isDirectory()) {
-      entries.push(...listScaffoldDirectoryEntries(sourceAbs, targetRel));
-      continue;
-    }
-    entries.push({
-      sourceAbs,
-      targetRel,
-    });
-  }
-  return entries;
-}
-
-function getProjectAgentScaffoldEntries(frameworkRoot = FRAMEWORK_ROOT) {
-  const projectAgentRoot = resolve(frameworkRoot, 'project-agent');
-  const claudeRoot = resolve(projectAgentRoot, 'project-dot-claude');
-
-  return [
-    {
-      sourceAbs: resolve(projectAgentRoot, 'project-agents-md.md'),
-      targetRel: '.claude/AGENTS.md',
-    },
-    {
-      sourceAbs: resolve(claudeRoot, 'settings.json'),
-      targetRel: '.claude/settings.json',
-    },
-    {
-      sourceAbs: resolve(projectAgentRoot, 'project-claude-md.md'),
-      targetRel: '.claude/CLAUDE.md',
-    },
-    ...listScaffoldDirectoryEntries(resolve(claudeRoot, 'hooks'), '.claude/hooks'),
-    ...listScaffoldDirectoryEntries(resolve(claudeRoot, 'rules'), '.claude/rules'),
-    ...listScaffoldDirectoryEntries(resolve(claudeRoot, 'skills'), '.claude/skills'),
-  ];
-}
-
-function writeProjectAgentScaffoldFiles(projectRootAbs, frameworkRoot = FRAMEWORK_ROOT) {
-  const createdPaths = [];
-
-  for (const entry of getProjectAgentScaffoldEntries(frameworkRoot)) {
-    const targetAbs = resolve(projectRootAbs, entry.targetRel);
-    mkdirSync(dirname(targetAbs), { recursive: true });
-    cpSync(entry.sourceAbs, targetAbs, { recursive: false });
-    createdPaths.push(entry.targetRel);
-  }
-
-  return { createdPaths };
 }
 
 export function ensureEmptyDirectory(absPath, label) {
@@ -426,7 +374,9 @@ function scaffoldIntoPaths(paths, options = {}) {
   writeFileSync(resolve(paths.sourceDirAbs, '.gitignore'), gitignoreContent);
   createdFiles.push('.gitignore');
 
-  const agentPackage = writeProjectAgentScaffoldFiles(paths.sourceDirAbs, frameworkRoot || FRAMEWORK_ROOT);
+  const agentPackage = writeProjectClaudeScaffoldPackage(paths.sourceDirAbs, {
+    frameworkRoot: frameworkRoot || FRAMEWORK_ROOT,
+  });
   createdFiles.push(...agentPackage.createdPaths);
 
   const git = initializeProjectGitDirectory(paths.sourceDirAbs);
