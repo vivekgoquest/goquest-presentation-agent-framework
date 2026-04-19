@@ -71,3 +71,10 @@ test('shell-less public surface removes shell-era docs and desktop workflow refe
   assert.equal(existsSync(repoPath('docs', 'electron-operator-cli.md')), false);
   assert.equal(existsSync(repoPath('docs', 'electron-operator-guide.md')), false);
 });
+
+test('shell-less public surface setup guidance uses the current audit-first command wording', () => {
+  const setup = readFileSync(repoPath('framework', 'runtime', 'setup.mjs'), 'utf8');
+
+  assert.match(setup, /Setup complete\. You can now preview, audit, finalize, and export decks\./);
+  assert.doesNotMatch(setup, /preview, check, finalize, and export decks/i);
+});

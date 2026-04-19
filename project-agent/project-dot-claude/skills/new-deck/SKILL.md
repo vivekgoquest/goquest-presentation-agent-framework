@@ -30,13 +30,12 @@ Then:
 - use optional `/abs/path-to-project/slides/<NNN-id>/slide.css` only when a slide needs local CSS
 - keep assets either deck-shared in `/abs/path-to-project/assets/` or slide-local in each slide folder
 - keep framework changes out of scope unless truly necessary
-- inspect the preview, screenshots, and downloaded PDF yourself; if it does not read like a presentation yet, revise `theme.css` or slide-local `slide.css` before finalizing
+- inspect the preview and the root PDF yourself; if it does not read like a presentation yet, revise `theme.css` or slide-local `slide.css` before finalizing
 - run `node .presentation/framework-cli.mjs finalize`
 
 At the end, tell me:
 1. the project folder path
 2. whether the project is linked or copied mode
-3. the PDF path
-4. the screenshot path
-5. the summary path
-6. any open questions that still affect the deck
+3. the root PDF path
+4. any additional manual export paths you intentionally created, if any
+5. any open questions that still affect the deck

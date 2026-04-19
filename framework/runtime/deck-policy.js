@@ -155,7 +155,7 @@ function selectorTouchesThemePrimitive(selector) {
 function formatFailures(sourceName, failures) {
   const details = failures.map((msg) => `- ${msg}`).join('\n');
   throw new Error(
-    `Deck policy violation in ${sourceName}:\n${details}\n\nFix the workspace files and rerun preview, check, export, or finalize.`
+    `Deck policy violation in ${sourceName}:\n${details}\n\nFix the workspace files and rerun audit, preview, export, or finalize.`
   );
 }
 

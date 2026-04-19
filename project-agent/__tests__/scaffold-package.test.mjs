@@ -132,6 +132,24 @@ test('scaffolded new-deck guidance keeps v1 long-deck behavior aligned with init
   assert.match(newDeckContent, /outline\.md/);
 });
 
+test('scaffolded new-deck handoff only asks for current shell-less delivery artifacts', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const newDeckContent = readFileSync(resolve(projectRoot, '.claude', 'skills', 'new-deck', 'SKILL.md'), 'utf8');
+  assert.match(newDeckContent, /inspect the preview and the root PDF yourself/i);
+  assert.match(newDeckContent, /the project folder path/i);
+  assert.match(newDeckContent, /whether the project is linked or copied mode/i);
+  assert.match(newDeckContent, /the root PDF path/i);
+  assert.match(newDeckContent, /any additional manual export paths you intentionally created, if any/i);
+  assert.match(newDeckContent, /any open questions that still affect the deck/i);
+  assert.doesNotMatch(newDeckContent, /the screenshot path/i);
+  assert.doesNotMatch(newDeckContent, /the summary path/i);
+});
+
 test('scaffold package resolves its source files from the installed package root instead of cwd', async (t) => {
   const outsideCwd = createTempProjectRoot();
   const scaffoldPackageUrl = pathToFileURL(resolve(import.meta.dirname, '..', 'scaffold-package.mjs')).href;

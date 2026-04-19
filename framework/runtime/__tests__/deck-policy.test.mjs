@@ -188,6 +188,35 @@ test('deck policy rejects slide-local css that targets the slide root through a 
   );
 });
 
+test('deck policy violation guidance points users to audit instead of the removed check command', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  await createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot, 'Policy Guidance Wording');
+
+  writeFileSync(
+    resolve(projectRoot, 'theme.css'),
+    [
+      '@layer theme {',
+      '  :root {',
+      '    --slide-max-w: 960px;',
+      '  }',
+      '}',
+      '',
+    ].join('\n')
+  );
+
+  assert.throws(
+    () => validateSlideDeckWorkspace(getProjectPaths(projectRoot)),
+    (error) => {
+      assert.match(error.message, /rerun audit, preview, export, or finalize/i);
+      assert.doesNotMatch(error.message, /rerun preview, check, export, or finalize/i);
+      return true;
+    }
+  );
+});
+
 test('deck policy exposes canvas findings without relying on thrown workspace validation errors', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));

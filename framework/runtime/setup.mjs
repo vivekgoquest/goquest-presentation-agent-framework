@@ -37,4 +37,4 @@ if (!browserInstalled) {
   console.log('Playwright Chromium already installed. Skipping browser install.');
 }
 
-console.log('\nSetup complete. You can now preview, check, finalize, and export decks.');
+console.log('\nSetup complete. You can now preview, audit, finalize, and export decks.');
