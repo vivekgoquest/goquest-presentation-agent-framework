@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
+import { renderPresentationHtml } from '../../runtime/deck-assemble.js';
+import { createPresentationScaffold } from '../../runtime/services/scaffold-service.mjs';
 import {
   CANVAS_LAYER_ORDER,
   CANVAS_STAGE,
@@ -12,6 +15,44 @@ import {
 } from '../canvas-contract.mjs';
 
 const REPO_ROOT = process.cwd();
+
+function createTempProjectRoot() {
+  return mkdtempSync(join(tmpdir(), 'pf-canvas-contract-'));
+}
+
+function fillBrief(projectRoot) {
+  writeFileSync(
+    resolve(projectRoot, 'brief.md'),
+    [
+      '# Canvas Contract Brief',
+      '',
+      '## Goal',
+      '',
+      'Render shell-less preview HTML through the shared runtime assembler.',
+      '',
+      '## Audience',
+      '',
+      'Framework maintainers.',
+      '',
+      '## Tone',
+      '',
+      'Operational and concise.',
+      '',
+      '## Must Include',
+      '',
+      '- Canvas contract regression coverage.',
+      '',
+      '## Constraints',
+      '',
+      '- none',
+      '',
+      '## Open Questions',
+      '',
+      '- none',
+      '',
+    ].join('\n')
+  );
+}
 
 test('canvas contract exports the canonical structural truth', () => {
   assert.equal(CANVAS_LAYER_ORDER, '@layer content, theme, canvas;');
@@ -53,18 +94,17 @@ test('deck policy imports the shared canvas contract instead of duplicating stru
   assert.doesNotMatch(deckPolicySource, /const PROTECTED_CANVAS_PREFIXES = \[/);
 });
 
-test('preview host stays viewer-only and does not style protected canvas selectors', () => {
-  const previewShellSource = readFileSync(resolve(REPO_ROOT, 'electron/preview-document-shell.mjs'), 'utf8');
+test('runtime output preserves slide sections without reviving export chrome', (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  assert.doesNotMatch(previewShellSource, /\.slide\b/);
-  assert.doesNotMatch(previewShellSource, /\.slide-wide\b/);
-  assert.doesNotMatch(previewShellSource, /\.slide-hero\b/);
-  assert.doesNotMatch(previewShellSource, /\.g2\b/);
-  assert.doesNotMatch(previewShellSource, /\.g3\b/);
-  assert.doesNotMatch(previewShellSource, /\.g4\b/);
-  assert.doesNotMatch(previewShellSource, /\.runtime-dot-nav\b/);
-  assert.doesNotMatch(previewShellSource, /\.runtime-export-bar\b/);
-  assert.match(previewShellSource, /section\[data-slide\]/);
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  fillBrief(projectRoot);
+
+  const rendered = renderPresentationHtml({ projectRoot });
+
+  assert.match(rendered.html, /<section\b[^>]*data-slide\b/);
+  assert.doesNotMatch(rendered.html, /runtime-export-bar/);
 });
 
 test('runtime chrome contract stays focused on viewer controls, not export actions', () => {

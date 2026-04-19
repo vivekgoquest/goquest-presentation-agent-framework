@@ -10,7 +10,7 @@ import {
   resolveProjectFrameworkAssetAbs,
 } from './deck-paths.js';
 import { renderPresentationHtml } from './deck-assemble.js';
-import { renderPresentationFailureHtml } from './preview-state-page.js';
+import { renderPolicyErrorPage, renderPresentationFailureHtml } from './preview-state-page.js';
 
 function isInsideRoot(targetAbs, rootAbs) {
   const normalizedTarget = resolve(targetAbs);
@@ -84,7 +84,7 @@ export function createRuntimeApp(options = {}) {
   app.use(express.json());
 
   app.get('/', (req, res) => {
-    res.status(404).type('text/plain').send('Web operator mode was removed. Launch Electron with npm run start.');
+    res.status(404).type('text/plain').send('Use the presentation CLI or /preview/ for shell-less preview.');
   });
   app.get(PROJECT_PREVIEW_PATH, (req, res) => {
     const currentProjectTarget = getCurrentProjectTarget(resolveCurrentTarget);

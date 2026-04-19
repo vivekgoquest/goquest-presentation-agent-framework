@@ -1,10 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-test('shell-less public surface removes the application layer and framework-owned agent launcher modules', () => {
-  assert.equal(existsSync(resolve(process.cwd(), 'framework', 'application')), false);
-  assert.equal(existsSync(resolve(process.cwd(), 'project-agent', 'agent-launcher.mjs')), false);
-  assert.equal(existsSync(resolve(process.cwd(), 'project-agent', 'agent-capabilities.mjs')), false);
+const REPO_ROOT = process.cwd();
+
+function repoPath(...parts) {
+  return resolve(REPO_ROOT, ...parts);
+}
+
+test('shell-less public surface removes the application layer, Electron shell, and shell-only runtime modules', () => {
+  assert.equal(existsSync(repoPath('framework', 'application')), false);
+  assert.equal(existsSync(repoPath('project-agent', 'agent-launcher.mjs')), false);
+  assert.equal(existsSync(repoPath('project-agent', 'agent-capabilities.mjs')), false);
+  assert.equal(existsSync(repoPath('electron')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'terminal-core.mjs')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'terminal-events.mjs')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'pty-bridge.py')), false);
+});
+
+test('shell-less public surface drops shell-era scripts and package dependencies', () => {
+  const packageJson = JSON.parse(readFileSync(repoPath('package.json'), 'utf8'));
+  const dependencies = packageJson.dependencies || {};
+  const devDependencies = packageJson.devDependencies || {};
+
+  assert.equal(packageJson.scripts?.start, undefined);
+  assert.equal(packageJson.scripts?.operator, undefined);
+  assert.equal(devDependencies.electron, undefined);
+  assert.equal(dependencies['node-pty'], undefined);
+  assert.equal(dependencies.ws, undefined);
+  assert.equal(dependencies.xterm, undefined);
+  assert.equal(dependencies['@xterm/addon-fit'], undefined);
+  assert.equal(dependencies['@xterm/addon-search'], undefined);
+  assert.equal(dependencies['@xterm/addon-web-links'], undefined);
 });

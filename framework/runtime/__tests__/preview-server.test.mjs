@@ -33,6 +33,10 @@ test('previewPresentation starts a preview server and stops cleanly in serve mod
   const response = await fetch(preview.previewUrl);
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') || '', /text\/html/i);
+
+  const rootResponse = await fetch(new URL('/', preview.previewUrl));
+  assert.equal(rootResponse.status, 404);
+  assert.equal(await rootResponse.text(), 'Use the presentation CLI or /preview/ for shell-less preview.');
 });
 
 test('previewPresentation opens the preview URL in open mode before returning', async (t) => {
