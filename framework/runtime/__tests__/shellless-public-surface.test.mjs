@@ -46,8 +46,16 @@ test('shell-less public surface drops shell-era scripts and package dependencies
 });
 
 test('shell-less public surface removes shell-era docs and desktop workflow references', () => {
+  const agents = readFileSync(repoPath('AGENTS.md'), 'utf8');
   const readme = readFileSync(repoPath('README.md'), 'utf8');
   const startHere = readFileSync(repoPath('START-HERE.md'), 'utf8');
+
+  assert.match(agents, /shell-less presentation package/i);
+  assert.match(agents, /framework\/runtime\/presentation-cli\.mjs/i);
+  assert.match(agents, /\.presentation\/framework-cli\.mjs/i);
+  assert.doesNotMatch(agents, /Electron/i);
+  assert.doesNotMatch(agents, /npm run start/i);
+  assert.doesNotMatch(agents, /framework\/application/i);
 
   assert.doesNotMatch(readme, /electron-native/i);
   assert.doesNotMatch(readme, /npm run start/i);
