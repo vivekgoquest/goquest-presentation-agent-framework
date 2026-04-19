@@ -1,26 +1,26 @@
 # Repository Onboarding Reading Order
 
-**Use this when:** you are new to the repository or returning after enough time that you need to reload the mental model.
+**Use this when:** you are new to the repository or returning after enough time that you need to reload the current shell-less mental model.
 
 **Read this after:** `AGENTS.md`.
 
 **Do not confuse with:** `docs/repo-architecture-index.md`, which is the task-routing layer rather than the learning path.
 
-**Key files:** listed below in order.
-
-**Verification:** after reading, you should be able to explain the four domains, the package model, and the main action flow.
+**Key outcome:** after reading, you should be able to explain the public CLI surface, the `.presentation/` state model, the `.claude/` scaffold source model, and the preview/export/finalize path.
 
 ---
 
 ## Goal of this reading order
 
-This order is optimized for AI agents. It is designed to answer questions in the right sequence:
+This order is optimized for maintainers and coding agents.
+
+It is meant to answer these questions in the right sequence:
 
 1. what the repository is trying to protect
-2. what the product does
-3. what a scaffolded project looks like
-4. how runtime and application layers divide responsibility
-5. where implementation changes belong
+2. what the shipped product is
+3. what a scaffolded project contains
+4. which files define package truth and runtime evidence
+5. where implementation changes belong in the shell-less repo
 
 ## Stage 1: repository contract and product summary
 
@@ -28,11 +28,14 @@ This order is optimized for AI agents. It is designed to answer questions in the
 Read first.
 
 Why it matters:
-- defines maintainer mission
-- defines the four-domain architecture
-- defines allowed and forbidden dependency directions
-- lists protected areas
-- lists the verification baseline
+- defines the maintainer contract
+- names the protected areas
+- defines the current repository shape
+- gives the required verification baseline
+- states the current public entrypoints:
+  - `presentation ...`
+  - `node framework/runtime/presentation-cli.mjs ...`
+  - `node .presentation/framework-cli.mjs ...`
 
 Do not proceed with framework edits before understanding this file.
 
@@ -41,106 +44,159 @@ Read second.
 
 Why it matters:
 - gives the product summary
-- lists supported commands
+- shows the supported command families
 - shows the scaffolded project structure
-- explains the package model at a high level
+- explains the root-PDF delivery model and the `.presentation/` state model
 
 ### 3. `START-HERE.md`
 Read third.
 
 Why it matters:
-- gives the operator workflow the product expects
-- confirms that Electron is the interactive path
-- reinforces that `.claude/` is adapter glue, not source truth
+- shows the operator workflow the product expects
+- reinforces the shell-less CLI-first entrypoints
+- shows how source-checkout usage differs from project-local shim usage
 
 ## Stage 2: canonical contracts
 
-### 4. `docs/base-canvas-contract.md`
+### 4. `docs/repo-architecture-overview.md`
+Read next.
+
+Why it matters:
+- gives the current one-page architecture summary
+- names the runtime, package/state, scaffold, and canvas/browser lanes
+- explains the dependency direction after the shell/application cleanup
+
+### 5. `docs/base-canvas-contract.md`
 Read next.
 
 Why it matters:
 - explains the `content < theme < canvas` ownership model
 - identifies protected structural primitives
-- explains what theme may and may not do
-- explains what content may and may not do
-- shows that runtime policy enforces these rules
+- shows what runtime policy actually enforces
 
-### 5. `docs/presentation-package-spec.md`
+### 6. `docs/presentation-package-spec.md`
 Read next.
 
 Why it matters:
-- explains the canonical scaffolded project package structure
+- explains the canonical project package structure
 - distinguishes authored source from generated structure and runtime evidence
-- explains why `.presentation/` exists
 - explains which files are agent-editable vs runtime-owned
 
-### 6. `docs/prd-human-agent.md`
+### 7. `docs/prd-human-agent.md`
 Read next.
 
 Why it matters:
-- gives the operator persona and workflow
-- defines success criteria for the product
-- explains how preview, validation, export, and AI collaboration are meant to feel
+- gives the operator persona and workflow expectations
+- defines what preview, audit, export, and finalize are supposed to feel like
+- explains the human + scaffolded-agent collaboration model
 
-## Stage 3: project-level authoring contracts
+## Stage 3: scaffolded authoring contracts
 
-These files live in the scaffold source, but they define what every project-local Claude package is supposed to teach the agent.
+These files live in the scaffold source, but they define what every generated project-local Claude packet teaches.
 
-### 7. `project-agent/project-dot-claude/rules/framework.md`
+### 8. `project-agent/project-agents-md.md`
 Why it matters:
-- restates core ownership and package truth for deck work
+- defines the project contract agents read first inside a scaffolded project
+- lists the current `.presentation/` truth files:
+  - `project.json`
+  - `intent.json`
+  - `package.generated.json`
+  - `runtime/render-state.json`
+  - `runtime/artifacts.json`
 
-### 8. `project-agent/project-dot-claude/rules/authoring-rules.md`
+### 9. `project-agent/project-claude-md.md`
+Why it matters:
+- explains what `.claude/` is and what it is not
+- reinforces that `.claude/` is helper scaffolding, not package truth
+
+### 10. `project-agent/project-dot-claude/rules/framework.md`
+Why it matters:
+- restates framework-vs-deck ownership for scaffolded projects
+
+### 11. `project-agent/project-dot-claude/rules/authoring-rules.md`
 Why it matters:
 - spells out allowed and forbidden authoring patterns
-- clarifies verification workflow
+- clarifies project-local verification workflow
 
-### 9. `project-agent/project-dot-claude/rules/file-boundaries.md`
+### 12. `project-agent/project-dot-claude/rules/file-boundaries.md`
 Why it matters:
-- clarifies deck-editable vs framework-protected areas
+- clarifies deck-editable vs runtime-owned files
+- shows the current read-only `.presentation/runtime/*.json` boundary
 
-### 10. `project-agent/project-dot-claude/rules/slide-patterns.md`
+### 13. `project-agent/project-dot-claude/rules/slide-patterns.md`
 Why it matters:
-- explains slide source model and structural primitives
+- explains the slide source model and structural primitives
 
-### 11. `project-agent/project-dot-claude/rules/tokens.md`
+### 14. `project-agent/project-dot-claude/rules/tokens.md`
 Why it matters:
 - explains theme tokens vs canvas tokens and escalation rules
 
-## Stage 4: executable surface
+## Stage 4: executable package surface
 
-### 12. `package.json`
+### 15. `package.json`
 Why it matters:
-- shows actual public scripts
-- confirms desktop entrypoint and project-only CLI commands
+- shows the real public bin
+- shows the current scripts baseline (`setup`, `test`)
+- confirms stale shell-era scripts are gone
 
-## Stage 5: implementation entrypoints
-
-### 13. `electron/main.mjs`
+### 16. `framework/runtime/presentation-cli.mjs`
 Why it matters:
-- shows Electron host wiring
-- shows protocol registration and worker process startup
+- defines the public command families and argument parsing
+- owns CLI envelopes and exit codes
 
-### 14. `framework/application/action-service.mjs`
+### 17. `framework/runtime/presentation-core.mjs`
 Why it matters:
-- is the product action brain
-- defines named actions, lifecycle, workflow metadata, and routing
+- defines command semantics beneath the CLI
+- preserves the mutation boundary between authored source and runtime-owned state
 
-### 15. `framework/application/project-query-service.mjs`
+## Stage 5: state and runtime entrypoints
+
+### 18. `framework/runtime/deck-paths.js`
 Why it matters:
-- explains project creation, opening, state querying, slide listing, and preview assembly entry
+- defines project path resolution
+- defines the shell-less project layout and root-PDF location
+- is the first place to read when project shape or help text feels wrong
 
-### 16. `framework/runtime/deck-assemble.js`
+### 19. `framework/runtime/presentation-package.js`
 Why it matters:
-- shows how authored fragments become full preview HTML
+- regenerates deterministic package structure
+- owns the generated manifest boundary
 
-### 17. `framework/runtime/deck-policy.js`
+### 20. `framework/runtime/presentation-runtime-state.js`
+Why it matters:
+- defines runtime evidence files
+- owns `render-state.json` and `artifacts.json`
+
+### 21. `framework/runtime/project-state.js`
+Why it matters:
+- classifies workflow state such as `onboarding`, `authoring`, `blocked`, `ready_for_finalize`, and `finalized`
+
+### 22. `framework/runtime/deck-policy.js`
 Why it matters:
 - shows what the framework truly enforces at runtime
+- is explicitly protected in `AGENTS.md`
 
-### 18. `framework/runtime/services/presentation-ops-service.mjs`
+### 23. `framework/runtime/deck-assemble.js`
 Why it matters:
-- shows validate, capture, export, and finalize end to end
+- shows how authored fragments become assembled preview HTML
+
+### 24. `framework/runtime/preview-server.mjs`
+Why it matters:
+- owns the preview serving path for `preview serve|open`
+
+### 25. `framework/runtime/services/presentation-ops-service.mjs`
+Why it matters:
+- owns validation, capture, PDF export, and finalize behavior
+- writes runtime evidence and the canonical root PDF
+
+### 26. `framework/runtime/services/scaffold-service.mjs`
+Why it matters:
+- owns `presentation init`
+- creates the authored workspace, `.presentation/`, `.claude/`, and git repo
+
+### 27. `framework/shared/project-claude-scaffold-package.mjs`
+Why it matters:
+- connects runtime scaffolding to the `project-agent/` source packet
 
 ## Stage 6: follow-up operational docs
 
@@ -154,7 +210,7 @@ Read:
 Read:
 - `docs/repo-call-flows.md`
 
-### If you need to trace Export presentation
+### If you need to trace canonical PDF delivery
 Read:
 - `docs/repo-action-trace-export-presentation.md`
 
@@ -172,19 +228,21 @@ If you do not have time for the full sequence, the minimum safe path is:
 
 1. `AGENTS.md`
 2. `README.md`
-3. `docs/base-canvas-contract.md`
-4. `docs/presentation-package-spec.md`
-5. `framework/application/action-service.mjs`
-6. `framework/runtime/deck-assemble.js`
-7. `framework/runtime/deck-policy.js`
+3. `docs/repo-architecture-overview.md`
+4. `docs/base-canvas-contract.md`
+5. `docs/presentation-package-spec.md`
+6. `framework/runtime/presentation-cli.mjs`
+7. `framework/runtime/presentation-core.mjs`
+8. `framework/runtime/deck-policy.js`
+9. `framework/runtime/services/presentation-ops-service.mjs`
 
 ## What you should be able to explain after finishing
 
 You should be able to answer all of these correctly:
 
-- What are the four architectural domains?
-- Which import directions are forbidden?
-- What is the difference between source, intent, generated package structure, and runtime evidence?
-- Why is `.presentation/package.generated.json` read-only to agents?
-- Why does Electron call the application layer instead of runtime services directly?
-- Which files own preview assembly, policy, export, and scaffolding?
+- What are the active public entrypoints for the product?
+- What is the difference between authored source, intent, generated structure, and runtime evidence?
+- Why are `.presentation/runtime/render-state.json` and `.presentation/runtime/artifacts.json` read-only to agents?
+- Which files own project creation, package regeneration, preview, export, and finalize?
+- Why is `.claude/` scaffold source only rather than a separate runtime host?
+- Which protected files in `AGENTS.md` require extra caution before editing?

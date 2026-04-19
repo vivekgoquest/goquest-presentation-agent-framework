@@ -15,7 +15,6 @@ Presentation truth lives in:
 - `.presentation/intent.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
 
 Do not treat `.claude/` as the source of presentation structure or state.
 
@@ -26,3 +25,4 @@ Keep this adapter shell-less and CLI-first:
 - prefer project-local commands such as `node .presentation/framework-cli.mjs audit all`
 - keep hooks thin and local to this project
 - do not add framework-service imports or git workflow logic here
+- treat `.presentation/runtime/*.json` as runtime-owned evidence, not authorable state

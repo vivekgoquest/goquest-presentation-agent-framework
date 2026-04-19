@@ -4,11 +4,13 @@
 
 **Read this after:** `docs/repo-architecture-overview.md`.
 
-**Do not confuse with:** `docs/repo-high-risk-files.md`, which focuses on sensitive files rather than task routing.
+**Do not confuse with:** `docs/repo-high-risk-files.md`, which focuses on sensitivity rather than routing.
 
-**Key files:** this document references the primary edit lanes for each change type.
+**Verification baseline:** each section lists the minimum recommended checks. Always start with `npm test`.
 
-**Verification:** each section lists the minimum recommended checks.
+When a verification step uses `node .presentation/framework-cli.mjs ...`, assume either:
+- the project can resolve the installed `pitch-framework` package, or
+- you are using the AGENTS.md maintainer smoke setup so the local shim can resolve this repo checkout.
 
 ---
 
@@ -21,156 +23,153 @@ For each requested change:
 3. stay inside the listed lane unless the task explicitly requires escalation
 4. run the listed verification before claiming success
 
-## 1. Desktop UI or Electron UX change
+When a task crosses categories, start with the highest-risk lane first.
+
+## 1. Change the public CLI surface
 
 Examples:
-- toolbar button behavior
-- welcome screen changes
-- diagnostics drawer changes
-- export modal UX
-- toast behavior
-- split-pane interactions
+- add or change a command family
+- change flags or argument validation
+- change JSON/text envelopes
+- change exit code behavior
+- change public help or error wording
 
 ### Read first
-- `electron/renderer/app.js`
-- `electron/renderer/ui-model.js`
-- `electron/main.mjs`
-- `AGENTS.md`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
+- `README.md`
+- `START-HERE.md`
 
 ### Primary edit lane
-- `electron/renderer/*`
-- `electron/main.mjs`
-- `electron/preload.cjs`
-
-### Avoid unless required
-- `framework/runtime/services/*`
-- `project-agent/*`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
+- `package.json` when the public bin/export surface changes
 
 ### Why
-Electron owns UI and host integration only. It must not take ownership of presentation runtime logic or project-agent workflow semantics.
+This lane owns the shipped product language for `presentation ...` and the repo-local source entrypoint.
 
 ### Verify
 - `npm test`
-- manual `npm run start` smoke
-- confirm UI action still routes correctly through the application layer
+- `node --test framework/runtime/__tests__/presentation-cli.test.mjs framework/runtime/__tests__/shellless-public-surface.test.mjs`
+- a focused source-entrypoint smoke for the changed command
 
-## 2. Add or change a named product action
+## 2. Change the project-local shim or project path contract
 
 Examples:
-- new toolbar action
-- new menu action
-- new review/apply action
-- changed action availability rules
+- change `.presentation/framework-cli.mjs`
+- change `--project` behavior
+- change root PDF location
+- change path-related help text
+- change copied-framework path resolution
 
 ### Read first
-- `framework/application/action-service.mjs`
-- `framework/application/presentation-action-adapter.mjs`
-- `framework/application/electron-request-service.mjs`
-- `electron/renderer/ui-model.js`
+- `framework/runtime/project-cli-shim.mjs`
+- `framework/runtime/deck-paths.js`
+- `docs/repo-trace-project-creation.md`
+- `docs/presentation-package-spec.md`
 
 ### Primary edit lane
-- `framework/application/action-service.mjs`
-- `framework/application/presentation-action-adapter.mjs`
-- `electron/renderer/ui-model.js`
-- `electron/renderer/app.js`
-
-### Additional lane for agent-backed actions
-- `project-agent/agent-capabilities.mjs`
-- `project-agent/agent-launcher.mjs`
+- `framework/runtime/project-cli-shim.mjs`
+- `framework/runtime/deck-paths.js`
+- related tests in `framework/runtime/__tests__/`
 
 ### Why
-The application layer owns deterministic action definitions and routing.
+This lane owns project portability and the shell-less path model.
 
 ### Verify
 - `npm test`
-- action-related tests
-- manual invocation through the Electron UI if surfaced there
+- `node --test framework/runtime/__tests__/deck-paths-project-only.test.mjs framework/runtime/__tests__/shellless-package-integration.test.mjs`
+- run the AGENTS.md shim smoke baseline if you changed resolution behavior
 
 ## 3. Change project scaffolding
 
 Examples:
-- add a scaffolded file
-- change default theme/brief/outline contents
-- change slide numbering defaults
-- change copy-framework behavior
-- change scaffolded `.claude/` package contents
+- add or remove a scaffolded file
+- change default theme or brief contents
+- change initial slide numbering or naming
+- change `.presentation/` initialization
+- change `.claude/` scaffold contents
+- change git init behavior
 
 ### Read first
 - `framework/runtime/services/scaffold-service.mjs`
-- `framework/application/project-scaffold-service.mjs`
-- `project-agent/scaffold-package.mjs`
-- `docs/presentation-package-spec.md`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `project-agent/project-agents-md.md`
+- `project-agent/project-claude-md.md`
+- `docs/repo-trace-project-creation.md`
 
 ### Primary edit lane
 - `framework/runtime/services/scaffold-service.mjs`
 - `framework/templates/*`
-- `project-agent/scaffold-package.mjs`
-- `project-agent/project-agents-md.md`
-- `project-agent/project-claude-md.md`
-- `project-agent/project-dot-claude/*`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `project-agent/*`
 
 ### Why
-Scaffolding is split between runtime project files and project-agent adapter files.
-
-### Verify
-- `npm run new -- --project /abs/path`
-- inspect generated project structure
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-
-## 4. Change preview assembly or runtime HTML composition
-
-Examples:
-- change generated slide wrappers
-- inject new scripts or styles
-- change asset rewriting
-- change preview shell assumptions
-
-### Read first
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-source.js`
-- `framework/runtime/runtime-app.js`
-- `framework/runtime/deck-policy.js`
-
-### Primary edit lane
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-source.js`
-- `framework/runtime/runtime-app.js`
-
-### Why
-Preview, validation, capture, export, and finalize all depend on this path.
+Scaffolding is split between runtime-owned project files and scaffolded Claude adapter files.
 
 ### Verify
 - `npm test`
-- `npm run check -- --project /abs/path`
-- manual preview in `npm run start`
+- `node --test project-agent/__tests__/scaffold-package.test.mjs framework/runtime/services/__tests__/runtime-services.test.mjs`
+- `node framework/runtime/presentation-cli.mjs init --project "$TMP_PROJECT" --slides 1 --format json`
+- inspect generated `.presentation/` and `.claude/`
 
-## 5. Change authoring policy or package validation semantics
+## 4. Change package state, runtime evidence, or workflow status
+
+Examples:
+- change `project.json` fields
+- change manifest generation
+- change `render-state.json` or `artifacts.json` shape
+- change workflow classification such as `blocked` or `finalized`
+- change status messaging or next-step guidance
+
+### Read first
+- `framework/runtime/presentation-package.js`
+- `framework/runtime/presentation-runtime-state.js`
+- `framework/runtime/project-state.js`
+- `framework/runtime/status-service.js`
+- `docs/presentation-package-spec.md`
+
+### Primary edit lane
+- the corresponding runtime state modules
+- related tests under `framework/runtime/__tests__/`
+- spec docs that define the contract
+
+### Why
+These files define durable project truth rather than transient behavior.
+
+### Verify
+- `npm test`
+- `node --test framework/runtime/__tests__/presentation-package.test.mjs framework/runtime/__tests__/presentation-runtime-state.test.mjs framework/runtime/__tests__/status-service.test.mjs`
+- scaffold a project and inspect `.presentation/*.json`
+- run project-local `inspect package`, `status`, and `finalize`
+
+## 5. Change audits or policy semantics
 
 Examples:
 - change forbidden CSS or HTML rules
-- change asset path policy
-- change long-deck outline requirement
-- change package validation logic
+- change asset-path policy
+- change long-deck outline enforcement
+- change audit issue wording or severity behavior
 
 ### Read first
 - `framework/runtime/deck-policy.js`
-- `framework/runtime/project-state.js`
+- `framework/runtime/audit-service.js`
 - `docs/base-canvas-contract.md`
 - `docs/presentation-package-spec.md`
 
 ### Primary edit lane
 - `framework/runtime/deck-policy.js`
-- `framework/runtime/project-state.js`
-- related docs that define the contract
+- `framework/runtime/audit-service.js`
+- related contract docs
 
 ### Protected area warning
-This is a sensitive edit lane. `AGENTS.md` explicitly flags policy semantics as protected.
+`AGENTS.md` explicitly flags policy semantics as protected.
 
 ### Verify
 - `npm test`
-- scaffold a project and run `check`
-- run `finalize` on a valid project
+- `node --test framework/runtime/__tests__/deck-policy.test.mjs`
+- scaffold a project and run `node .presentation/framework-cli.mjs audit all --format json`
+- run `node .presentation/framework-cli.mjs finalize --format json` on a valid project
 
 ## 6. Change structural canvas behavior
 
@@ -191,21 +190,80 @@ Examples:
 - `framework/canvas/*`
 
 ### Protected area warning
-This is one of the most sensitive areas in the repo. It affects every linked project.
+This is one of the most sensitive areas in the repo. It affects every project.
 
 ### Verify
 - `npm test`
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-- inspect rendered output artifacts
+- `node --test framework/canvas/__tests__/canvas-contract.test.mjs`
+- a shell-less project smoke with `audit all` and `finalize`
+- inspect rendered output artifacts carefully
 
-## 7. Change browser-side slide behavior
+## 7. Change preview serving or assembled HTML composition
+
+Examples:
+- change generated slide wrappers
+- inject new scripts or styles
+- change preview routing
+- change runtime preview failure rendering
+- change asset rewriting during assembly
+
+### Read first
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/runtime-app.js`
+- `framework/runtime/preview-server.mjs`
+- `docs/repo-call-flows.md`
+
+### Primary edit lane
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/runtime-app.js`
+- `framework/runtime/preview-server.mjs`
+
+### Why
+Preview, export, and finalize all depend on this shared assembly path.
+
+### Verify
+- `npm test`
+- `node --test framework/runtime/__tests__/preview-server.test.mjs framework/runtime/__tests__/preview-state-page.test.mjs`
+- `node .presentation/framework-cli.mjs preview serve`
+- `node .presentation/framework-cli.mjs finalize --format json`
+
+## 8. Change export or finalize behavior
+
+Examples:
+- change canonical root-PDF behavior
+- change manual PDF export behavior
+- change screenshot export behavior
+- change rendered-issue summarization
+- change runtime evidence writes during delivery
+
+### Read first
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/runtime/pdf-export.js`
+- `framework/runtime/presentation-runtime-state.js`
+- `docs/repo-action-trace-export-presentation.md`
+
+### Primary edit lane
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/runtime/pdf-export.js`
+- related runtime state helpers
+
+### Why
+This lane owns deterministic delivery and artifact recording.
+
+### Verify
+- `npm test`
+- `node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/shellless-package-integration.test.mjs`
+- `node .presentation/framework-cli.mjs export pdf --format json`
+- `node .presentation/framework-cli.mjs finalize --format json`
+- inspect the project-root PDF plus `.presentation/runtime/render-state.json` and `.presentation/runtime/artifacts.json`
+
+## 9. Change browser-side runtime behavior
 
 Examples:
 - keyboard navigation logic
-- in-preview dot navigation
-- counter behavior
-- animation and reveal handling
+- dot navigation behavior
+- counters, animation, or reveal handling
+- runtime chrome behavior inside preview
 
 ### Read first
 - `framework/client/nav.js`
@@ -217,144 +275,73 @@ Examples:
 - `framework/client/*`
 
 ### Why
-The browser runtime behavior is owned by `framework/client/`, not Electron.
+The browser runtime behavior is owned by `framework/client/` and is consumed by the preview/export pipeline.
 
 ### Verify
 - `npm test`
-- manual preview navigation in Electron
-- `check` and `finalize` for stability
+- the closest `framework/client` or preview tests
+- manual preview navigation in the browser
+- `finalize` for stability if behavior affects rendering
 
-## 8. Change capture, export, or finalize behavior
-
-Examples:
-- screenshot behavior
-- report shape
-- PDF export behavior
-- finalize output writing
-- runtime evidence writing
-
-### Read first
-- `framework/runtime/services/presentation-ops-service.mjs`
-- `framework/runtime/pdf-export.js`
-- `framework/runtime/presentation-runtime-state.js`
-
-### Primary edit lane
-- `framework/runtime/services/presentation-ops-service.mjs`
-- related runtime helper files
-
-### Why
-This lane owns deterministic output generation and evidence persistence.
-
-### Verify
-- `npm test`
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-- inspect `outputs/` and `.presentation/runtime/*.json`
-
-## 9. Change project/package state files or schemas
+## 10. Change the scaffolded Claude adapter package
 
 Examples:
-- add intent fields
-- change generated manifest shape
-- change runtime evidence JSON shape
+- add or change a skill
+- change `.claude/AGENTS.md` or `.claude/CLAUDE.md`
+- change hook wording or hook boundaries
+- change deck-editable vs runtime-owned guidance
 
 ### Read first
-- `framework/runtime/presentation-intent.js`
-- `framework/runtime/presentation-package.js`
-- `framework/runtime/presentation-runtime-state.js`
-- `docs/presentation-package-spec.md`
-
-### Primary edit lane
-- the corresponding runtime state modules
-- spec docs that define the contract
-
-### Why
-These files define durable project truth, not just transient behavior.
-
-### Verify
-- scaffold a new project
-- open an existing project
-- run `check` and `finalize`
-- inspect `.presentation/*.json`
-
-## 10. Change terminal behavior
-
-Examples:
-- shell startup behavior
-- resize behavior
-- terminal lifecycle
-- project context switching
-
-### Read first
-- `framework/runtime/terminal-core.mjs`
-- `electron/worker/terminal-service.mjs`
-- `AGENTS.md`
-
-### Primary edit lane
-- `framework/runtime/terminal-core.mjs`
-- `electron/worker/terminal-service.mjs`
-
-### Protected area warning
-Terminal lifecycle guarantees are explicitly protected in `AGENTS.md`.
-
-### Verify
-- `npm test`
-- manual shell start/stop/restart
-- manual project switching in Electron
-
-## 11. Change file watching or preview refresh behavior
-
-Examples:
-- debounce timing
-- ignored paths
-- watch roots
-- refresh triggers
-
-### Read first
-- `electron/worker/watch-service.mjs`
-- `electron/worker/host.mjs`
-- `electron/renderer/app.js`
-
-### Primary edit lane
-- `electron/worker/watch-service.mjs`
-- related worker/renderer integration files
-
-### Verify
-- edit `theme.css`
-- edit a slide
-- add or remove a slide folder
-- confirm preview refreshes only when expected
-
-## 12. Change project-local Claude scaffolding or agent capabilities
-
-Examples:
-- add a new skill
-- change launcher prompt composition
-- change project-local `AGENTS.md` or `.claude/` scaffold content
-
-### Read first
-- `project-agent/agent-capabilities.mjs`
-- `project-agent/agent-launcher.mjs`
-- `project-agent/scaffold-package.mjs`
-- `framework/application/action-service.mjs`
+- `framework/shared/project-claude-scaffold-package.mjs`
+- `project-agent/project-agents-md.md`
+- `project-agent/project-claude-md.md`
+- `project-agent/project-dot-claude/*`
+- `project-agent/__tests__/scaffold-package.test.mjs`
 
 ### Primary edit lane
 - `project-agent/*`
-- action registration in `framework/application/action-service.mjs` if needed
+- `framework/shared/project-claude-scaffold-package.mjs`
 
 ### Why
-The agent layer owns vendor-specific execution details, but the application layer still owns the workflow semantics.
+This lane owns project-local agent guidance, but it must stay subordinate to runtime/package truth.
 
 ### Verify
 - `npm test`
-- scaffold a fresh project and inspect `AGENTS.md` and `.claude/`
-- manually invoke affected action if available
+- `node --test project-agent/__tests__/scaffold-package.test.mjs`
+- scaffold a fresh project and inspect `.claude/`
+- confirm scaffolded markdown teaches only current shell-less commands and files
+
+## 11. Change maintainer docs or repo contracts
+
+Examples:
+- rewrite architecture docs
+- update verification runbooks
+- update onboarding guidance
+- remove stale references to deleted layers or files
+
+### Read first
+- `AGENTS.md`
+- `README.md`
+- `START-HERE.md`
+- the specific `docs/repo-*.md` files you are changing
+
+### Primary edit lane
+- `docs/*`
+- top-level maintainer docs when required
+
+### Why
+These docs teach the repository’s current architecture and verification habits.
+
+### Verify
+- `npm test`
+- `node --test framework/runtime/__tests__/shellless-public-surface.test.mjs`
+- spot-check that each documented command and file path still exists
 
 ## Final check before editing
 
 Before changing anything, answer these four questions:
 
-1. Which domain owns the behavior I am changing?
+1. Which layer owns the behavior I am changing?
 2. Is this a protected area named in `AGENTS.md`?
 3. What is the minimum verification for this lane?
-4. Am I accidentally bypassing the application layer or the package/runtime ownership model?
+4. Am I accidentally reintroducing a deleted shell/application workflow or stale runtime evidence assumption?

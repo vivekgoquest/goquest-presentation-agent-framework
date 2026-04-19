@@ -55,6 +55,7 @@ test('scaffold package keeps the Claude packet shell-less and CLI-first', async 
     assert.doesNotMatch(content, /application-prepared workflow context/i);
     assert.doesNotMatch(content, /\bElectron\b/i);
     assert.doesNotMatch(content, /desktop app workflow/i);
+    assert.doesNotMatch(content, /last-good\.json/i);
     assert.doesNotMatch(content, /\bnpm run (?:new|check|finalize|export|capture|setup)\b/i);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs check\b/);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs capture\b/);

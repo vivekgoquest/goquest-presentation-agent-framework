@@ -1,295 +1,345 @@
 # Action Trace: Export Presentation
 
-**Use this when:** you need to understand or change what happens when the user triggers **Export presentation**.
+**Use this when:** you need to understand or change the canonical PDF-delivery flow in the shell-less package.
 
 **Read this after:** `docs/repo-call-flows.md` and `docs/repo-architecture-overview.md`.
 
 **Do not confuse with:**
-- `export_presentation_artifacts` — direct PDF/PNG artifact export
-- `validate_presentation` — validation-only workflow
+- `presentation export screenshots` — explicit PNG artifact export
+- `presentation audit all` — deterministic validation without PDF delivery
+- `presentation preview serve|open` — browser preview without artifact delivery
 
 **Key files:**
-- `electron/renderer/app.js`
-- `framework/application/action-service.mjs`
-- `framework/application/presentation-action-adapter.mjs`
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
 - `framework/runtime/services/presentation-ops-service.mjs`
-- `framework/runtime/finalize-deck.mjs`
+- `framework/runtime/presentation-runtime-state.js`
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/runtime-app.js`
+- `framework/runtime/pdf-export.js`
 
 **Verification:**
 - `npm test`
-- `npm run finalize -- --project /abs/path`
-- manual Electron export smoke if UI changed
+- `node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/shellless-package-integration.test.mjs`
+- a shell-less smoke with `presentation finalize --project /abs/path` or the repo-local/project-local equivalents
 
 ---
 
-## What this action means
+## What this action means now
 
-The `export_presentation` action is the **canonical finalize pipeline**.
+There is no separate UI-owned export path anymore.
 
-It is not the same as the direct artifact export dialog. It is the product action that:
+Canonical PDF delivery is triggered by CLI entrypoints:
 
-- captures the deck
-- exports the canonical PDF
-- writes `outputs/report.json`
-- writes `outputs/summary.md`
-- updates runtime evidence in `.presentation/runtime/`
-- returns pass/fail status for delivery readiness
+- `presentation finalize --project /abs/path`
+- `presentation export pdf --project /abs/path`
 
-## The full trace
+These are related but not identical:
 
-## 1. The user clicks Export presentation in the Electron UI
+- `finalize` is the explicit canonical delivery command
+- `export pdf` with **no** `--output-dir` or `--output-file` reuses the same canonical finalize path
+- `export pdf` **with** `--output-dir` or `--output-file` creates an extra PDF artifact inside the project instead of redefining the canonical finalized output
 
-Primary UI file:
-- `electron/renderer/app.js`
+In all cases, the package updates only current runtime evidence:
 
-What happens:
-- the primary toolbar button is bound to an action id
-- `runProductAction(actionId, button)` is called
-- the action id for this path is `export_presentation`
+- `.presentation/runtime/render-state.json`
+- `.presentation/runtime/artifacts.json`
 
-Key renderer behavior:
-- action status label is updated to running
-- more-menu is closed
-- button loading state is shown
+The current product records delivery evidence only through `render-state.json` and `artifacts.json`.
 
-## 2. The renderer invokes the action bridge
+## Entry commands
 
-Still in `electron/renderer/app.js`:
-- `invokeProductAction(actionId, args)`
-- `window.electron.actions.invoke(actionId, args)`
+Typical commands are:
 
-This means the renderer does not call runtime code directly.
+```bash
+presentation finalize --project /abs/path/to/my-deck --format json
+presentation export pdf --project /abs/path/to/my-deck --format json
+presentation export pdf --project /abs/path/to/my-deck --output-dir outputs/manual-export --output-file deck.pdf
+```
 
-## 3. Electron main process forwards the request to the worker
+From a source checkout, use:
 
-File:
-- `electron/main.mjs`
+```bash
+node framework/runtime/presentation-cli.mjs ...
+```
+
+Inside a scaffolded project, use:
+
+```bash
+node .presentation/framework-cli.mjs ...
+```
+
+## Trace A: canonical delivery through `presentation finalize`
+
+## 1. The CLI parses the finalize request
+
+Primary file:
+- `framework/runtime/presentation-cli.mjs`
 
 Path:
-- IPC handler `presentation:invoke`
-- `invokeWorker(request.channel, request.payload)`
+- `parsePresentationCliArgs(argv)`
+- `runFinalizeCommand(parsed, command, core)`
 
-The main process acts as the transport bridge only.
+Important validation:
+- `finalize` requires `--project`
+- `finalize` rejects `--output-dir`
+- `finalize` rejects `--output-file`
+- `finalize` rejects `--slide`
+- `finalize` does not accept extra positionals
 
-## 4. The worker host dispatches the request
+Why this matters:
+- canonical delivery should stay unambiguous
+- manual artifact routing belongs to `export`, not `finalize`
 
-File:
-- `electron/worker/host.mjs`
+## 2. The CLI dispatches into the runtime core
 
-The worker host receives the request and routes it through:
-- `framework/application/electron-request-service.mjs`
+Primary file:
+- `framework/runtime/presentation-core.mjs`
 
-The request channel for actions is:
-- `action:invoke`
+Path:
+- `core.finalize(projectRoot)`
 
-## 5. The Electron request service hands off to the application action service
+What happens here:
+- the runtime core preserves the authored-content mutation boundary
+- finalize is run under the same shell-less core surface as the other commands
+- the returned envelope includes `status`, `outputs`, `evidenceUpdated`, and `issues`
 
-File:
-- `framework/application/electron-request-service.mjs`
+## 3. The finalize service owns the actual delivery work
 
-For `ACTION_INVOKE`, it calls:
-- `actionService.invokeAction(payload.actionId, payload.args || {})`
-
-This is the moment the request becomes a named product workflow.
-
-## 6. The action service validates availability and emits lifecycle events
-
-File:
-- `framework/application/action-service.mjs`
-
-High-level steps:
-1. find the action definition for `export_presentation`
-2. list resolved actions and confirm the action is enabled
-3. create a run id
-4. build the action context
-5. emit lifecycle events:
-   - queued
-   - running
-6. invoke the workflow service
-
-The action catalog marks this action as:
-- id: `export_presentation`
-- label: `Export presentation`
-- surface: `primary`
-- kind: `presentation`
-
-## 7. The workflow service routes to the presentation workflow path
-
-Still in `framework/application/action-service.mjs`:
-- `createActionWorkflowService(...).invokeAction(...)`
-
-For `export_presentation`, the workflow service chooses:
-- `invokePresentationWorkflow(...)`
-
-It does **not** go through the agent launcher.
-
-## 8. The presentation action adapter maps the action to finalize
-
-File:
-- `framework/application/presentation-action-adapter.mjs`
-
-For `export_presentation`, it calls:
-- `finalizePresentation(target, args.options || {})`
-
-This is the canonical runtime operation for this action.
-
-## 9. The runtime finalize pipeline starts
-
-File:
+Primary file:
 - `framework/runtime/services/presentation-ops-service.mjs`
 
 Function:
 - `finalizePresentation(targetInput, options = {})`
 
-High-level steps inside finalize:
-1. resolve project source and output paths
-2. remove the existing `outputs/` directory contents
-3. recreate output directories
-4. capture the presentation into canonical output paths
-5. export the PDF to `outputs/deck.pdf`
-6. build issue summary
-7. write `outputs/report.json`
-8. write `outputs/summary.md`
-9. write runtime evidence files
-10. if pass, write `last-good.json`
+High-level steps:
+1. resolve project paths
+2. remove stale legacy finalized-output directories if they exist
+3. capture the current assembled deck into a temporary runtime directory
+4. summarize rendered issues from the capture report
+5. generate the canonical root PDF
+6. refresh `.presentation/runtime/artifacts.json`
+7. refresh `.presentation/runtime/render-state.json`
+8. return pass/fail status plus artifact paths
 
-## 10. Capture runs against the runtime preview
+## 4. Capture runs against the runtime preview stack
 
 Still in `presentation-ops-service.mjs`:
 - `capturePresentation(...)`
-- via `withRuntimeServer(...)`
 
-Supporting file:
+Supporting files:
 - `framework/runtime/runtime-app.js`
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/deck-policy.js`
 
 What happens:
-- an Express runtime server is started temporarily
+- the runtime preview app is started temporarily
 - the assembled deck is served at `/preview/`
 - Playwright opens that preview URL
 - slides are discovered and evaluated
-- full-page PNG and per-slide PNGs are captured
-- report data is collected
+- overflow, console errors, and canvas consistency are collected
 
-## 11. Capture depends on deterministic deck assembly
+Important consequence:
+- finalize depends on the same policy and assembly path as preview
+- if assembly or policy breaks, delivery breaks too
 
-Capture and finalize both depend on:
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-policy.js`
-- `framework/runtime/presentation-package.js`
-
-That means Export presentation inherits all of the following:
-- package regeneration
-- authored source validation
-- strict policy enforcement
-- runtime preview assembly
-
-If assembly or policy breaks, export breaks.
-
-## 12. The PDF is generated
+## 5. The canonical PDF is written to the project root
 
 Still in `presentation-ops-service.mjs`:
-- `exportDeckPdf(...)`
+- `exportDeckPdf(target, sourcePaths.rootPdfAbs, { recordArtifacts: false })`
 
 Supporting file:
 - `framework/runtime/pdf-export.js`
 
-The generated PDF is written to:
-- `outputs/deck.pdf`
+Result:
+- the canonical delivered PDF is written to:
+  - `<project-root>/<project-slug>.pdf`
 
-## 13. Finalize writes canonical artifacts and runtime evidence
+This is the current product contract.
+
+## 6. Runtime evidence is refreshed
 
 Files involved:
-- `framework/runtime/services/presentation-ops-service.mjs`
 - `framework/runtime/presentation-runtime-state.js`
+- `framework/runtime/services/presentation-ops-service.mjs`
 
-Outputs written:
-- `outputs/deck.pdf`
-- `outputs/report.json`
-- `outputs/summary.md`
-- `outputs/full-page.png`
-- `outputs/slides/*.png`
+### `render-state.json` records
+- current source fingerprint
+- render status (`pass` or `fail`)
+- producer (`finalize`)
+- slide ids
+- console-error count
+- overflow and failure summaries
+- issues from the rendered run
 
-Runtime evidence written:
-- `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/render-state.json`
-- `.presentation/runtime/last-good.json` when status is pass
+### `artifacts.json` records
+- `finalized.pdf` when canonical delivery is current and passing
+- `latestExport.pdf` for the most recent PDF export result
+- alias fields kept for compatibility readers
 
-## 14. Control returns through the stack
+Important detail:
+- on a passing canonical finalize, `finalized` and `latestExport` both point at the project-root PDF
+- on a failing finalize, render-state still updates, and artifacts are updated conservatively to avoid pretending delivery succeeded
 
-The runtime returns a structured result to:
-- `presentation-action-adapter`
-- `action-service`
-- worker response
-- Electron main process
-- renderer
+## 7. The CLI returns the finalize envelope
 
-The action service emits the final lifecycle event:
-- succeeded or failed
+Back in `presentation-cli.mjs`, the response includes:
 
-The renderer then:
-- updates action status text
-- shows a toast
-- refreshes project panels
+- `status`
+- `summary`
+- `outputs.artifacts`
+- `evidenceUpdated`
+- `issues`
 
-## What can make Export presentation fail
+The command exits:
+- `0` on pass
+- `1` when finalize completes with issues/failures
 
-This action can fail because of:
+## Trace B: canonical delivery through `presentation export pdf`
+
+This path starts differently but converges on the same finalize service when the request is for the canonical full-deck PDF.
+
+## 1. The CLI parses the export request
+
+Primary file:
+- `framework/runtime/presentation-cli.mjs`
+
+Path:
+- `runExportCommand(parsed, command, core)`
+
+What it forwards:
+- target format (`pdf` or `screenshots`)
+- requested slide ids if any
+- `--output-dir`
+- `--output-file`
+
+## 2. The runtime core normalizes the export request
+
+Primary file:
+- `framework/runtime/presentation-core.mjs`
+
+Path:
+- `core.exportPresentation(projectRoot, options)`
+
+What it does:
+- runs `inspectPackage` to get the current manifest
+- validates slide selections against the manifest
+- converts output paths to project-relative paths
+- preserves the authored-content mutation boundary
+
+## 3. Canonical `export pdf` requests are routed to finalize
+
+Primary file:
+- `framework/runtime/services/presentation-ops-service.mjs`
+
+Function:
+- `exportPresentation(targetInput, request = {}, options = {})`
+
+Canonical cases:
+- no `--output-dir` and no `--output-file`
+- or an explicit output path that resolves to the project-root PDF
+
+In those cases:
+- filtered slide selection is rejected
+- the service calls `finalizePresentation(...)`
+- the returned result is wrapped as an export result
+
+This is why full-deck `export pdf` and `finalize` share the same delivery semantics.
+
+## Trace C: extra PDF export through `presentation export pdf --output-dir ...`
+
+This is the manual artifact path, not canonical finalize.
+
+## 1. The service chooses an explicit output path
+
+`presentation-ops-service.mjs` resolves:
+- the requested output directory inside the project
+- the requested output file name, or the default suggested PDF name
+
+## 2. It generates the PDF directly
+
+Path:
+- `exportDeckPdf(target, outputPath, { recordArtifacts: false, ... })`
+
+Then it records artifacts with:
+- `writePdfExportArtifacts(..., { markFinalized: false })`
+
+## 3. Artifact-state behavior differs from finalize
+
+For explicit extra exports:
+- `latestExport` is updated to the manual PDF path
+- `finalized` is preserved rather than replaced
+- no new canonical delivery state is invented
+
+That distinction is important.
+
+The package must not treat an arbitrary manual export as proof that the canonical root PDF is current.
+
+## Trace D: screenshot export through `presentation export screenshots`
+
+For screenshot exports:
+- the service requires `--output-dir`
+- it runs `capturePresentation(...)`
+- it writes slide PNGs to the requested directory
+- it does **not** update finalized-PDF delivery state
+
+## What can make canonical delivery fail
+
+This flow can fail because of:
 - authored source policy violations
 - preview assembly failure
 - browser console errors during capture
 - overflow detection
 - rendered canvas contract violations
-- PDF export failure
+- PDF generation failure
 
-In CLI form, `npm run finalize` exits non-zero on failure.
+## What to change for common requests
 
-## What to change for common export-related requests
-
-### Change button text, loading states, or toasts
+### Change CLI wording, flags, or exit behavior
 Edit:
-- `electron/renderer/app.js`
-- maybe `electron/renderer/ui-model.js`
+- `framework/runtime/presentation-cli.mjs`
+- maybe `framework/runtime/presentation-core.mjs`
 
-### Change action availability
+### Change canonical-vs-manual export routing
 Edit:
-- `framework/application/action-service.mjs`
-- maybe `framework/runtime/project-state.js`
-
-### Change what Export presentation actually does
-Edit:
-- `framework/application/presentation-action-adapter.mjs`
+- `framework/runtime/presentation-core.mjs`
 - `framework/runtime/services/presentation-ops-service.mjs`
 
-### Change report or runtime evidence contents
+### Change the generated PDF or capture behavior
 Edit:
+- `framework/runtime/pdf-export.js`
 - `framework/runtime/services/presentation-ops-service.mjs`
+- maybe `framework/runtime/runtime-app.js`
+- maybe `framework/runtime/deck-assemble.js`
+
+### Change runtime evidence contents
+Edit:
 - `framework/runtime/presentation-runtime-state.js`
-
-### Change preview or capture assumptions
-Edit:
-- `framework/runtime/deck-assemble.js`
-- `framework/runtime/deck-policy.js`
-- possibly `framework/runtime/runtime-app.js`
+- `framework/runtime/services/presentation-ops-service.mjs`
 
 ## What not to do
 
-- do not make the renderer call finalize logic directly
-- do not duplicate finalize behavior in Electron-specific code
-- do not confuse `export_presentation` with `export_presentation_artifacts`
-- do not hand-edit runtime evidence files to fake export state
+- do not reintroduce a separate UI-only export path
+- do not duplicate finalize logic in a second orchestration layer
+- do not hand-edit `.presentation/runtime/*.json` to fake delivery state
+- do not treat a manual PDF export as equivalent to a successful canonical finalize
+- do not add back deleted checkpoint-file assumptions
 
 ## Minimal verification after changing this flow
 
-### If UI-only change
+### If you changed canonical delivery behavior
 - `npm test`
-- manual export click in Electron
+- `node --test framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/shellless-package-integration.test.mjs`
+- scaffold a project, fill a valid `brief.md`, then run:
+  - `node .presentation/framework-cli.mjs export pdf --format json`
+  - `node .presentation/framework-cli.mjs finalize --format json`
+- inspect:
+  - `<project-root>/<project-slug>.pdf`
+  - `.presentation/runtime/render-state.json`
+  - `.presentation/runtime/artifacts.json`
 
-### If action/application change
+### If you changed only manual export behavior
 - `npm test`
-- manual export click in Electron
-- confirm lifecycle events still update UI
-
-### If runtime/finalize change
-- `npm test`
-- `npm run finalize -- --project /abs/path`
-- inspect `outputs/` and `.presentation/runtime/*.json`
+- run `node .presentation/framework-cli.mjs export pdf --output-dir outputs/manual-export --output-file deck.pdf`
+- run `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
+- confirm `artifacts.json` still distinguishes `latestExport` from `finalized`

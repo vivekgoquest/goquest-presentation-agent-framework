@@ -65,6 +65,17 @@ test('shell-less v1 project metadata and paths prefer root pdf delivery', async 
   assert.equal('lastGoodAbs' in paths, false);
 });
 
+test('readProjectMetadata points users at presentation init when project metadata is missing', async (t) => {
+  const { readProjectMetadata } = await import('../deck-paths.js');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  assert.throws(
+    () => readProjectMetadata(projectRoot),
+    /Create the project with presentation init --project \/abs\/path first\./
+  );
+});
+
 test('compatibility metadata restores legacy defaults and preserves copied mode inference', async (t) => {
   const [{ createPresentationScaffold }, { FRAMEWORK_ROOT, getProjectPaths, readProjectCompatibilityMetadata, readProjectMetadata }] = await Promise.all([
     import('../services/scaffold-service.mjs'),

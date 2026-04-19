@@ -13,15 +13,14 @@ Read these files in this order:
 3. `.presentation/intent.json`
 4. `.presentation/runtime/render-state.json` if it exists
 5. `.presentation/runtime/artifacts.json` if it exists
-6. `.presentation/runtime/last-good.json` if it exists
 
 Then read authored source as needed:
 
-7. `brief.md`
-8. `outline.md` if it exists
-9. `theme.css`
-10. relevant `slides/<NNN-slide-id>/slide.html`
-11. relevant `slides/<NNN-slide-id>/slide.css` if it exists
+6. `brief.md`
+7. `outline.md` if it exists
+8. `theme.css`
+9. relevant `slides/<NNN-slide-id>/slide.html`
+10. relevant `slides/<NNN-slide-id>/slide.css` if it exists
 
 ## What This Package Contains
 
@@ -57,21 +56,15 @@ Use these files as the source of truth:
   - per-slide purpose
 
 - `.presentation/runtime/render-state.json`
-  - current runtime validity
-  - policy status
-  - canvas status
-  - quality status
+  - current render and validation status
+  - policy findings
+  - canvas/runtime evidence
+  - latest checked source fingerprint
 
 - `.presentation/runtime/artifacts.json`
-  - current output inventory
-  - screenshot paths
-  - report paths
-  - PDF paths when present
-
-- `.presentation/runtime/last-good.json`
-  - last known-good render checkpoint
-  - artifact references for that checkpoint
-  - linked git commit when available
+  - latest export inventory
+  - canonical finalized root PDF when current
+  - manual PDF or screenshot artifact paths when present
 
 ## Editable Files
 
@@ -94,7 +87,6 @@ Do not edit these by hand:
 - `.presentation/package.generated.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
-- `.presentation/runtime/last-good.json`
 
 These are system-owned or runtime-owned.
 
@@ -122,12 +114,14 @@ These are system-owned or runtime-owned.
 
 Use these commands from the project root:
 
+- `node .presentation/framework-cli.mjs inspect package --format json`
 - `node .presentation/framework-cli.mjs audit all`
 - `node .presentation/framework-cli.mjs finalize`
 - `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
 - `node .presentation/framework-cli.mjs export pdf --output-dir outputs/manual-export --output-file deck.pdf`
 
 Run `audit all` during iteration and `finalize` before handoff.
+Use `inspect package` when you need raw package or runtime-state facts.
 
 ## Expected Handoff
 

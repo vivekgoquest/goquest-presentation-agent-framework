@@ -6,9 +6,11 @@
 
 **Do not confuse with:** `docs/repo-change-impact-matrix.md`, which is task-routing guidance. This document is about sensitivity and blast radius.
 
-**Key files:** listed below by risk category.
+**Verification baseline:** always run at least `npm test`, plus the lane-specific checks listed below.
 
-**Verification:** always run at least `npm test`, plus the lane-specific checks listed under each category.
+When a verification step uses `node .presentation/framework-cli.mjs ...`, assume either:
+- the project can resolve the installed `pitch-framework` package, or
+- you set up the AGENTS.md maintainer smoke so the local shim can resolve this repo checkout.
 
 ---
 
@@ -17,10 +19,17 @@
 A file is high risk if one or more of these are true:
 
 - it affects every deck rather than one project
-- it defines a contract that other layers assume is stable
-- it is enforced by tests or policy
-- it influences multiple workflows at once
-- it can silently desynchronize package truth, runtime evidence, and outputs
+- it defines a contract other layers assume is stable
+- it is named as protected in `AGENTS.md`
+- it influences multiple command families at once
+- it can silently desynchronize authored source, generated structure, runtime evidence, and delivery output
+
+For any high-risk change, also keep the shell-less product contract in mind:
+
+- public entrypoints are `presentation ...`, `node framework/runtime/presentation-cli.mjs ...`, and `node .presentation/framework-cli.mjs ...`
+- deterministic project state lives under `.presentation/`
+- scaffolded vendor guidance lives under `.claude/`
+- canonical delivery is the project-root PDF plus runtime evidence in `.presentation/runtime/*.json`
 
 ## Highest-risk category 1: structural canvas contract
 
@@ -36,259 +45,232 @@ Changing them can affect:
 - preview layout
 - screenshot capture
 - PDF export
-- rendered canvas contract validation
+- rendered canvas validation
 - theme/content ownership boundaries
 
 ### Typical failure modes
-- changing slide ratio or width assumptions
+- changing slide ratio or stage width assumptions
 - breaking grid semantics
 - making theme overrides unexpectedly pass or fail
 - introducing layout changes that overflow existing decks
 
-### Required caution
-Only change these files with explicit framework-level intent.
-
 ### Minimum verification
 - `npm test`
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-- inspect resulting screenshots and PDF
+- a shell-less project smoke with `init`, `audit all`, and `finalize`
+- inspect the resulting preview/PDF behavior closely
 
-## Highest-risk category 2: deck policy semantics
+## Highest-risk category 2: policy semantics and authored-boundary enforcement
 
 ### Files
 - `framework/runtime/deck-policy.js`
+- `framework/runtime/presentation-core.mjs`
 - `framework/runtime/project-state.js`
 - `project-agent/project-dot-claude/rules/*.md`
 - `docs/base-canvas-contract.md`
 - `docs/presentation-package-spec.md`
 
 ### Why they are risky
-`deck-policy.js` is the enforcement layer for authoring rules. It controls which source patterns are legal and which states block preview, check, export, or finalize.
+`deck-policy.js` is the enforcement layer for authoring rules, and `presentation-core.mjs` protects the mutation boundary between authored content and runtime-owned files.
 
-Changing policy affects:
+Changing this lane affects:
 - every project
-- stop-hook behavior
-- user-visible validation failures
-- action availability via project state
+- audit results
+- preview/export/finalize eligibility
+- user-visible failure messages
+- scaffolded authoring guidance
 
 ### Typical failure modes
 - old valid decks suddenly fail
 - dangerous patterns accidentally become allowed
+- runtime commands start mutating authored source
 - docs drift away from runtime enforcement
-- readiness state misclassifies project status
+- workflow state is misclassified
 
 ### Minimum verification
 - `npm test`
-- scaffold a fresh project and run `check`
-- run `finalize` on a valid project
-- inspect failure messages for clarity
+- scaffold a fresh project
+- run `node .presentation/framework-cli.mjs audit all --format json`
+- run `node .presentation/framework-cli.mjs finalize --format json` on a valid project
+- inspect failure messages for clarity if you touched diagnostics
 
-## Highest-risk category 3: terminal lifecycle
-
-### Files
-- `framework/runtime/terminal-core.mjs`
-- `electron/worker/terminal-service.mjs`
-
-### Why they are risky
-These files own terminal lifecycle guarantees, shell startup, resize behavior, and project-root session behavior.
-
-Changes can break:
-- terminal startup
-- terminal shutdown
-- project switching
-- output streaming
-- renderer expectations
-
-### Typical failure modes
-- dead terminal sessions
-- bad cwd after project switch
-- resize glitches
-- vendor-specific logic leaking into terminal core
-
-### Minimum verification
-- `npm test`
-- manual terminal start
-- manual stop and restart
-- manual project switch in Electron
-
-## Highest-risk category 4: action workflow orchestration
+## Highest-risk category 3: project/package state contracts
 
 ### Files
-- `framework/application/action-service.mjs`
-- `framework/application/presentation-action-adapter.mjs`
-- `framework/application/project-hook-service.mjs`
-
-### Why they are risky
-These files define named product actions, availability rules, workflow metadata, lifecycle events, and hook behavior.
-
-Changes can affect:
-- button availability
-- UI action semantics
-- agent-launch semantics
-- stop-hook validation and checkpointing
-
-### Typical failure modes
-- actions enabled in the wrong state
-- export/validate/review actions routed incorrectly
-- lifecycle events no longer match renderer expectations
-- hook behavior drifts from intended application-owned workflow model
-
-### Minimum verification
-- `npm test`
-- manual invocation of changed actions
-- hook smoke on a scaffolded project if hook logic changed
-
-## Highest-risk category 5: deterministic runtime operations
-
-### Files
-- `framework/runtime/services/presentation-ops-service.mjs`
-- `framework/runtime/pdf-export.js`
-- `framework/runtime/runtime-app.js`
-- `framework/runtime/deck-assemble.js`
-
-### Why they are risky
-These files sit in the shared path used by preview, check, capture, export, and finalize.
-
-Changes can affect:
-- runtime preview correctness
-- Playwright capture correctness
-- output artifacts
-- runtime evidence writes
-- finalize pass/fail behavior
-
-### Typical failure modes
-- preview works but finalize fails
-- capture report drifts from actual rendered output
-- outputs are missing or written to wrong paths
-- last-good state becomes stale or incorrect
-
-### Minimum verification
-- `npm test`
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-- inspect `outputs/` and `.presentation/runtime/*.json`
-
-## Highest-risk category 6: package and runtime state contracts
-
-### Files
+- `framework/runtime/deck-paths.js`
 - `framework/runtime/presentation-package.js`
 - `framework/runtime/presentation-intent.js`
 - `framework/runtime/presentation-runtime-state.js`
-- `framework/runtime/deck-paths.js`
+- `framework/runtime/project-state.js`
+- `framework/runtime/status-service.js`
 - `docs/presentation-package-spec.md`
 
 ### Why they are risky
-These files define how project truth is shaped and persisted.
+These files define the project model the package creates and the state it persists.
 
-Changes can affect:
+Changing them can affect:
 - newly scaffolded projects
 - existing project compatibility
-- package regeneration behavior
-- runtime evidence readers and writers
+- the generated manifest shape
+- `render-state.json` and `artifacts.json`
+- status workflow classification
 - agent assumptions about editable vs read-only files
 
 ### Typical failure modes
-- package files missing required fields
+- missing required files under `.presentation/`
+- bad path resolution for the project-local shim or root PDF
 - runtime evidence schema drift
-- existing projects no longer open cleanly
-- intent validation incorrectly blocks work
+- stale or misleading status guidance
+- compatibility regressions for copied-framework projects
 
 ### Minimum verification
 - `npm test`
-- scaffold a new project
-- open an existing project
-- run `check` and `finalize`
-- inspect `.presentation/*.json`
+- scaffold a new project from the source entrypoint
+- inspect `.presentation/project.json`, `intent.json`, `package.generated.json`, `runtime/render-state.json`, and `runtime/artifacts.json`
+- run project-local `inspect package`, `status`, and `finalize`
 
-## Highest-risk category 7: project scaffolding
+## Highest-risk category 4: public CLI surface and project-local shim portability
+
+### Files
+- `framework/runtime/presentation-cli.mjs`
+- `framework/runtime/presentation-core.mjs`
+- `framework/runtime/project-cli-shim.mjs`
+- `package.json`
+
+### Why they are risky
+These files define the actual shipped entrypoints and command semantics.
+
+Changing them can affect:
+- installed-package usage via `presentation ...`
+- source-checkout usage via `node framework/runtime/presentation-cli.mjs ...`
+- scaffolded project usage via `node .presentation/framework-cli.mjs ...`
+- exit codes, JSON envelopes, and user-facing help text
+
+### Typical failure modes
+- command families parse incorrectly
+- the shim hard-codes framework source paths and stops being portable
+- CLI help or error messages teach stale workflows
+- source-entrypoint and project-local behavior drift apart
+
+### Minimum verification
+- `npm test`
+- `node framework/runtime/presentation-cli.mjs init --project "$TMP_PROJECT" --slides 1 --format json`
+- `node "$TMP_PROJECT/.presentation/framework-cli.mjs" inspect package --format json`
+- `node "$TMP_PROJECT/.presentation/framework-cli.mjs" status --format json`
+
+## Highest-risk category 5: preview, export, and finalize pipeline
+
+### Files
+- `framework/runtime/preview-server.mjs`
+- `framework/runtime/runtime-app.js`
+- `framework/runtime/deck-assemble.js`
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/runtime/pdf-export.js`
+- `framework/runtime/presentation-runtime-state.js`
+
+### Why they are risky
+These files sit in the shared delivery path used by preview, audit-render checks, export, and finalize.
+
+Changing them can affect:
+- preview correctness
+- screenshot capture correctness
+- canonical root-PDF generation
+- manual PDF/screenshot exports
+- runtime evidence writes in `.presentation/runtime/*.json`
+
+### Typical failure modes
+- preview works but finalize fails
+- export writes the wrong PDF path
+- `artifacts.json` stops reflecting finalized vs latest-export state correctly
+- render-state data no longer matches the actual capture result
+- delivery breaks because policy/assembly assumptions changed underneath it
+
+### Minimum verification
+- `npm test`
+- scaffold a project and fill a valid `brief.md`
+- run `node .presentation/framework-cli.mjs preview serve` if preview behavior changed
+- run `node .presentation/framework-cli.mjs export pdf --format json`
+- run `node .presentation/framework-cli.mjs finalize --format json`
+- inspect the project-root PDF plus `.presentation/runtime/render-state.json` and `.presentation/runtime/artifacts.json`
+
+## Highest-risk category 6: project scaffolding and Claude packet generation
 
 ### Files
 - `framework/runtime/services/scaffold-service.mjs`
-- `framework/application/project-scaffold-service.mjs`
-- `project-agent/scaffold-package.mjs`
+- `framework/shared/project-claude-scaffold-package.mjs`
 - `framework/templates/*`
+- `project-agent/project-agents-md.md`
+- `project-agent/project-claude-md.md`
 - `project-agent/project-dot-claude/*`
 
 ### Why they are risky
 Scaffolding defines the initial shape of every new project.
 
-Changes can affect:
-- source file presence and defaults
-- package file initialization
-- copied vs linked framework behavior
-- project-local Claude rules and skills
-- initial git history
+Changing it can affect:
+- authored file presence and defaults
+- `.presentation/` file initialization
+- `.claude/` guidance and hooks
+- project-local shim availability
+- git initialization behavior
+- copied-framework mode behavior
 
 ### Typical failure modes
 - invalid scaffolded projects
-- missing `.presentation` files
-- project-local agent package out of sync with framework assumptions
-- copied framework paths resolving incorrectly
-
-### Minimum verification
-- `npm run new -- --project /abs/path`
-- inspect scaffold contents
-- `npm run check -- --project /abs/path`
-- `npm run finalize -- --project /abs/path`
-
-## Highest-risk category 8: architectural boundaries
-
-### Files
-- `framework/application/__tests__/boundary-contract.test.mjs`
-- any implementation file involved in dependency-direction changes
-
-### Why they are risky
-These tests protect the repository’s main separation-of-concerns guarantees.
-
-Changes here are risky because they can turn one accidental shortcut into a long-term architecture leak.
-
-### Typical failure modes
-- Electron importing runtime services directly
-- runtime depending on application or project-agent modules
-- terminal core becoming vendor-aware
-- hook wrappers taking ownership they should not have
+- missing `.presentation` state files
+- stale or contradictory scaffolded markdown
+- `.claude/` rules drifting away from runtime behavior
+- projects that cannot resolve or run their local shim
 
 ### Minimum verification
 - `npm test`
-- read the affected sections of `AGENTS.md`
-- confirm the new dependency direction is explicitly intended
+- `node --test project-agent/__tests__/scaffold-package.test.mjs framework/runtime/services/__tests__/runtime-services.test.mjs`
+- scaffold a fresh project and inspect `.claude/` plus `.presentation/`
+- run project-local `audit all` and `status`
+
+## Highest-risk category 7: shared scaffold source and maintainer docs
+
+### Files
+- `README.md`
+- `START-HERE.md`
+- `docs/repo-*.md`
+- `docs/presentation-package-spec.md`
+- `docs/prd-human-agent.md`
+
+### Why they are risky
+These files teach maintainers and operators how the current product works.
+
+If they drift, the repository becomes harder to maintain even when the code is correct.
+
+### Typical failure modes
+- docs teach deleted command paths
+- docs mention deleted layers or stale entrypoints
+- docs describe runtime evidence that no longer exists
+- verification commands no longer match the real product
+
+### Minimum verification
+- `npm test`
+- `node --test framework/runtime/__tests__/shellless-public-surface.test.mjs`
+- manually spot-check the commands and file paths you document
 
 ## Medium-high risk but usually localizable
 
-### `electron/main.mjs`
+### `framework/client/*`
 Risk reason:
-- protocol routing, worker lifecycle, IPC bridge
+- browser-side preview/navigation behavior can change without changing the shell-less package shape, but the blast radius still reaches every deck.
 
-### `electron/worker/host.mjs`
+### `framework/templates/*`
 Risk reason:
-- service composition root for the worker process
+- content-only scaffold improvements are often local, but they still affect every newly initialized project.
 
-### `framework/application/project-query-service.mjs`
+### `project-agent/project-dot-claude/skills/*`
 Risk reason:
-- project activation, preview document generation, project state surface
-
-### `project-agent/agent-launcher.mjs`
-Risk reason:
-- launcher prompt composition and capability execution; should not hardcode product semantics incorrectly
-
-## Lower-risk lanes if you stay within them
-
-These are usually safer when changes are tightly scoped:
-
-- `electron/renderer/app.css`
-- `framework/templates/*` content-only improvements
-- project-agent skill prose updates that do not alter core product contracts
-- `framework/client/*` when behavior changes are small and verified carefully
-
-Lower risk does not mean no risk. It means smaller blast radius if boundaries are respected.
+- skills are prose, but they can still teach stale workflows or violate the current package contract.
 
 ## Agent operating rules for risky edits
 
 Before editing a high-risk file, do all of the following:
 
 1. read the corresponding contract doc first
-2. identify the exact workflows affected
+2. identify the exact command families and files affected
 3. verify whether the file is named as protected in `AGENTS.md`
 4. avoid opportunistic refactors in the same change
 5. run the lane-specific verification before claiming success
@@ -298,7 +280,13 @@ Before editing a high-risk file, do all of the following:
 If a requested change seems to require edits in any of these areas:
 - `framework/canvas/`
 - `framework/runtime/deck-policy.js`
-- `framework/runtime/terminal-core.mjs`
-- `electron/worker/terminal-service.mjs`
+- `framework/runtime/presentation-package.js`
+- `framework/runtime/presentation-runtime-state.js`
+- `framework/runtime/project-state.js`
+- `framework/runtime/project-cli-shim.mjs`
+- `framework/runtime/services/scaffold-service.mjs`
+- `framework/runtime/services/presentation-ops-service.mjs`
+- `framework/runtime/pdf-export.js`
+- `framework/shared/project-claude-scaffold-package.mjs`
 
 Treat it as explicit framework maintenance work, not a casual implementation detail.

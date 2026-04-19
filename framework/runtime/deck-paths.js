@@ -199,7 +199,7 @@ function createCompatibilityMetadata(projectRootAbs, metadata) {
 export function readProjectMetadata(projectRootInput) {
   const { metadataAbs } = getProjectSystemPaths(projectRootInput);
   if (!existsSync(metadataAbs)) {
-    throw new Error(`Project metadata not found at ${metadataAbs}. Create the project with npm run new -- --project /abs/path first.`);
+    throw new Error(`Project metadata not found at ${metadataAbs}. Create the project with presentation init --project /abs/path first.`);
   }
 
   let data;

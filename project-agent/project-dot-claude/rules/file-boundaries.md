@@ -26,7 +26,6 @@ Generated package and runtime truth are read-only:
 - `<project>/.presentation/package.generated.json`
 - `<project>/.presentation/runtime/render-state.json`
 - `<project>/.presentation/runtime/artifacts.json`
-- `<project>/.presentation/runtime/last-good.json`
 
 ## Project-Local CLI Boundary
 
