@@ -38,22 +38,22 @@ test('scaffold package writes AGENTS and CLAUDE files beneath .claude only', asy
   assert.match(readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8'), /\.presentation\/package\.generated\.json/);
 });
 
-test('scaffold package avoids removed project-shim command guidance in copied Claude docs', async (t) => {
-  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+test('scaffold package keeps the Claude packet shell-less and CLI-first', async (t) => {
+  const { getProjectAgentScaffoldPackage, writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
+  const scaffoldPackage = getProjectAgentScaffoldPackage({ frameworkRoot: process.cwd() });
   writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
 
-  const packetFiles = [
-    '.claude/AGENTS.md',
-    '.claude/rules/authoring-rules.md',
-    '.claude/skills/new-deck/SKILL.md',
-    '.claude/skills/fix-validation-issues/SKILL.md',
-  ];
+  const markdownPacketFiles = scaffoldPackage.entries
+    .map((entry) => entry.targetRel)
+    .filter((targetRel) => targetRel.startsWith('.claude/') && /\.md$/i.test(targetRel));
 
-  for (const packetFile of packetFiles) {
+  for (const packetFile of markdownPacketFiles) {
     const content = readFileSync(resolve(projectRoot, packetFile), 'utf8');
+    assert.doesNotMatch(content, /application-prepared workflow context/i);
+    assert.doesNotMatch(content, /\bnpm run (?:new|check|finalize|export|capture|setup)\b/i);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs check\b/);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs capture\b/);
     assert.doesNotMatch(content, /node \.presentation\/framework-cli\.mjs export \/tmp\//);
@@ -64,9 +64,21 @@ test('scaffold package avoids removed project-shim command guidance in copied Cl
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs audit all/);
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export screenshots --output-dir/);
   assert.match(agentsContent, /node \.presentation\/framework-cli\.mjs export pdf --output-dir outputs\/manual-export --output-file deck\.pdf/);
+  assert.doesNotMatch(agentsContent, /application-owned hook workflows|framework application layer/i);
 
   const authoringContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'authoring-rules.md'), 'utf8');
   assert.match(authoringContent, /node \.presentation\/framework-cli\.mjs export pdf --output-dir outputs\/manual-export --output-file deck\.pdf/);
+
+  const newDeckContent = readFileSync(resolve(projectRoot, '.claude', 'skills', 'new-deck', 'SKILL.md'), 'utf8');
+  assert.match(newDeckContent, /\bpresentation init --project\b/);
+  assert.doesNotMatch(newDeckContent, /node \.presentation\/framework-cli\.mjs init\b/);
+  assert.doesNotMatch(newDeckContent, /\bnpm run new\b/i);
+  assert.doesNotMatch(newDeckContent, /\bnpm run setup\b/i);
+
+  const settings = JSON.parse(readFileSync(resolve(projectRoot, '.claude', 'settings.json'), 'utf8'));
+  const statusMessage = settings.hooks.Stop[0].hooks[0].statusMessage;
+  assert.match(statusMessage, /audit|CLI|project-local/i);
+  assert.doesNotMatch(statusMessage, /checkpoint/i);
 });
 
 test('scaffolded Claude packet points agents to the in-packet AGENTS contract instead of a missing root file', async (t) => {

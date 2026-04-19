@@ -2,7 +2,7 @@
 
 This project is a presentation package built with the Presentation Framework.
 
-Start here before reading any vendor-specific agent files.
+Start here before reading any vendor-specific adapter files.
 
 ## Read Order
 
@@ -118,7 +118,7 @@ These are system-owned or runtime-owned.
 - Deterministic package truth comes from `.presentation/package.generated.json`
 - Each `slide.html` must contain exactly one valid slide root fragment
 
-## Project CLI Commands
+## Project-Local CLI Commands
 
 Use these commands from the project root:
 
@@ -147,10 +147,9 @@ This project may contain vendor-specific agent adapters such as:
 Those adapter directories are not the source of presentation truth.
 Read them only after reading this file and the `.presentation/` files above.
 
-Adapter hooks are local entrypoints only. The framework application layer owns
-the actual stop-turn and quality-hook workflows.
+Adapter hooks are thin local entrypoints that call the project-local CLI from
+this project root. They do not resolve framework source paths, import framework
+services, or perform git checkpointing.
 
-If a trigger includes application-prepared workflow context in the prompt,
-follow that context as the canonical meaning of the action. Skills and adapter
-docs are execution helpers beneath that workflow, not alternate action
-definitions.
+Treat adapter docs and skills as helper guidance beneath this project contract,
+not as alternate sources of package state or workflow ownership.

@@ -1,12 +1,10 @@
 ---
 name: review-visual-presentation
-description: Run the artifact-only visual review swarm and write one canonical visual review JSON file. Use when the application invokes review_visual_presentation.
+description: Run the artifact-only visual review swarm and write one canonical visual review JSON file. Use when a fresh visual review result is needed.
 user-invocable: false
 ---
 
-Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
-If the launcher prompt includes application-prepared workflow context, treat it
-as the canonical review workflow and use this skill only as execution guidance.
+Read `.claude/AGENTS.md` first, then `.claude/CLAUDE.md` for Claude-specific helper guidance.
 
 Then:
 - do not edit presentation source files

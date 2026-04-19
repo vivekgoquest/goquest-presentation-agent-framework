@@ -2,10 +2,10 @@
 
 In a scaffolded project, read AGENTS.md in this directory first.
 
-This `.claude/` directory contains Claude-specific workflow helpers:
+This `.claude/` directory contains Claude-specific, project-local helpers:
 
 - `settings.json` for hook wiring
-- `hooks/` for local wrapper entrypoints into application-owned hook workflows
+- `hooks/` for thin local adapters that call `node .presentation/framework-cli.mjs ...`
 - `skills/` for guided workflows such as new deck creation, deterministic validation repair, visual review, and narrative review
 
 Presentation truth lives in:
@@ -19,9 +19,10 @@ Presentation truth lives in:
 
 Do not treat `.claude/` as the source of presentation structure or state.
 
-Use `.claude/skills/*` only when a Claude-specific workflow has been invoked.
+Use `.claude/skills/*` only when the matching task is needed.
 
-If the launcher includes application-prepared workflow context in the prompt,
-follow that workflow context as the canonical action definition. Treat the skill
-file as execution guidance beneath that workflow, not as a competing source of
-truth.
+Keep this adapter shell-less and CLI-first:
+
+- prefer project-local commands such as `node .presentation/framework-cli.mjs audit all`
+- keep hooks thin and local to this project
+- do not add framework-service imports or git workflow logic here

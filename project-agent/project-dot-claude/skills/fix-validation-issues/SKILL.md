@@ -4,18 +4,16 @@ description: Fix deterministic validation failures in a presentation project. Us
 user-invocable: true
 ---
 
-Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
-If the launcher prompt includes application-prepared workflow context, treat it
-as the canonical fix-validation workflow and use this skill only as execution guidance.
+Read `.claude/AGENTS.md` first, then `.claude/CLAUDE.md` for Claude-specific helper guidance.
 
-Run node .presentation/framework-cli.mjs audit all
+Run `node .presentation/framework-cli.mjs audit all`
 
 Read the validation failures carefully. For each failure:
 1. Identify the specific source file or rendered contract issue involved.
-2. Edit the affected slide.html, slide.css, theme.css, or other deck source to resolve it.
-3. Stay within the deck contract: no inline styles, no !important, content < theme < canvas.
+2. Edit the affected `slide.html`, `slide.css`, `theme.css`, or other deck source to resolve it.
+3. Stay within the deck contract: no inline styles, no `!important`, `content < theme < canvas`.
 
-After fixing the current failures, run node .presentation/framework-cli.mjs audit all again.
+After fixing the current failures, run `node .presentation/framework-cli.mjs audit all` again.
 
 If new validation failures appear, fix those too. Repeat until the audit passes cleanly.
 

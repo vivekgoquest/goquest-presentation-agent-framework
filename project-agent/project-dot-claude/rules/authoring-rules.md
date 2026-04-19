@@ -33,15 +33,18 @@ and `.presentation/*` state have been read.
 
 ## Verification Workflow
 
-After meaningful deck changes, prefer:
+After meaningful deck changes:
 
-1. `node .presentation/framework-cli.mjs finalize`
+1. run `node .presentation/framework-cli.mjs audit all`
+2. before handoff, run `node .presentation/framework-cli.mjs finalize`
 
-Optional lower-level commands:
+Optional export commands:
 
-- `node .presentation/framework-cli.mjs audit all`
 - `node .presentation/framework-cli.mjs export screenshots --output-dir outputs/manual-capture`
 - `node .presentation/framework-cli.mjs export pdf --output-dir outputs/manual-export --output-file deck.pdf`
+
+The stop hook is a thin local adapter around the same CLI. Manual CLI runs are
+the source of truth while iterating.
 
 ## What `audit all` Covers
 
@@ -55,7 +58,7 @@ The project audit currently checks deterministic source-policy issues such as:
 
 ## Authoring Heuristics For Agents
 
-- generated structure is deterministic: the hook regenerates `.presentation/package.generated.json` from source on every clean stop
+- generated structure is deterministic: the local CLI regenerates `.presentation/package.generated.json` from source during audit and finalize flows
 - runtime evidence is read-only: `.presentation/runtime/*.json` is owned by the framework, not by deck edits
 - prefer deck-local theme variables over one-off visual hacks
 - for decks with more than 10 slides, lock the story in `outline.md` before slide-by-slide buildout

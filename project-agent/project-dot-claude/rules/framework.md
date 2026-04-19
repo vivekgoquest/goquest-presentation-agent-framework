@@ -20,8 +20,8 @@ The overall repo is organized around ownership:
 
 - `framework/canvas/` owns structural CSS
 - `framework/client/` owns browser behavior
-- `framework/runtime/` owns preview assembly, validation, capture, export, setup, and finalize
-- one project folder (created via `npm run new -- --project /abs/path`) owns deck source, package state, and outputs
+- `framework/runtime/` owns preview assembly, validation, capture, export, and finalize
+- one project folder (created via `presentation init --project /abs/path`) owns deck source, package state, and outputs
 
 ## Layer Contract
 
@@ -39,7 +39,7 @@ Interpretation:
 
 Use `.claude/AGENTS.md` plus `.presentation/*` for presentation package truth:
 
-- `.claude/AGENTS.md` defines universal startup order, edit lanes, and required commands
+- `.claude/AGENTS.md` defines universal startup order, edit lanes, and required project-local CLI commands
 - `.presentation/project.json` is stable system identity
 - `.presentation/intent.json` is editable authoring intent
 - `.presentation/package.generated.json` is deterministic structure generated from source
@@ -51,7 +51,7 @@ In slide-folder mode:
 
 - `slide.html` must contain exactly one slide root fragment
 - runtime generates the outer `<section id="<slide-id>" data-slide>` wrapper
-- the assembled HTML is served on demand for preview/check/export/finalize
+- the assembled HTML is served on demand for preview, audit, export, and finalize
 - decks with more than 10 slides must carry a completed `outline.md` before validation passes
 
 ## Structural Primitives
@@ -74,11 +74,11 @@ Runtime chrome is separate from the sacred canvas:
 
 The runtime assumes:
 
-- deck policy validation passes before preview, export, capture, or finalize
+- deck policy validation passes before preview, export, or finalize
 - slide discovery happens via generated `[data-slide]`
 - counters finalize through `[data-count]`
 - animations can be disabled for stable capture and export
-- `slides/` workspaces assemble deterministically into an in-memory HTML document that every runtime command serves or exports
+- `slides/` workspaces assemble deterministically into an in-memory HTML document that every project-local CLI command serves or exports
 
 ## Editing Guidance
 

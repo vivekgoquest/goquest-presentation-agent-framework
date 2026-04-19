@@ -1,12 +1,10 @@
 ---
 name: review-narrative-presentation
-description: Run the artifact-only narrative review swarm and write one canonical narrative review JSON file. Use when the application invokes review_narrative_presentation.
+description: Run the artifact-only narrative review swarm and write one canonical narrative review JSON file. Use when a fresh narrative review result is needed.
 user-invocable: false
 ---
 
-Read .claude/AGENTS.md first, then .claude/CLAUDE.md for Claude-specific workflow help.
-If the launcher prompt includes application-prepared workflow context, treat it
-as the canonical review workflow and use this skill only as execution guidance.
+Read `.claude/AGENTS.md` first, then `.claude/CLAUDE.md` for Claude-specific helper guidance.
 
 Then:
 - do not edit presentation source files

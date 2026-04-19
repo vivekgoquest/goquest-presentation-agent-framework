@@ -8,7 +8,7 @@
             "type": "command",
             "command": "node .claude/hooks/run-presentation-stop-workflow.mjs",
             "timeout": 15,
-            "statusMessage": "Validating presentation and checkpointing local git…"
+            "statusMessage": "Running project-local presentation audit via .presentation/framework-cli.mjs…"
           }
         ]
       }

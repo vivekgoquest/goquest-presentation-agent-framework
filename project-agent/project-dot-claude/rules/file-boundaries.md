@@ -28,6 +28,17 @@ Generated package and runtime truth are read-only:
 - `<project>/.presentation/runtime/artifacts.json`
 - `<project>/.presentation/runtime/last-good.json`
 
+## Project-Local CLI Boundary
+
+Within a project, verify work with the local shim:
+
+- `node .presentation/framework-cli.mjs audit all`
+- `node .presentation/framework-cli.mjs finalize`
+
+Keep `.claude/hooks/` thin and project-local. Those files should only adapt local
+triggers into project-local CLI commands. They are not the place to add
+framework-path resolution, framework-service imports, or git workflow logic.
+
 ## Shared Framework Files
 
 These affect every deck and should be treated as protected unless the task is explicitly framework-level:
