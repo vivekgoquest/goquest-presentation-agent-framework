@@ -696,7 +696,7 @@ test('presentation CLI delegates preview through the core facade', async (t) => 
   assert.deepEqual(calls, [['previewPresentation', projectRoot, { mode: 'serve' }]]);
 });
 
-test('presentation CLI treats finalize as a thin export alias in v1', async (t) => {
+test('presentation CLI routes finalize through the core finalize contract', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
@@ -705,21 +705,19 @@ test('presentation CLI treats finalize as a thin export alias in v1', async (t) 
   const calls = [];
   const result = await runPresentationCli(['finalize', '--project', projectRoot, '--format', 'json'], {
     core: {
-      async exportPresentation(input, options = {}) {
-        calls.push(['exportPresentation', input, options]);
+      async finalize(input) {
+        calls.push(['finalize', input]);
         return {
-          kind: 'presentation-export',
+          kind: 'presentation-finalize',
           projectRoot: input,
           status: 'pass',
-          outputDir: 'outputs/exports/manual',
-          artifacts: ['outputs/exports/manual/deck.pdf'],
-          evidenceUpdated: ['.presentation/runtime/artifacts.json'],
-          issues: [],
-          scope: {
-            kind: 'export',
-            format: 'pdf',
-            projectRoot: input,
+          outputs: {
+            outputDir: '',
+            pdf: `${basename(input)}.pdf`,
+            artifacts: [`${basename(input)}.pdf`],
           },
+          evidenceUpdated: ['.presentation/runtime/render-state.json', '.presentation/runtime/artifacts.json'],
+          issues: [],
         };
       },
     },
@@ -727,17 +725,9 @@ test('presentation CLI treats finalize as a thin export alias in v1', async (t) 
 
   assert.equal(result.exitCode, 0);
   assert.equal(result.payload.status, 'pass');
-  assert.equal(result.payload.summary, 'Requested export artifacts were produced.');
-  assert.deepEqual(calls, [[
-    'exportPresentation',
-    projectRoot,
-    {
-      target: 'pdf',
-      slideIds: [],
-      outputDir: '',
-      outputFile: '',
-    },
-  ]]);
+  assert.equal(result.payload.summary, 'Canonical finalize artifacts were produced.');
+  assert.deepEqual(result.payload.outputs.artifacts, [`${basename(projectRoot)}.pdf`]);
+  assert.deepEqual(calls, [['finalize', projectRoot]]);
 });
 
 test('presentation CLI returns violations for export and finalize soft-fail results', async (t) => {
@@ -746,8 +736,10 @@ test('presentation CLI returns violations for export and finalize soft-fail resu
 
   createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
 
-  for (const family of ['export', 'finalize']) {
-    const result = await runPresentationCli([family, '--project', projectRoot, '--format', 'json'], {
+  const scenarios = [
+    {
+      family: 'export',
+      expectedSummary: 'Requested export completed with issues.',
       core: {
         async exportPresentation(input, options = {}) {
           assert.equal(input, projectRoot);
@@ -773,12 +765,36 @@ test('presentation CLI returns violations for export and finalize soft-fail resu
           };
         },
       },
-    });
+    },
+    {
+      family: 'finalize',
+      expectedSummary: 'Finalize completed with issues.',
+      core: {
+        async finalize(input) {
+          assert.equal(input, projectRoot);
+          return {
+            kind: 'presentation-finalize',
+            projectRoot: input,
+            status: 'fail',
+            outputs: {
+              outputDir: '',
+              pdf: `${basename(input)}.pdf`,
+              artifacts: [`${basename(input)}.pdf`],
+            },
+            evidenceUpdated: ['.presentation/runtime/render-state.json', '.presentation/runtime/artifacts.json'],
+            issues: ['Browser console errors were detected: 1.'],
+          };
+        },
+      },
+    },
+  ];
+
+  for (const { family, expectedSummary, core } of scenarios) {
+    const result = await runPresentationCli([family, '--project', projectRoot, '--format', 'json'], { core });
 
     assert.equal(result.exitCode, 1);
     assert.equal(result.payload.status, 'fail');
-    assert.equal(result.payload.summary, 'Requested export completed with issues.');
-    assert.notEqual(result.payload.summary, 'Requested export artifacts were produced.');
+    assert.equal(result.payload.summary, expectedSummary);
     assert.deepEqual(result.payload.issues, ['Browser console errors were detected: 1.']);
   }
 });
@@ -788,6 +804,7 @@ test('presentation CLI rejects finalize positionals instead of silently exportin
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   let exportCalls = 0;
+  let finalizeCalls = 0;
   const result = await runPresentationCli(['finalize', 'status', '--project', projectRoot, '--format', 'json'], {
     core: {
       async exportPresentation() {
@@ -805,13 +822,27 @@ test('presentation CLI rejects finalize positionals instead of silently exportin
           },
         };
       },
+      async finalize() {
+        finalizeCalls += 1;
+        return {
+          status: 'pass',
+          outputs: {
+            outputDir: '',
+            pdf: `${basename(projectRoot)}.pdf`,
+            artifacts: [`${basename(projectRoot)}.pdf`],
+          },
+          evidenceUpdated: ['.presentation/runtime/render-state.json', '.presentation/runtime/artifacts.json'],
+          issues: [],
+        };
+      },
     },
   });
 
-  assert.equal(result.exitCode, 3);
-  assert.equal(result.payload.status, 'unsupported');
-  assert.match(result.payload.summary, /Finalize does not accept extra positionals/i);
+  assert.equal(result.exitCode, 4);
+  assert.equal(result.payload.status, 'invalid-args');
+  assert.match(result.payload.summary, /Finalize does not accept --output-dir, --output-file, or --slide/i);
   assert.equal(exportCalls, 0);
+  assert.equal(finalizeCalls, 0);
 });
 
 test('presentation CLI defaults export to pdf and the root deliverable when no target is provided', async (t) => {

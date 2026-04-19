@@ -111,6 +111,37 @@ test('presentation-cli audit returns exit code 1 on hard violations', async (t) 
   assert.equal(json.issues[0].code, 'theme.structural-token-override');
 });
 
+test('presentation-cli audit keeps evidence separate from nextFocus in the envelope', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const result = await runPresentationCli(['audit', 'theme', '--project', projectRoot, '--format', 'json'], {
+    core: {
+      async runAudit(input, options = {}) {
+        assert.equal(input, projectRoot);
+        assert.equal(options.family, 'theme');
+        return {
+          kind: 'presentation-audit',
+          family: 'theme',
+          projectRoot: input,
+          slideId: null,
+          status: 'fail',
+          issueCount: 1,
+          issues: [{ code: 'theme.structural-token-override', source: 'theme.css' }],
+          nextFocus: ['theme.css'],
+          evidence: ['theme.css'],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.payload.status, 'fail');
+  assert.deepEqual(result.payload.nextFocus, ['theme.css']);
+  assert.deepEqual(result.payload.evidence, ['theme.css']);
+  assert.notStrictEqual(result.payload.evidence, result.payload.nextFocus);
+});
+
 test('presentation-cli status returns workflow and facets', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
@@ -291,4 +322,58 @@ test('presentation-cli export maps invalid slide selections to a structured cli 
   assert.equal(json.status, 'invalid-request');
   assert.match(json.summary, /Unknown slide selections: missing-slide/);
   assert.equal(existsSync(outputDir), false);
+});
+
+test('presentation-cli finalize rejects export-only flags with invalid-args', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  let exportCalls = 0;
+  let finalizeCalls = 0;
+  const result = await runPresentationCli([
+    'finalize',
+    '--project',
+    projectRoot,
+    '--output-dir',
+    'outputs/manual',
+    '--format',
+    'json',
+  ], {
+    core: {
+      async exportPresentation() {
+        exportCalls += 1;
+        return {
+          status: 'pass',
+          outputDir: 'outputs/manual',
+          artifacts: ['outputs/manual/deck.pdf'],
+          evidenceUpdated: ['.presentation/runtime/artifacts.json'],
+          issues: [],
+          scope: {
+            kind: 'export',
+            format: 'pdf',
+            projectRoot,
+          },
+        };
+      },
+      async finalize() {
+        finalizeCalls += 1;
+        return {
+          status: 'pass',
+          outputs: {
+            outputDir: '',
+            pdf: `${projectRoot}.pdf`,
+            artifacts: [`${projectRoot}.pdf`],
+          },
+          evidenceUpdated: ['.presentation/runtime/artifacts.json'],
+          issues: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(result.exitCode, 4);
+  assert.equal(result.payload.status, 'invalid-args');
+  assert.match(result.payload.summary, /Finalize does not accept --output-dir, --output-file, or --slide/i);
+  assert.equal(exportCalls, 0);
+  assert.equal(finalizeCalls, 0);
 });

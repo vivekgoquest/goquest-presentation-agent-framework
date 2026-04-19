@@ -10,13 +10,14 @@ const EXIT_CODE_OK = 0;
 const EXIT_CODE_VIOLATIONS = 1;
 const EXIT_CODE_ERROR = 2;
 const EXIT_CODE_UNSUPPORTED = 3;
+const EXIT_CODE_INVALID_ARGS = 4;
 
 class CliError extends Error {
   constructor(message, options = {}) {
     super(message);
     this.name = 'CliError';
-    this.exitCode = options.exitCode ?? EXIT_CODE_UNSUPPORTED;
-    this.status = options.status ?? 'unsupported';
+    this.exitCode = options.exitCode ?? EXIT_CODE_INVALID_ARGS;
+    this.status = options.status ?? 'invalid-args';
     this.extra = options.extra ?? {};
   }
 }
@@ -41,6 +42,10 @@ function parseFlagValue(argv, index, flagName) {
     throw new CliError(`Missing value for ${flagName}.`);
   }
   return value;
+}
+
+function cloneList(values) {
+  return Array.isArray(values) ? [...values] : [];
 }
 
 export function parsePresentationCliArgs(argv = []) {
@@ -300,6 +305,8 @@ async function runAuditCommand(parsed, command, core) {
     strict: parsed.strict,
     render: parsed.render,
   });
+  const nextFocus = cloneList(result.nextFocus);
+  const evidence = result.evidence === undefined ? cloneList(nextFocus) : cloneList(result.evidence);
   const payload = {
     command,
     status: result.status,
@@ -311,8 +318,8 @@ async function runAuditCommand(parsed, command, core) {
     summary: summarizeAuditResult(result),
     issueCount: result.issueCount,
     issues: result.issues,
-    nextFocus: result.nextFocus,
-    evidence: result.nextFocus,
+    nextFocus,
+    evidence,
     freshness: {
       relativeToSource: 'current',
     },
@@ -367,25 +374,61 @@ async function runPreviewCommand(parsed, command, core) {
   return response;
 }
 
-function buildFinalizeExportRequest(parsed) {
-  if (parsed.positionals.length > 0) {
-    throw new CliError(
-      'Finalize does not accept extra positionals. Use plain "presentation finalize" or "presentation export pdf".',
-      {
-        extra: {
-          scope: {
-            kind: 'finalize-target',
-            target: parsed.positionals[0],
-          },
-        },
-      }
-    );
+function validateFinalizeRequest(parsed) {
+  const invalidFlags = [];
+  if (parsed.outputDir) {
+    invalidFlags.push('--output-dir');
+  }
+  if (parsed.outputFile) {
+    invalidFlags.push('--output-file');
+  }
+  if (parsed.slideIds.length > 0) {
+    invalidFlags.push('--slide');
   }
 
-  return {
-    ...parsed,
-    positionals: ['pdf'],
+  if (parsed.positionals.length === 0 && invalidFlags.length === 0) {
+    return;
+  }
+
+  throw new CliError(
+    'Finalize does not accept --output-dir, --output-file, or --slide. Use plain "presentation finalize" with no extra positionals.',
+    {
+      extra: {
+        scope: {
+          kind: 'finalize-args',
+          projectRoot: parsed.projectRoot,
+          invalidFlags,
+          positionals: parsed.positionals,
+        },
+      },
+    }
+  );
+}
+
+async function runFinalizeCommand(parsed, command, core) {
+  validateFinalizeRequest(parsed);
+
+  const result = await core.finalize(parsed.projectRoot);
+  const failed = result.status === 'fail';
+  const payload = {
+    command,
+    status: result.status || 'pass',
+    summary: failed
+      ? 'Finalize completed with issues.'
+      : 'Canonical finalize artifacts were produced.',
+    outputs: result.outputs || {
+      outputDir: '',
+      artifacts: [],
+    },
+    evidenceUpdated: result.evidenceUpdated || [],
+    issues: result.issues || [],
+    scope: {
+      kind: 'finalize',
+      projectRoot: parsed.projectRoot,
+    },
   };
+
+  return finalizeResult(payload, parsed.format, failed ? EXIT_CODE_VIOLATIONS : EXIT_CODE_OK);
 }
 
 async function runExportCommand(parsed, command, core) {
@@ -433,7 +476,7 @@ async function dispatchPresentationCli(argv = process.argv.slice(2), options = {
       case 'preview':
         return await runPreviewCommand(parsed, command, core);
       case 'finalize':
-        return await runExportCommand(buildFinalizeExportRequest(parsed), command, core);
+        return await runFinalizeCommand(parsed, command, core);
       case 'export':
         return await runExportCommand(parsed, command, core);
       case 'explain':

@@ -17,6 +17,10 @@ test('shell-less public surface removes the application layer, Electron shell, a
   assert.equal(existsSync(repoPath('framework', 'runtime', 'terminal-core.mjs')), false);
   assert.equal(existsSync(repoPath('framework', 'runtime', 'terminal-events.mjs')), false);
   assert.equal(existsSync(repoPath('framework', 'runtime', 'pty-bridge.py')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'check-deck.mjs')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'deck-capture.mjs')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'export-pdf.mjs')), false);
+  assert.equal(existsSync(repoPath('framework', 'runtime', 'finalize-deck.mjs')), false);
 });
 
 test('shell-less public surface drops shell-era scripts and package dependencies', () => {
@@ -24,6 +28,12 @@ test('shell-less public surface drops shell-era scripts and package dependencies
   const dependencies = packageJson.dependencies || {};
   const devDependencies = packageJson.devDependencies || {};
 
+  assert.deepEqual(Object.keys(packageJson.scripts || {}).sort(), ['setup', 'test']);
+  assert.equal(packageJson.scripts?.new, undefined);
+  assert.equal(packageJson.scripts?.check, undefined);
+  assert.equal(packageJson.scripts?.capture, undefined);
+  assert.equal(packageJson.scripts?.export, undefined);
+  assert.equal(packageJson.scripts?.finalize, undefined);
   assert.equal(packageJson.scripts?.start, undefined);
   assert.equal(packageJson.scripts?.operator, undefined);
   assert.equal(devDependencies.electron, undefined);

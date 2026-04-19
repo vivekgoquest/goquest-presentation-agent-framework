@@ -406,6 +406,9 @@ export function createPresentationCore(deps = {}) {
           render: Boolean(options.render),
         });
 
+        const nextFocus = Array.isArray(result.nextFocus) ? [...result.nextFocus] : [];
+        const evidence = Array.isArray(result.evidence) ? [...result.evidence] : [...nextFocus];
+
         return {
           kind: 'presentation-audit',
           family: result.family,
@@ -414,7 +417,8 @@ export function createPresentationCore(deps = {}) {
           status: result.status,
           issueCount: result.issueCount,
           issues: result.issues,
-          nextFocus: result.nextFocus,
+          nextFocus,
+          evidence,
           families: result.families,
         };
       });

@@ -12,11 +12,6 @@
   },
   "scripts": {
     "setup": "node framework/runtime/setup.mjs",
-    "new": "node framework/runtime/presentation-cli.mjs init",
-    "finalize": "node framework/runtime/finalize-deck.mjs",
-    "export": "node framework/runtime/export-pdf.mjs",
-    "capture": "node framework/runtime/deck-capture.mjs",
-    "check": "node framework/runtime/check-deck.mjs",
     "test": "node --test framework/canvas/__tests__/canvas-contract.test.mjs framework/runtime/__tests__/deck-policy.test.mjs framework/runtime/services/__tests__/runtime-services.test.mjs framework/runtime/__tests__/deck-paths-project-only.test.mjs framework/runtime/__tests__/preview-state-page.test.mjs framework/runtime/__tests__/preview-server.test.mjs framework/runtime/__tests__/presentation-cli.test.mjs framework/runtime/__tests__/presentation-core.test.mjs framework/runtime/__tests__/presentation-core-boundary.test.mjs framework/runtime/__tests__/presentation-package.test.mjs framework/runtime/__tests__/presentation-runtime-state.test.mjs framework/runtime/__tests__/project-state.test.mjs framework/runtime/__tests__/status-service.test.mjs framework/runtime/__tests__/structural-compiler.test.mjs framework/runtime/__tests__/project-hook-cli.test.mjs framework/runtime/__tests__/shellless-public-surface.test.mjs framework/runtime/__tests__/shellless-package-integration.test.mjs project-agent/__tests__/scaffold-package.test.mjs"
   },
   "dependencies": {
