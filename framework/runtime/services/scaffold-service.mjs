@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import {
@@ -24,6 +25,7 @@ import {
 } from '../presentation-package.js';
 import { writeInitialPresentationIntent } from '../presentation-intent.js';
 import { ensurePresentationRuntimeStateFiles } from '../presentation-runtime-state.js';
+import { writeProjectAgentScaffoldPackage } from '../../../project-agent/scaffold-package.mjs';
 
 function assertSupportedV1SlideCount(slideCount) {
   if (!Number.isSafeInteger(slideCount) || slideCount < 1 || slideCount > LONG_DECK_OUTLINE_THRESHOLD) {
@@ -238,10 +240,34 @@ function createPendingProjectPaths(projectRootInput) {
   };
 }
 
+function initializeProjectGitDirectory(projectRoot) {
+  const gitDirRel = '.git';
+  const gitDirAbs = resolve(projectRoot, gitDirRel);
+
+  try {
+    execFileSync('git', ['init'], {
+      cwd: projectRoot,
+      stdio: 'ignore',
+    });
+
+    return {
+      status: existsSync(gitDirAbs) ? 'initialized' : 'missing',
+      path: gitDirRel,
+    };
+  } catch (error) {
+    return {
+      status: existsSync(gitDirAbs) ? 'initialized' : 'unavailable',
+      path: gitDirRel,
+      error: error?.message || 'git init failed',
+    };
+  }
+}
+
 function scaffoldIntoPaths(paths, options = {}) {
   const {
     slideCount,
     copyFramework = false,
+    frameworkRoot,
   } = options;
   const templatesDir = resolve(FRAMEWORK_ROOT, 'framework', 'templates');
   const deckTitle = slugToTitle(paths.slug);
@@ -348,6 +374,14 @@ function scaffoldIntoPaths(paths, options = {}) {
   writeFileSync(resolve(paths.sourceDirAbs, '.gitignore'), gitignoreContent);
   createdFiles.push('.gitignore');
 
+  const agentPackage = writeProjectAgentScaffoldPackage(
+    paths.sourceDirAbs,
+    frameworkRoot ? { frameworkRoot } : {}
+  );
+  createdFiles.push(...agentPackage.createdPaths);
+
+  const git = initializeProjectGitDirectory(paths.sourceDirAbs);
+
   return {
     status: 'created',
     targetKind: 'project',
@@ -356,8 +390,9 @@ function scaffoldIntoPaths(paths, options = {}) {
     slideCount,
     outlineRequired,
     frameworkMode: copyFramework ? 'copied' : 'linked',
-    files: createdFiles,
+    files: [...new Set(createdFiles)],
     nextSteps,
+    git,
   };
 }
 
@@ -369,5 +404,9 @@ export function createPresentationScaffold(targetInput, options = {}) {
   const validatedSlideCount = assertSupportedV1SlideCount(slideCount);
   const projectPaths = createPendingProjectPaths(targetInput.projectRootAbs || targetInput.projectRoot || targetInput);
   ensureEmptyDirectory(projectPaths.sourceDirAbs, 'Project folder');
-  return scaffoldIntoPaths(projectPaths, { slideCount: validatedSlideCount, copyFramework });
+  return scaffoldIntoPaths(projectPaths, {
+    slideCount: validatedSlideCount,
+    copyFramework,
+    frameworkRoot: options.frameworkRoot,
+  });
 }

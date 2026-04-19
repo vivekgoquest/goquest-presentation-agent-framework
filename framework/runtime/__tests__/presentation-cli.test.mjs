@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { parsePresentationCliArgs } from '../presentation-cli.mjs';
+import { parsePresentationCliArgs, runPresentationCli } from '../presentation-cli.mjs';
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 
 const CLI_PATH = resolve(process.cwd(), 'framework/runtime/presentation-cli.mjs');
@@ -118,6 +118,31 @@ test('presentation-cli inspect package returns a structured package envelope', a
   assert.deepEqual(json.scope, { kind: 'package', projectRoot });
   assert.equal(json.data.manifest.counts.slidesTotal, 2);
   assert.ok(json.freshness);
+});
+
+test('package.json exposes the runtime CLI as the public presentation bin', () => {
+  const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
+  assert.equal(packageJson.bin.presentation, './framework/runtime/presentation-cli.mjs');
+});
+
+test('presentation-cli init creates the full shell-less project scaffold', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const result = await runPresentationCli(['init', '--project', projectRoot, '--format', 'json']);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.payload.status, 'created');
+  assert.equal(result.payload.projectRoot, projectRoot);
+  assert.ok(result.payload.files.includes('.presentation/project.json'));
+  assert.ok(result.payload.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.payload.files.includes('.claude/AGENTS.md'));
+  assert.ok(result.payload.files.includes('.claude/CLAUDE.md'));
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.git')), true);
 });
 
 test('presentation-cli parser accepts init and preview command families', () => {

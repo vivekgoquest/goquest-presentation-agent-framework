@@ -140,6 +140,26 @@ function seedLegacyFinalizedAliases(projectRoot) {
   );
 }
 
+test('runtime scaffold service creates the full shell-less project scaffold', async (t) => {
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const result = createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+
+  assert.equal(result.status, 'created');
+  assert.ok(result.files.includes('.presentation/project.json'));
+  assert.ok(result.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.files.includes('.claude/AGENTS.md'));
+  assert.ok(result.files.includes('.claude/CLAUDE.md'));
+  assert.deepEqual(result.git.path, '.git');
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.git')), true);
+});
+
 test('application scaffold creates the shell-less v1 layout for a 3-slide project', async (t) => {
   const [
     { createProjectScaffold },

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
@@ -58,6 +58,24 @@ test('presentation core exposes semantic query and operation entrypoints', () =>
   assert.equal(typeof core.exportPresentation, 'function');
 });
 
+
+test('presentation core initProject creates the full shell-less project scaffold', async (t) => {
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const core = createPresentationCore();
+  const result = await core.initProject(projectRoot, { slideCount: 2 });
+
+  assert.equal(result.status, 'created');
+  assert.equal(result.slideCount, 2);
+  assert.ok(result.files.includes('.presentation/framework-cli.mjs'));
+  assert.ok(result.files.includes('.claude/AGENTS.md'));
+  assert.ok(result.files.includes('.claude/CLAUDE.md'));
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.git')), true);
+});
 
 test('presentation core delegates initProject and previewPresentation through injected services', async () => {
   const calls = [];

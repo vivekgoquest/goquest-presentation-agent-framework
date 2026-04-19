@@ -336,6 +336,7 @@ async function runInitCommand(parsed, command, core) {
     slideCount: result.slideCount,
     files: result.files || [],
     nextSteps: result.nextSteps || [],
+    git: result.git || null,
   }, parsed.format, EXIT_CODE_OK);
 }
 
