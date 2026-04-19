@@ -9,15 +9,15 @@ function createTempProjectRoot() {
 }
 
 test('getProjectPaths exposes shell-less v1 package, adapter, and root pdf helpers', async (t) => {
-  const [{ createProjectScaffold }, { getProjectPaths }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { getProjectPaths }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../deck-paths.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const paths = getProjectPaths(projectRoot);
 
   assert.equal(paths.intentRel, '.presentation/intent.json');
@@ -40,8 +40,8 @@ function flattenTree(node) {
 }
 
 test('project tree classifies shell-less v1 source, system, adapter, and deliverable files', async (t) => {
-  const [{ createProjectScaffold }, { getProjectPaths }, { buildProjectTreeNode }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { getProjectPaths }, { buildProjectTreeNode }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../deck-paths.js'),
     import('../project-tree.js'),
   ]);
@@ -49,7 +49,7 @@ test('project tree classifies shell-less v1 source, system, adapter, and deliver
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const paths = getProjectPaths(projectRoot);
   writeFileSync(paths.rootPdfAbs, 'fake pdf');
 
@@ -67,15 +67,15 @@ test('project tree classifies shell-less v1 source, system, adapter, and deliver
 });
 
 test('generatePresentationPackageManifest derives presentation structure from source files', async (t) => {
-  const [{ createProjectScaffold }, { generatePresentationPackageManifest }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { generatePresentationPackageManifest }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-package.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   writeFileSync(resolve(projectRoot, 'brief.md'), '# Brief\n\nFilled in');
 
   const manifest = generatePresentationPackageManifest(projectRoot);
@@ -86,12 +86,12 @@ test('generatePresentationPackageManifest derives presentation structure from so
 });
 
 test('scaffold writes initial intent and generated package files', async (t) => {
-  const { createProjectScaffold } = await import('../../application/project-scaffold-service.mjs');
+  const { createPresentationScaffold } = await import('../services/scaffold-service.mjs');
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
 
   const intentPath = resolve(projectRoot, '.presentation', 'intent.json');
   const manifestPath = resolve(projectRoot, '.presentation', 'package.generated.json');
@@ -105,15 +105,15 @@ test('scaffold writes initial intent and generated package files', async (t) => 
 });
 
 test('renderPresentationHtml regenerates missing package files for legacy projects', async (t) => {
-  const [{ createProjectScaffold }, { renderPresentationHtml }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { renderPresentationHtml }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../deck-assemble.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   writeFileSync(resolve(projectRoot, 'brief.md'), '# Brief\n\nFilled in');
   rmSync(resolve(projectRoot, '.presentation', 'intent.json'), { force: true });
   rmSync(resolve(projectRoot, '.presentation', 'package.generated.json'), { force: true });
@@ -125,8 +125,8 @@ test('renderPresentationHtml regenerates missing package files for legacy projec
 });
 
 test('presentation-package legacy helpers delegate structural manifest compute and record behavior', async (t) => {
-  const [{ createProjectScaffold }, packageHelpers, structuralCompiler] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, packageHelpers, structuralCompiler] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-package.js'),
     import('../structural-compiler.js'),
   ]);
@@ -134,7 +134,7 @@ test('presentation-package legacy helpers delegate structural manifest compute a
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
 
   const generated = packageHelpers.generatePresentationPackageManifest(projectRoot);
   const computed = structuralCompiler.computeStructuralManifest(projectRoot);
@@ -146,15 +146,15 @@ test('presentation-package legacy helpers delegate structural manifest compute a
 });
 
 test('ensurePresentationPackageFiles does not rewrite an unchanged package manifest', async (t) => {
-  const [{ createProjectScaffold }, { ensurePresentationPackageFiles }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { ensurePresentationPackageFiles }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-package.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
 
   const manifestPath = resolve(projectRoot, '.presentation', 'package.generated.json');
   const before = statSync(manifestPath).mtimeMs;

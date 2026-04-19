@@ -26,15 +26,15 @@ test('parsePresentationTargetCliArgs accepts project targets only', async () => 
 });
 
 test('shell-less v1 project metadata and paths prefer root pdf delivery', async (t) => {
-  const [{ createProjectScaffold }, { getProjectPaths, getSuggestedPdfName, readProjectMetadata }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { getProjectPaths, getSuggestedPdfName, readProjectMetadata }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../deck-paths.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
 
   const paths = getProjectPaths(projectRoot);
   const metadata = readProjectMetadata(projectRoot);
@@ -66,8 +66,8 @@ test('shell-less v1 project metadata and paths prefer root pdf delivery', async 
 });
 
 test('compatibility metadata restores legacy defaults and preserves copied mode inference', async (t) => {
-  const [{ createProjectScaffold }, { FRAMEWORK_ROOT, getProjectPaths, readProjectCompatibilityMetadata, readProjectMetadata }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { FRAMEWORK_ROOT, getProjectPaths, readProjectCompatibilityMetadata, readProjectMetadata }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../deck-paths.js'),
   ]);
 
@@ -76,8 +76,8 @@ test('compatibility metadata restores legacy defaults and preserves copied mode 
   t.after(() => rmSync(linkedProjectRoot, { recursive: true, force: true }));
   t.after(() => rmSync(copiedProjectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot: linkedProjectRoot }, { slideCount: 2, copyFramework: false });
-  createProjectScaffold({ projectRoot: copiedProjectRoot }, { slideCount: 2, copyFramework: true });
+  createPresentationScaffold({ projectRoot: linkedProjectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot: copiedProjectRoot }, { slideCount: 2, copyFramework: true });
 
   const linkedRaw = readProjectMetadata(linkedProjectRoot);
   const linkedCompat = readProjectCompatibilityMetadata(linkedProjectRoot);

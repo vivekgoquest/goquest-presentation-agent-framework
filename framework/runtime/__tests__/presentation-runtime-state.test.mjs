@@ -13,15 +13,15 @@ function readJson(path) {
 }
 
 test('ensurePresentationRuntimeStateFiles creates render-state and artifacts only', async (t) => {
-  const [{ createProjectScaffold }, { ensurePresentationRuntimeStateFiles }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { ensurePresentationRuntimeStateFiles }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   rmSync(resolve(projectRoot, '.presentation', 'runtime'), { recursive: true, force: true });
 
   const state = ensurePresentationRuntimeStateFiles(projectRoot);
@@ -35,15 +35,15 @@ test('ensurePresentationRuntimeStateFiles creates render-state and artifacts onl
 });
 
 test('writeRenderState persists runtime validation truth and evidence metadata', async (t) => {
-  const [{ createProjectScaffold }, { writeRenderState }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { writeRenderState }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const renderStatePath = resolve(projectRoot, '.presentation', 'runtime', 'render-state.json');
 
   writeRenderState(projectRoot, {
@@ -64,15 +64,15 @@ test('writeRenderState persists runtime validation truth and evidence metadata',
 });
 
 test('writeArtifacts persists simplified root-pdf artifact evidence', async (t) => {
-  const [{ createProjectScaffold }, { writeArtifacts }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { writeArtifacts }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const artifactsPath = resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json');
 
   const rootPdfRel = `${basename(projectRoot)}.pdf`;

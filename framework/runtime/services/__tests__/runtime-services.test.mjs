@@ -190,18 +190,18 @@ test('runtime scaffold service creates the full shell-less project scaffold', as
   assert.equal(existsSync(resolve(projectRoot, '.git')), true);
 });
 
-test('application scaffold creates the shell-less v1 layout for a 3-slide project', async (t) => {
+test('runtime scaffold creates the shell-less v1 layout for a 3-slide project', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { getProjectAgentScaffoldPackage },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../../../../project-agent/scaffold-package.mjs'),
   ]);
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  const result = await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  const result = await createPresentationScaffold({ projectRoot }, { slideCount: 3 });
 
   assert.equal(result.status, 'created');
   assert.deepEqual(result.files.filter((file) => file.endsWith('slide.html')).sort(), [
@@ -225,12 +225,12 @@ test('application scaffold creates the shell-less v1 layout for a 3-slide projec
 });
 
 test('project shim fails with repair guidance when the package is not resolvable from a real temp project outside the repo', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'external-project');
   t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 3 });
 
   const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
   const source = readFileSync(shimPath, 'utf8');
@@ -254,12 +254,12 @@ test('project shim fails with repair guidance when the package is not resolvable
 });
 
 test('project shim fails with repair guidance when installed pitch-framework is incompatible with the presentation-cli entrypoint', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'external-project');
   t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 3 });
   installIncompatibleFrameworkPackage(workspaceRoot);
 
   const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
@@ -277,12 +277,12 @@ test('project shim fails with repair guidance when installed pitch-framework is 
 });
 
 test('project shim executes when pitch-framework is resolvable through standard package resolution', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'external-project');
   t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 3 });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 3 });
   installResolvableFrameworkPackage(workspaceRoot);
 
   const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
@@ -298,12 +298,12 @@ test('project shim executes when pitch-framework is resolvable through standard 
 });
 
 test('project shim keeps preview serve alive until terminated when pitch-framework is resolvable', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'external-project');
   t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2 });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2 });
   installResolvableFrameworkPackage(workspaceRoot);
 
   const shimPath = resolve(projectRoot, '.presentation', 'framework-cli.mjs');
@@ -321,14 +321,14 @@ test('project shim keeps preview serve alive until terminated when pitch-framewo
   assert.match(result.stdout, /previewUrl:/);
 });
 
-test('application scaffold rejects unsupported long-deck v1 projects before writing files', async (t) => {
-  const { createProjectScaffold } = await import('../../../application/project-scaffold-service.mjs');
+test('runtime scaffold rejects unsupported long-deck v1 projects before writing files', async (t) => {
+  const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const workspaceRoot = createTempProjectRoot();
   const projectRoot = resolve(workspaceRoot, 'unsupported-long-deck');
   t.after(() => rmSync(workspaceRoot, { recursive: true, force: true }));
 
   assert.throws(
-    () => createProjectScaffold({ projectRoot }, { slideCount: 11 }),
+    () => createPresentationScaffold({ projectRoot }, { slideCount: 11 }),
     /supports 1 to 10 slides|supports 1-10 slides|long-deck/i
   );
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), false);
@@ -337,13 +337,13 @@ test('application scaffold rejects unsupported long-deck v1 projects before writ
 
 test('runtime services operate on a real scaffolded project', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { capturePresentation },
     { validatePresentation },
     { exportDeckPdf },
     { finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('../presentation-ops-service.mjs'),
@@ -353,7 +353,7 @@ test('runtime services operate on a real scaffolded project', async (t) => {
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   const captureDir = resolve(projectRoot, '.artifacts', 'capture');
@@ -412,17 +412,17 @@ test('runtime services operate on a real scaffolded project', async (t) => {
 
 test('assembled deck keeps export in Electron and out of the deck html', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { renderPresentationHtml },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../../deck-assemble.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   const rendered = renderPresentationHtml({ projectRoot });
@@ -434,11 +434,11 @@ test('assembled deck keeps export in Electron and out of the deck html', async (
 
 test('runtime export service can export selected slides to one pdf or individual pngs', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation },
     { PDFDocument },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('pdf-lib'),
   ]);
@@ -448,7 +448,7 @@ test('runtime export service can export selected slides to one pdf or individual
   const pngOutputDir = resolve(projectRoot, '.artifacts', 'selected-png');
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   const pdfResult = await exportPresentation(
@@ -480,17 +480,17 @@ test('runtime export service can export selected slides to one pdf or individual
 
 test('runtime export service rejects slide-filtered canonical pdf requests instead of finalizing partial output', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation, finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   await assert.rejects(
@@ -510,10 +510,10 @@ test('runtime export service rejects slide-filtered canonical pdf requests inste
 
 test('explicit canonical pdf destinations keep finalize capture semantics instead of taking the manual export path', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
@@ -524,7 +524,7 @@ test('explicit canonical pdf destinations keep finalize capture semantics instea
     const projectRoot = createTempProjectRoot();
     t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-    await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+    await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
     fillBrief(projectRoot);
 
     const projectMetadata = readJson(resolve(projectRoot, '.presentation', 'project.json'));
@@ -562,17 +562,17 @@ test('explicit canonical pdf destinations keep finalize capture semantics instea
 
 test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportDeckPdf },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
   seedLegacyFinalizedAliases(projectRoot);
 
@@ -589,17 +589,17 @@ test('root pdf exports clear stale legacy aliases after the root-pdf rewrite', a
 
 test('soft-failed canonical pdf export does not resurrect deleted legacy finalized aliases', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
   seedLegacyFinalizedAliases(projectRoot);
 
@@ -637,17 +637,17 @@ test('soft-failed canonical pdf export does not resurrect deleted legacy finaliz
 
 test('soft-failed full-deck canonical refresh clears prior finalized evidence while keeping the new root pdf as latest export', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation, finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   const initialFinalize = await finalizePresentation({ projectRoot });
@@ -683,11 +683,11 @@ test('soft-failed full-deck canonical refresh clears prior finalized evidence wh
 
 test('non-canonical pdf exports preserve the prior finalized fingerprint while recording the new latest export', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { exportPresentation, finalizePresentation },
     { computeSourceFingerprint },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('../../source-fingerprint.js'),
   ]);
@@ -696,7 +696,7 @@ test('non-canonical pdf exports preserve the prior finalized fingerprint while r
   const slideHtmlPath = resolve(projectRoot, 'slides', '010-intro', 'slide.html');
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   const initialFinalize = await finalizePresentation({ projectRoot });
@@ -734,17 +734,17 @@ test('non-canonical pdf exports preserve the prior finalized fingerprint while r
 
 test('failed finalize before pdf refresh preserves the prior finalized fingerprint instead of restamping stale finalize evidence', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: true });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: true });
   fillBrief(projectRoot);
 
   const initialFinalize = await finalizePresentation({ projectRoot });
@@ -773,11 +773,11 @@ test('failed finalize before pdf refresh preserves the prior finalized fingerpri
 
 test('validatePresentation ignores deck-quality heuristics and keeps canonical artifacts unchanged', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { validatePresentation },
     { finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
@@ -785,7 +785,7 @@ test('validatePresentation ignores deck-quality heuristics and keeps canonical a
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 5, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 5, copyFramework: false });
   fillBrief(projectRoot);
 
   for (const slideDir of ['010-intro', '020-slide-02', '030-slide-03', '040-slide-04', '050-close']) {
@@ -811,11 +811,11 @@ test('validatePresentation ignores deck-quality heuristics and keeps canonical a
 
 test('runtime commands regenerate missing package files for legacy projects', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { validatePresentation },
     { finalizePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
@@ -823,7 +823,7 @@ test('runtime commands regenerate missing package files for legacy projects', as
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   fillBrief(projectRoot);
 
   rmSync(resolve(projectRoot, '.presentation', 'intent.json'), { force: true });
@@ -844,17 +844,17 @@ test('runtime commands regenerate missing package files for legacy projects', as
 
 test('rendered contract checks fail when a copied framework canvas breaks the stage contract', async (t) => {
   const [
-    { createProjectScaffold },
+    { createPresentationScaffold },
     { validatePresentation },
   ] = await Promise.all([
-    import('../../../application/project-scaffold-service.mjs'),
+    import('../scaffold-service.mjs'),
     import('../presentation-ops-service.mjs'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  await createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: true });
+  await createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: true });
   fillBrief(projectRoot);
 
   const copiedCanvasCss = resolve(projectRoot, '.presentation', 'framework', 'base', 'canvas', 'canvas.css');

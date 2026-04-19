@@ -101,11 +101,13 @@ test('core finalize and export flows keep authored source immutable while real s
 
   const before = snapshotAuthoredSource(projectRoot);
   const core = createPresentationCore();
+  const exportOutputDir = resolve(projectRoot, 'outputs', 'exports', 'boundary');
 
   const finalizeResult = await core.finalize(projectRoot);
   const exportResult = await core.exportPresentation(projectRoot, {
     target: 'pdf',
     slideIds: ['intro'],
+    outputDir: exportOutputDir,
   });
 
   const after = snapshotAuthoredSource(projectRoot);
@@ -115,7 +117,7 @@ test('core finalize and export flows keep authored source immutable while real s
   assert.equal(existsSync(resolve(projectRoot, '.presentation/runtime/render-state.json')), true);
   assert.equal(existsSync(resolve(projectRoot, '.presentation/runtime/artifacts.json')), true);
   assert.equal(existsSync(resolve(projectRoot, finalizeResult.outputs.pdf)), true);
-  assert.match(exportResult.outputDir, /^outputs\/exports\/.+\/pdf$/);
+  assert.equal(exportResult.outputDir, 'outputs/exports/boundary');
   assert.equal(exportResult.artifacts.length, 1);
   assert.equal(existsSync(resolve(projectRoot, exportResult.artifacts[0])), true);
 });

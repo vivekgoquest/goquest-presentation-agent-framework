@@ -9,15 +9,15 @@ function createTempProjectRoot() {
 }
 
 test('computeStructuralManifest derives normalized slides from valid slide directories only', async (t) => {
-  const [{ createProjectScaffold }, { computeStructuralManifest }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { computeStructuralManifest }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../structural-compiler.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   renameSync(resolve(projectRoot, 'slides', '020-close'), resolve(projectRoot, 'slides', '020-problem'));
   mkdirSync(resolve(projectRoot, 'slides', 'notes-and-scratchpad'), { recursive: true });
   writeFileSync(resolve(projectRoot, 'slides', 'notes-and-scratchpad', 'slide.html'), '<section>Ignore me</section>');
@@ -33,15 +33,15 @@ test('computeStructuralManifest derives normalized slides from valid slide direc
 });
 
 test('recordStructuralManifest writes package.generated.json only when content changes', async (t) => {
-  const [{ createProjectScaffold }, { recordStructuralManifest }] = await Promise.all([
-    import('../../application/project-scaffold-service.mjs'),
+  const [{ createPresentationScaffold }, { recordStructuralManifest }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
     import('../structural-compiler.js'),
   ]);
 
   const projectRoot = createTempProjectRoot();
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
-  createProjectScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
+  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
   const manifestPath = resolve(projectRoot, '.presentation', 'package.generated.json');
 
   const first = recordStructuralManifest(projectRoot);
