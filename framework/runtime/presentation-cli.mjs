@@ -1,4 +1,8 @@
-import { pathToFileURL } from 'node:url';
+#!/usr/bin/env node
+
+import { realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createPresentationCore, PresentationCoreError } from './presentation-core.mjs';
 
@@ -469,7 +473,19 @@ export async function runPresentationCli(argv = process.argv.slice(2), options =
   return dispatchPresentationCli(argv, options);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function isDirectCliInvocation() {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+  }
+}
+
+if (isDirectCliInvocation()) {
   const result = await dispatchPresentationCli(process.argv.slice(2));
   process.stdout.write(result.stdout);
   if (result.holdOpen) {

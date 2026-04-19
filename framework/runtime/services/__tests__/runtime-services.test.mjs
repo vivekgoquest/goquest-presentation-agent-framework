@@ -140,6 +140,11 @@ function seedLegacyFinalizedAliases(projectRoot) {
   );
 }
 
+test('runtime scaffold service does not import project-agent code modules directly', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '..', 'scaffold-service.mjs'), 'utf8');
+  assert.doesNotMatch(source, /from\s+['"][^'"]*project-agent\/scaffold-package\.mjs['"]/);
+});
+
 test('runtime scaffold service creates the full shell-less project scaffold', async (t) => {
   const { createPresentationScaffold } = await import('../scaffold-service.mjs');
   const projectRoot = createTempProjectRoot();

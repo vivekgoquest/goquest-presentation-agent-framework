@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -123,6 +123,62 @@ test('presentation-cli inspect package returns a structured package envelope', a
 test('package.json exposes the runtime CLI as the public presentation bin', () => {
   const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'));
   assert.equal(packageJson.bin.presentation, './framework/runtime/presentation-cli.mjs');
+});
+
+test('runtime presentation cli starts with a portable node shebang', () => {
+  const source = readFileSync(CLI_PATH, 'utf8');
+  assert.match(source, /^#!\/usr\/bin\/env node\r?\n/);
+});
+
+test('runtime presentation cli supports direct shebang execution from an external cwd', {
+  skip: process.platform === 'win32',
+}, (t) => {
+  const outsideCwd = createTempProjectRoot();
+  const projectRoot = resolve(outsideCwd, 'generated-project');
+  t.after(() => rmSync(outsideCwd, { recursive: true, force: true }));
+
+  const result = spawnSync(
+    CLI_PATH,
+    ['init', '--project', projectRoot, '--slides', '2', '--format', 'json'],
+    {
+      cwd: outsideCwd,
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.status, 'created');
+  assert.equal(json.slideCount, 2);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'AGENTS.md')), true);
+});
+
+test('runtime presentation cli direct-entry guard works through a symlinked bin path', {
+  skip: process.platform === 'win32',
+}, (t) => {
+  const outsideCwd = createTempProjectRoot();
+  const projectRoot = resolve(outsideCwd, 'generated-project');
+  const symlinkPath = resolve(outsideCwd, 'presentation');
+  t.after(() => rmSync(outsideCwd, { recursive: true, force: true }));
+
+  symlinkSync(CLI_PATH, symlinkPath);
+
+  const result = spawnSync(
+    process.execPath,
+    [symlinkPath, 'init', '--project', projectRoot, '--slides', '2', '--format', 'json'],
+    {
+      cwd: outsideCwd,
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const json = JSON.parse(result.stdout);
+  assert.equal(json.status, 'created');
+  assert.equal(json.slideCount, 2);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'project.json')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
 });
 
 test('presentation-cli init creates the full shell-less project scaffold', async (t) => {
