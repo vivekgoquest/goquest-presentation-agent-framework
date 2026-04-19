@@ -9,7 +9,7 @@ the source of truth.
 
 This project uses a constrained HTML presentation framework for building decks that:
 
-- preview in the Electron desktop app
+- preview through the runtime CLI (`presentation preview serve|open` or `node .presentation/framework-cli.mjs preview ...`)
 - export to PDF deterministically
 - support automated Playwright capture and review
 - keep agent edits inside clearly owned surfaces
