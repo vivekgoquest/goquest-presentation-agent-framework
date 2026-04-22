@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
+import { refreshDesignState } from '../design-state.js';
 import { getProjectState } from '../project-state.js';
 
 function createTempProjectRoot() {
@@ -78,6 +79,30 @@ test('getProjectState restores outline-specific onboarding guidance for long dec
     assert.match(state.nextStep, /outline\.md/i);
     assert.match(state.nextStep, /story arc|outline/i);
     assert.doesNotMatch(state.nextStep, /remaining long-deck source materials/i);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('getProjectState marks design state stale when source moves after ledger generation', () => {
+  const projectRoot = createTempProjectRoot();
+
+  try {
+    createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+    fillBrief(projectRoot);
+    fillAllSlides(projectRoot);
+    refreshDesignState(projectRoot);
+    writeFileSync(
+      resolve(projectRoot, 'theme.css'),
+      '@layer theme { :root { --color-accent: #000000; } }\n'
+    );
+
+    const state = getProjectState(projectRoot);
+
+    assert.equal(state.facets.designState, 'stale');
+    assert.equal(state.designStateAvailable, true);
+    assert.match(state.lastDesignStateGeneratedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.ok(state.nextFocus.includes('presentation audit all'));
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }
