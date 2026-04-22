@@ -7,6 +7,8 @@ import { resolve } from 'node:path';
 import { createPresentationScaffold } from '../services/scaffold-service.mjs';
 import { refreshDesignState } from '../design-state.js';
 import { getProjectState } from '../project-state.js';
+import { writeDesignState, writeRenderState } from '../presentation-runtime-state.js';
+import { computeSourceFingerprint } from '../source-fingerprint.js';
 
 function createTempProjectRoot() {
   return mkdtempSync(resolve(tmpdir(), 'pf-project-state-'));
@@ -103,6 +105,37 @@ test('getProjectState marks design state stale when source moves after ledger ge
     assert.equal(state.designStateAvailable, true);
     assert.match(state.lastDesignStateGeneratedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.ok(state.nextFocus.includes('presentation audit all'));
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('getProjectState points nextStep at audit when render evidence is current but design state is stale', () => {
+  const projectRoot = createTempProjectRoot();
+
+  try {
+    createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+    fillBrief(projectRoot);
+    fillAllSlides(projectRoot);
+
+    const sourceFingerprint = computeSourceFingerprint(projectRoot);
+    writeRenderState(projectRoot, {
+      status: 'pass',
+      sourceFingerprint,
+      generatedAt: '2026-04-22T00:00:00.000Z',
+    });
+    writeDesignState(projectRoot, {
+      sourceFingerprint: 'sha256:stale-design-state',
+      generatedAt: '2026-04-22T00:00:00.000Z',
+    });
+
+    const state = getProjectState(projectRoot);
+
+    assert.equal(state.facets.evidence, 'current');
+    assert.equal(state.facets.designState, 'stale');
+    assert.deepEqual(state.nextFocus, ['presentation audit all']);
+    assert.match(state.nextStep, /presentation audit all/i);
+    assert.match(state.nextStep, /design-state ledger is not current/i);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }

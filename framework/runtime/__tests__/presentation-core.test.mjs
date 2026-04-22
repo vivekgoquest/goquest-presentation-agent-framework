@@ -192,6 +192,7 @@ test('presentation core status and inspect report finalized after a successful r
   assert.deepEqual(status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
+    designState: 'current',
   });
   assert.equal(status.nextBoundary, 'maintain');
   assert.deepEqual(status.nextFocus, [rootPdfRel]);
@@ -199,6 +200,7 @@ test('presentation core status and inspect report finalized after a successful r
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
+    designState: 'current',
   });
   assert.equal(inspection.status.nextBoundary, 'maintain');
   assert.deepEqual(inspection.status.nextFocus, [rootPdfRel]);
@@ -228,12 +230,14 @@ test('presentation core marks finalized delivery stale after authored source cha
   assert.deepEqual(status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'stale',
   });
   assert.deepEqual(status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'stale',
   });
   assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
@@ -269,6 +273,7 @@ test('presentation core keeps stale finalized status after an explicit non-canon
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'current',
   });
   assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
@@ -305,6 +310,7 @@ test('presentation core does not treat failed validation evidence as ready for f
   assert.deepEqual(status.facets, {
     delivery: 'not_finalized',
     evidence: 'stale',
+    designState: 'stale',
   });
   assert.equal(inspection.renderState.status, 'fail');
   assert.equal(inspection.status.workflow, 'authoring');
