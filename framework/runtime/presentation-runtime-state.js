@@ -35,6 +35,53 @@ function deriveOutputDir(pathRecord) {
   return artifactPath.split('/').slice(0, -1).join('/');
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function mergePlainObjects(base, patch) {
+  if (!isPlainObject(base)) {
+    return isPlainObject(patch) ? { ...patch } : patch;
+  }
+
+  if (!isPlainObject(patch)) {
+    return patch === undefined ? base : patch;
+  }
+
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(base[key])) {
+      merged[key] = mergePlainObjects(base[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+function mergeDesignStatePayload(base, payload = {}) {
+  const merged = { ...base, ...payload };
+  const branchKeys = [
+    'authority',
+    'canvas',
+    'theme',
+    'narrative',
+    'content',
+    'audit',
+    'driftRules',
+    'fingerprints',
+  ];
+
+  for (const key of branchKeys) {
+    if (key in payload) {
+      merged[key] = mergePlainObjects(base[key], payload[key]);
+    }
+  }
+
+  return merged;
+}
+
 export function createInitialRenderState() {
   return {
     schemaVersion: 1,
@@ -235,14 +282,11 @@ export function writeRenderState(projectRootInput, payload = {}) {
 export function writeDesignState(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
   const base = createInitialDesignState();
-  const designState = {
-    ...base,
-    ...payload,
-    kind: 'presentation-design-state',
-    schemaVersion: 1,
-    sourceFingerprint: payload.sourceFingerprint || base.sourceFingerprint,
-    generatedAt: payload.generatedAt || new Date().toISOString(),
-  };
+  const designState = mergeDesignStatePayload(base, payload);
+  designState.kind = 'presentation-design-state';
+  designState.schemaVersion = 1;
+  designState.sourceFingerprint = payload.sourceFingerprint || base.sourceFingerprint;
+  designState.generatedAt = payload.generatedAt || new Date().toISOString();
   writeJson(paths.designStateAbs, designState);
   return designState;
 }

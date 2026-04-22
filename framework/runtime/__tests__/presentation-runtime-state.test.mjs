@@ -12,7 +12,7 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-test('ensurePresentationRuntimeStateFiles creates render-state and artifacts only', async (t) => {
+test('ensurePresentationRuntimeStateFiles creates render-state, design-state evidence, and artifacts', async (t) => {
   const [{ createPresentationScaffold }, { ensurePresentationRuntimeStateFiles }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
@@ -111,6 +111,9 @@ test('writeDesignState persists generated design-state evidence', async (t) => {
   assert.equal(json.kind, 'presentation-design-state');
   assert.equal(json.sourceFingerprint, 'sha256:test');
   assert.equal(json.canvas.status, 'fixed');
+  assert.deepEqual(json.canvas.structuralTokens, []);
+  assert.deepEqual(json.theme.observedTokens, []);
+  assert.equal(json.driftRules.untrackedLayerBypassIsNotAllowed, true);
   assert.equal(json.theme.status, 'working');
 });
 
