@@ -90,6 +90,7 @@ Validators, audits, preview, export, finalize, hooks, and shells may inspect thi
 The headless core may still create or update system-owned files such as:
 - `.presentation/project.json`
 - `.presentation/package.generated.json`
+- `.presentation/runtime/design-state.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
@@ -170,6 +171,7 @@ The shell may later wrap these operations, but it does not define them.
     intent.json
     package.generated.json
     runtime/
+      design-state.json
       render-state.json
       artifacts.json
     framework-cli.mjs
@@ -285,6 +287,10 @@ It answers questions like:
 - whether brief and theme are present and complete enough to proceed
 
 ### Deterministic runtime evidence
+
+`/.presentation/runtime/design-state.json`
+
+Generated design-state evidence and orientation ledger. It is an index over canvas, theme, narrative, content, package structure, and runtime evidence. It is not authorable state.
 
 `/.presentation/runtime/render-state.json`
 
@@ -403,6 +409,7 @@ It should hold only:
 
 So design-system information appears there only as:
 - remembered evidence
+- generated design-state orientation
 - generated structure
 - validation outcomes
 - operational metadata
@@ -442,6 +449,7 @@ Editing source may cause this file to change, but deterministic package operatio
 
 - `.presentation/project.json`
 - `.presentation/package.generated.json`
+- `.presentation/runtime/design-state.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`
@@ -451,6 +459,7 @@ Editing source may cause this file to change, but deterministic package operatio
 
 - `.presentation/project.json` during init/repair flows
 - `.presentation/package.generated.json`
+- `.presentation/runtime/design-state.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 - `.presentation/framework-cli.mjs`

@@ -46,6 +46,12 @@ Optional export commands:
 The stop hook is a thin local adapter around the same CLI. Manual CLI runs are
 the source of truth while iterating.
 
+## Design State Ledger
+
+- If a theme/content change changes reusable visual language, update `theme.css` and rerun `node .presentation/framework-cli.mjs audit all` so the design-state ledger refreshes.
+- If a change is slide-only, keep it in the slide source and let audit verify that it does not bypass theme or canvas.
+- Never hand-edit `.presentation/runtime/design-state.json`.
+
 ## What `audit all` Covers
 
 The project audit currently checks deterministic source-policy issues such as:
@@ -58,6 +64,7 @@ The project audit currently checks deterministic source-policy issues such as:
 
 ## Authoring Heuristics For Agents
 
+- read `.presentation/runtime/design-state.json` first as generated design evidence, then follow its pointers to authorable files
 - generated structure is deterministic: the local CLI regenerates `.presentation/package.generated.json` from source during audit and finalize flows
 - runtime evidence is read-only: `.presentation/runtime/*.json` is owned by the framework, not by deck edits
 - prefer deck-local theme variables over one-off visual hacks

@@ -24,6 +24,7 @@ Generated package and runtime truth are read-only:
 
 - `<project>/.presentation/project.json`
 - `<project>/.presentation/package.generated.json`
+- `<project>/.presentation/runtime/design-state.json`
 - `<project>/.presentation/runtime/render-state.json`
 - `<project>/.presentation/runtime/artifacts.json`
 

@@ -38,6 +38,22 @@ test('scaffold package writes AGENTS and CLAUDE files beneath .claude only', asy
   assert.match(readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8'), /\.presentation\/package\.generated\.json/);
 });
 
+test('scaffolded guidance orients agents through the design state ledger', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const agentsContent = readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8');
+  assert.match(agentsContent, /\.presentation\/runtime\/design-state\.json/);
+  assert.match(agentsContent, /generated evidence/i);
+
+  const frameworkContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'framework.md'), 'utf8');
+  assert.match(frameworkContent, /single context surface/);
+  assert.match(frameworkContent, /not source of truth/);
+});
+
 test('scaffold package keeps the Claude packet shell-less and CLI-first', async (t) => {
   const { getProjectAgentScaffoldPackage, writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
   const projectRoot = createTempProjectRoot();
