@@ -358,8 +358,7 @@ export function createPresentationCore(deps = {}) {
           });
         }
 
-        const { paths, manifest } = services.ensurePresentationPackageFiles(projectRoot);
-        const designState = services.refreshDesignState(paths.projectRootAbs, { manifest });
+        const { paths, manifest, designState } = services.ensurePresentationPackageFiles(projectRoot);
         const renderState = services.readRenderState(paths.projectRootAbs);
         const artifacts = services.readArtifacts(paths.projectRootAbs);
         const status = buildStatusResult(services.getProjectState(paths.projectRootAbs), paths);
@@ -391,21 +390,20 @@ export function createPresentationCore(deps = {}) {
       return runInsideCoreMutationBoundary(() => {
         const state = services.getProjectState(projectRoot);
         const paths = services.getProjectPaths(projectRoot);
-        services.refreshDesignState(paths.projectRootAbs);
         return buildStatusResult(state, paths);
       });
     },
 
     getPreview(projectRoot) {
-      return runInsideCoreMutationBoundary(() => {
-        const paths = services.getProjectPaths(projectRoot);
-        services.refreshDesignState(paths.projectRootAbs);
-        return buildPreviewResult(projectRoot, services);
-      });
+      return runInsideCoreMutationBoundary(() => buildPreviewResult(projectRoot, services));
     },
 
     async previewPresentation(projectRoot, options = {}) {
-      return await services.previewPresentation(projectRoot, options);
+      return await runInsideCoreMutationBoundary(async () => {
+        const paths = services.getProjectPaths(projectRoot);
+        services.refreshDesignState(paths.projectRootAbs);
+        return await services.previewPresentation(projectRoot, options);
+      });
     },
 
     async runAudit(projectRoot, options = {}) {

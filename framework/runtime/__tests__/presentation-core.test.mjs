@@ -112,7 +112,17 @@ test('presentation core delegates initProject and previewPresentation through in
         sourceDir: target.projectRoot,
         slideCount: options.slideCount,
         files: ['brief.md'],
+        };
+      },
+    getProjectPaths(projectRoot) {
+      calls.push(['getProjectPaths', projectRoot]);
+      return {
+        projectRootAbs: projectRoot,
       };
+    },
+    refreshDesignState(projectRootAbs) {
+      calls.push(['refreshDesignState', projectRootAbs]);
+      return { kind: 'presentation-design-state' };
     },
     async previewPresentation(projectRoot, options = {}) {
       calls.push(['previewPresentation', projectRoot, options]);
@@ -132,6 +142,8 @@ test('presentation core delegates initProject and previewPresentation through in
   assert.equal(previewResult.previewUrl, 'http://127.0.0.1:4173/preview/');
   assert.deepEqual(calls, [
     ['createProjectScaffold', { projectRoot: '/tmp/core-init-project' }, { slideCount: 4, copyFramework: false }],
+    ['getProjectPaths', '/tmp/core-preview-project'],
+    ['refreshDesignState', '/tmp/core-preview-project'],
     ['previewPresentation', '/tmp/core-preview-project', { mode: 'serve' }],
   ]);
 });

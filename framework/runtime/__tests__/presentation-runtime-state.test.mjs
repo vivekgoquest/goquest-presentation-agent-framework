@@ -71,7 +71,7 @@ test('writeRenderState persists runtime validation truth and evidence metadata',
 });
 
 test('writeDesignState persists generated design-state evidence', async (t) => {
-  const [{ createPresentationScaffold }, { writeDesignState }] = await Promise.all([
+  const [{ createPresentationScaffold }, { createInitialDesignState, writeDesignState }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
@@ -81,6 +81,7 @@ test('writeDesignState persists generated design-state evidence', async (t) => {
 
   createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
   const designStatePath = resolve(projectRoot, '.presentation', 'runtime', 'design-state.json');
+  writeFileSync(designStatePath, `${JSON.stringify(createInitialDesignState(), null, 2)}\n`);
 
   writeDesignState(projectRoot, {
     sourceFingerprint: 'sha256:test',
@@ -165,7 +166,7 @@ test('writeDesignState restores defaults when a partial design-state already exi
 });
 
 test('writeDesignState preserves earlier nested project fields across partial writes', async (t) => {
-  const [{ createPresentationScaffold }, { writeDesignState, readDesignState }] = await Promise.all([
+  const [{ createPresentationScaffold }, { createInitialDesignState, writeDesignState, readDesignState }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
@@ -174,6 +175,8 @@ test('writeDesignState preserves earlier nested project fields across partial wr
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
 
   createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  const designStatePath = resolve(projectRoot, '.presentation', 'runtime', 'design-state.json');
+  writeFileSync(designStatePath, `${JSON.stringify(createInitialDesignState(), null, 2)}\n`);
 
   writeDesignState(projectRoot, {
     sourceFingerprint: 'sha256:first',

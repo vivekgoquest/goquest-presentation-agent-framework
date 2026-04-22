@@ -172,6 +172,7 @@ test('presentation-cli inspect package returns a structured package envelope', a
   assert.equal(json.status, 'ok');
   assert.deepEqual(json.scope, { kind: 'package', projectRoot });
   assert.equal(json.data.manifest.counts.slidesTotal, 2);
+  assert.equal(json.data.designState.kind, 'presentation-design-state');
   assert.ok(json.freshness);
 });
 
