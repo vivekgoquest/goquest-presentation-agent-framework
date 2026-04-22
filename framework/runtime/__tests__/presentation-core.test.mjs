@@ -232,14 +232,14 @@ test('presentation core marks finalized delivery stale after authored source cha
     evidence: 'stale',
     designState: 'stale',
   });
-  assert.deepEqual(status.nextFocus, ['presentation export', rootPdfRel]);
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
     designState: 'stale',
   });
-  assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
+  assert.deepEqual(inspection.status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.artifacts.finalized.exists, true);
 });
 

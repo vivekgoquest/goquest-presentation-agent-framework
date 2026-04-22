@@ -52,6 +52,25 @@ test('derivePackageStatus focuses audit when design state is stale without block
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
 });
 
+test('derivePackageStatus focuses audit when design state is stale even if finalized delivery is stale', () => {
+  const status = derivePackageStatus({
+    sourceComplete: true,
+    blockerCount: 0,
+    delivery: 'finalized_stale',
+    evidence: 'current',
+    designStateEvidence: 'stale',
+    canonicalPdfPath: 'deck.pdf',
+  });
+
+  assert.equal(status.workflow, 'authoring');
+  assert.deepEqual(status.facets, {
+    delivery: 'finalized_stale',
+    evidence: 'current',
+    designState: 'stale',
+  });
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
+});
+
 test('derivePackageStatus focuses audit when design state is missing without blocking authoring', () => {
   const status = derivePackageStatus({
     sourceComplete: true,

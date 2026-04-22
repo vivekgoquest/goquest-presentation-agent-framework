@@ -134,13 +134,13 @@ function buildNextFocus(workflow, facets, facts = {}) {
       return canonicalPdfFocus.length > 0 ? canonicalPdfFocus : ['presentation export'];
     case 'authoring':
     default:
+      if (designStateNeedsAudit(facets)) {
+        return ['presentation audit all'];
+      }
       if (facets.delivery === 'finalized_stale') {
         return canonicalPdfFocus.length > 0
           ? ['presentation export', ...canonicalPdfFocus]
           : ['presentation export'];
-      }
-      if (designStateNeedsAudit(facets)) {
-        return ['presentation audit all'];
       }
       if (facets.evidence !== 'current') {
         return ['presentation audit all'];
