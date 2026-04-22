@@ -13,7 +13,10 @@ function readJson(path) {
 }
 
 test('ensurePresentationRuntimeStateFiles creates render-state, design-state evidence, and artifacts', async (t) => {
-  const [{ createPresentationScaffold }, { ensurePresentationRuntimeStateFiles }] = await Promise.all([
+  const [{ createPresentationScaffold }, {
+    ensurePresentationRuntimeStateFiles,
+    readDesignState,
+  }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
     import('../presentation-runtime-state.js'),
   ]);
@@ -25,12 +28,16 @@ test('ensurePresentationRuntimeStateFiles creates render-state, design-state evi
   rmSync(resolve(projectRoot, '.presentation', 'runtime'), { recursive: true, force: true });
 
   const state = ensurePresentationRuntimeStateFiles(projectRoot);
+  const designStatePath = resolve(projectRoot, '.presentation', 'runtime', 'design-state.json');
 
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
   assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
+  assert.ok(existsSync(designStatePath));
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'last-good.json')), false);
   assert.ok(state.renderState);
   assert.ok(state.artifacts);
+  assert.equal(state.designState.kind, 'presentation-design-state');
+  assert.equal(readDesignState(projectRoot).kind, 'presentation-design-state');
   assert.equal('lastGood' in state, false);
 });
 
