@@ -63,6 +63,7 @@ function mergePlainObjects(base, patch) {
 function mergeDesignStatePayload(base, payload = {}) {
   const merged = { ...base, ...payload };
   const branchKeys = [
+    'project',
     'authority',
     'canvas',
     'theme',
@@ -281,7 +282,7 @@ export function writeRenderState(projectRootInput, payload = {}) {
 
 export function writeDesignState(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
-  const base = createInitialDesignState();
+  const base = readJson(paths.designStateAbs) || createInitialDesignState();
   const designState = mergeDesignStatePayload(base, payload);
   designState.kind = 'presentation-design-state';
   designState.schemaVersion = 1;

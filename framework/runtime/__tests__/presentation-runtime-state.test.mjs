@@ -41,31 +41,6 @@ test('ensurePresentationRuntimeStateFiles creates render-state, design-state evi
   assert.equal('lastGood' in state, false);
 });
 
-test('ensurePresentationRuntimeStateFiles creates design-state evidence alongside render-state and artifacts', async (t) => {
-  const [{ createPresentationScaffold }, {
-    ensurePresentationRuntimeStateFiles,
-    readDesignState,
-  }] = await Promise.all([
-    import('../services/scaffold-service.mjs'),
-    import('../presentation-runtime-state.js'),
-  ]);
-
-  const projectRoot = createTempProjectRoot();
-  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
-
-  createPresentationScaffold({ projectRoot }, { slideCount: 2, copyFramework: false });
-  rmSync(resolve(projectRoot, '.presentation', 'runtime'), { recursive: true, force: true });
-
-  const state = ensurePresentationRuntimeStateFiles(projectRoot);
-  const designStatePath = resolve(projectRoot, '.presentation', 'runtime', 'design-state.json');
-
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'render-state.json')));
-  assert.ok(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json')));
-  assert.ok(existsSync(designStatePath));
-  assert.equal(state.designState.kind, 'presentation-design-state');
-  assert.equal(readDesignState(projectRoot).kind, 'presentation-design-state');
-});
-
 test('writeRenderState persists runtime validation truth and evidence metadata', async (t) => {
   const [{ createPresentationScaffold }, { writeRenderState }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
@@ -122,6 +97,58 @@ test('writeDesignState persists generated design-state evidence', async (t) => {
   assert.deepEqual(json.theme.observedTokens, []);
   assert.equal(json.driftRules.untrackedLayerBypassIsNotAllowed, true);
   assert.equal(json.theme.status, 'working');
+});
+
+test('writeDesignState preserves earlier nested project fields across partial writes', async (t) => {
+  const [{ createPresentationScaffold }, { writeDesignState, readDesignState }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
+    import('../presentation-runtime-state.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+
+  writeDesignState(projectRoot, {
+    sourceFingerprint: 'sha256:first',
+    project: {
+      root: projectRoot,
+      slug: 'demo',
+    },
+    theme: {
+      status: 'working',
+      source: 'theme.css',
+    },
+  });
+
+  writeDesignState(projectRoot, {
+    generatedAt: '2026-04-22T00:00:00.000Z',
+    project: {
+      title: 'Demo deck',
+    },
+    theme: {
+      observedTokens: ['--brand-accent'],
+    },
+  });
+
+  const json = readDesignState(projectRoot);
+  assert.deepEqual(json.project, {
+    root: projectRoot,
+    slug: 'demo',
+    title: 'Demo deck',
+  });
+  assert.deepEqual(json.theme, {
+    status: 'working',
+    source: 'theme.css',
+    fingerprint: '',
+    observedTokens: ['--brand-accent'],
+    observedPrimitives: [],
+    canvasVariablesUsed: [],
+    assetReferences: [],
+  });
+  assert.equal(json.sourceFingerprint, 'sha256:first');
+  assert.equal(json.generatedAt, '2026-04-22T00:00:00.000Z');
 });
 
 test('writeArtifacts persists simplified root-pdf artifact evidence', async (t) => {
