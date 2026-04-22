@@ -48,6 +48,9 @@ test('scaffolded guidance orients agents through the design state ledger', async
   const agentsContent = readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8');
   assert.match(agentsContent, /\.presentation\/runtime\/design-state\.json/);
   assert.match(agentsContent, /generated evidence/i);
+  assert.match(agentsContent, /single context surface/);
+  assert.match(agentsContent, /not source of truth/);
+  assert.match(agentsContent, /not single authority/);
 
   const frameworkContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'framework.md'), 'utf8');
   assert.match(frameworkContent, /single context surface/);

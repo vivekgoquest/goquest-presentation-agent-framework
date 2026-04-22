@@ -34,14 +34,21 @@ The presentation is defined by six lanes:
 5. deterministic runtime evidence
 6. git-backed history
 
-## Package Truth
-
-Use these files as the source of truth:
+## First Orientation Surface
 
 - `.presentation/runtime/design-state.json`
   - generated evidence and first orientation surface
-  - pointers to current canvas, theme, content, intent, structure, and runtime evidence authorities
-  - not authorable state
+  - single context surface, not single authority
+  - not source of truth and not authorable state
+  - pointers to authoritative canvas, theme, content, intent, package, and runtime evidence files
+
+Do not edit `.presentation/runtime/design-state.json` by hand. If it is missing
+or stale, rerun the project-local CLI and follow the ledger pointers to the
+authoritative files before making changes.
+
+## Package Truth
+
+Use these files as the source of truth:
 
 - `.presentation/project.json`
   - stable package identity
