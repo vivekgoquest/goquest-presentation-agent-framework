@@ -45,7 +45,7 @@ function mergePlainObjects(base, patch) {
   }
 
   if (!isPlainObject(patch)) {
-    return patch === undefined ? base : patch;
+    return base;
   }
 
   const merged = { ...base };
@@ -81,6 +81,16 @@ function mergeDesignStatePayload(base, payload = {}) {
   }
 
   return merged;
+}
+
+function normalizeDesignState(payload = {}) {
+  const base = createInitialDesignState();
+  const designState = mergeDesignStatePayload(base, payload);
+  designState.kind = 'presentation-design-state';
+  designState.schemaVersion = 1;
+  designState.sourceFingerprint = payload.sourceFingerprint || base.sourceFingerprint;
+  designState.generatedAt = payload.generatedAt || base.generatedAt;
+  return designState;
 }
 
 export function createInitialRenderState() {
@@ -282,11 +292,8 @@ export function writeRenderState(projectRootInput, payload = {}) {
 
 export function writeDesignState(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
-  const base = readJson(paths.designStateAbs) || createInitialDesignState();
-  const designState = mergeDesignStatePayload(base, payload);
-  designState.kind = 'presentation-design-state';
-  designState.schemaVersion = 1;
-  designState.sourceFingerprint = payload.sourceFingerprint || base.sourceFingerprint;
+  const existing = normalizeDesignState(readJson(paths.designStateAbs) || {});
+  const designState = normalizeDesignState(mergeDesignStatePayload(existing, payload));
   designState.generatedAt = payload.generatedAt || new Date().toISOString();
   writeJson(paths.designStateAbs, designState);
   return designState;
@@ -314,7 +321,7 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   return {
     renderState: readJson(paths.renderStateAbs),
     artifacts: normalizeArtifacts(readJson(paths.artifactsAbs) || {}),
-    designState: readJson(paths.designStateAbs),
+    designState: readDesignState(projectRootInput),
   };
 }
 
@@ -325,7 +332,8 @@ export function readRenderState(projectRootInput) {
 
 export function readDesignState(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
-  return readJson(paths.designStateAbs);
+  const designState = readJson(paths.designStateAbs);
+  return designState ? normalizeDesignState(designState) : null;
 }
 
 export function readArtifacts(projectRootInput) {

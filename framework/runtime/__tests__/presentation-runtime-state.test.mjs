@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
@@ -97,6 +97,71 @@ test('writeDesignState persists generated design-state evidence', async (t) => {
   assert.deepEqual(json.theme.observedTokens, []);
   assert.equal(json.driftRules.untrackedLayerBypassIsNotAllowed, true);
   assert.equal(json.theme.status, 'working');
+});
+
+test('writeDesignState restores defaults when a partial design-state already exists', async (t) => {
+  const [{ createPresentationScaffold }, {
+    createInitialDesignState,
+    writeDesignState,
+    readDesignState,
+  }] = await Promise.all([
+    import('../services/scaffold-service.mjs'),
+    import('../presentation-runtime-state.js'),
+  ]);
+
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  createPresentationScaffold({ projectRoot }, { slideCount: 1, copyFramework: false });
+  const designStatePath = resolve(projectRoot, '.presentation', 'runtime', 'design-state.json');
+
+  writeFileSync(designStatePath, JSON.stringify({
+    schemaVersion: 1,
+    kind: 'presentation-design-state',
+    sourceFingerprint: 'sha256:seed',
+    project: {
+      slug: 'seeded',
+    },
+    theme: {
+      status: 'working',
+      source: 'theme.css',
+      observedTokens: ['--accent'],
+    },
+  }, null, 2));
+
+  writeDesignState(projectRoot, {
+    project: {
+      title: 'Demo deck',
+    },
+    theme: {
+      observedPrimitives: ['--shadow'],
+    },
+  });
+
+  const json = readDesignState(projectRoot);
+  const base = createInitialDesignState();
+
+  assert.equal(json.schemaVersion, 1);
+  assert.equal(json.kind, 'presentation-design-state');
+  assert.equal(json.sourceFingerprint, 'sha256:seed');
+  assert.deepEqual(json.authority, base.authority);
+  assert.deepEqual(json.canvas, base.canvas);
+  assert.deepEqual(json.narrative, base.narrative);
+  assert.deepEqual(json.content, base.content);
+  assert.deepEqual(json.audit, base.audit);
+  assert.deepEqual(json.driftRules, base.driftRules);
+  assert.deepEqual(json.fingerprints, base.fingerprints);
+  assert.deepEqual(json.project, {
+    slug: 'seeded',
+    title: 'Demo deck',
+  });
+  assert.deepEqual(json.theme, {
+    ...base.theme,
+    status: 'working',
+    source: 'theme.css',
+    observedTokens: ['--accent'],
+    observedPrimitives: ['--shadow'],
+  });
 });
 
 test('writeDesignState preserves earlier nested project fields across partial writes', async (t) => {
