@@ -53,9 +53,10 @@ export function ensurePresentationPackageFiles(projectRootInput, options = {}) {
   });
 
   const manifest = recordStructuralManifest(paths.projectRootAbs);
-  ensurePresentationRuntimeStateFiles(paths.projectRootAbs);
+  const runtimeState = ensurePresentationRuntimeStateFiles(paths.projectRootAbs);
   return {
     paths,
     manifest,
+    designState: runtimeState.designState,
   };
 }

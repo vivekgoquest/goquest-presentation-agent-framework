@@ -101,6 +101,8 @@ test('runtime-first package flow works through the project-local shim and produc
   const initJson = parseCliJson(initResult.stdout);
   assert.equal(initJson.status, 'created');
   assert.equal(existsSync(resolve(projectRoot, '.presentation', 'framework-cli.mjs')), true);
+  assert.equal(existsSync(resolve(projectRoot, '.presentation', 'runtime', 'design-state.json')), true);
+  assert.ok(initJson.files.includes('.presentation/runtime/design-state.json'));
 
   fillBrief(projectRoot);
 
@@ -122,10 +124,15 @@ test('runtime-first package flow works through the project-local shim and produc
   const projectMetadata = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'project.json'), 'utf8'));
   const rootPdfRel = `${projectMetadata.projectSlug}.pdf`;
   const artifactsState = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'runtime', 'artifacts.json'), 'utf8'));
+  const designState = JSON.parse(readFileSync(resolve(projectRoot, '.presentation', 'runtime', 'design-state.json'), 'utf8'));
 
   assert.ok(finalizeJson.outputs.artifacts.includes(rootPdfRel));
+  assert.ok(finalizeJson.evidenceUpdated.includes('.presentation/runtime/design-state.json'));
   assert.equal(existsSync(resolve(projectRoot, rootPdfRel)), true);
   assert.equal(artifactsState.finalized.exists, true);
   assert.equal(artifactsState.finalized.pdf.path, rootPdfRel);
   assert.equal(artifactsState.latestExport.pdf.path, rootPdfRel);
+  assert.equal(designState.kind, 'presentation-design-state');
+  assert.equal(designState.canvas.status, 'fixed');
+  assert.equal(designState.theme.status, 'working');
 });

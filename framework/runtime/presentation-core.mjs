@@ -15,6 +15,7 @@ import {
   PRESENTATION_PACKAGE_WRITE_ZONES,
   withPresentationPackageMutationBoundary,
 } from './presentation-package.js';
+import { refreshDesignState } from './design-state.js';
 import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
 import { previewPresentation as previewPresentationOperation } from './preview-server.mjs';
 import { renderPresentationFailureHtml } from './preview-state-page.js';
@@ -163,7 +164,7 @@ async function enforceCoreAuthoredContentImmutability(projectRoot, operationName
   return result;
 }
 
-function buildStatusResult(state) {
+function buildStatusResult(state, paths = null) {
   const blockers = state.lastPolicyError ? [state.lastPolicyError] : [];
 
   return {
@@ -176,8 +177,9 @@ function buildStatusResult(state) {
     nextBoundary: state.nextBoundary,
     nextFocus: state.nextFocus,
     evidence: [
-      '.presentation/runtime/render-state.json',
-      '.presentation/runtime/artifacts.json',
+      paths?.renderStateRel || '.presentation/runtime/render-state.json',
+      paths?.artifactsRel || '.presentation/runtime/artifacts.json',
+      paths?.designStateRel || '.presentation/runtime/design-state.json',
     ],
     freshness: {
       relativeToSource: state.facets?.evidence || 'unknown',
@@ -318,6 +320,7 @@ export function createPresentationCore(deps = {}) {
     canvasStage: CANVAS_STAGE,
     getProjectPaths,
     ensurePresentationPackageFiles,
+    refreshDesignState,
     readRenderState,
     readArtifacts,
     getProjectState,
@@ -356,9 +359,10 @@ export function createPresentationCore(deps = {}) {
         }
 
         const { paths, manifest } = services.ensurePresentationPackageFiles(projectRoot);
+        const designState = services.refreshDesignState(paths.projectRootAbs, { manifest });
         const renderState = services.readRenderState(paths.projectRootAbs);
         const artifacts = services.readArtifacts(paths.projectRootAbs);
-        const status = buildStatusResult(services.getProjectState(paths.projectRootAbs));
+        const status = buildStatusResult(services.getProjectState(paths.projectRootAbs), paths);
 
         return {
           kind: 'presentation-package',
@@ -368,11 +372,13 @@ export function createPresentationCore(deps = {}) {
           manifest,
           renderState,
           artifacts,
+          designState,
           status,
           evidence: [
             paths.packageManifestRel,
             paths.renderStateRel,
             paths.artifactsRel,
+            paths.designStateRel,
           ],
           freshness: {
             relativeToSource: status.freshness.relativeToSource,
@@ -382,11 +388,20 @@ export function createPresentationCore(deps = {}) {
     },
 
     getStatus(projectRoot) {
-      return runInsideCoreMutationBoundary(() => buildStatusResult(services.getProjectState(projectRoot)));
+      return runInsideCoreMutationBoundary(() => {
+        const state = services.getProjectState(projectRoot);
+        const paths = services.getProjectPaths(projectRoot);
+        services.refreshDesignState(paths.projectRootAbs);
+        return buildStatusResult(state, paths);
+      });
     },
 
     getPreview(projectRoot) {
-      return runInsideCoreMutationBoundary(() => buildPreviewResult(projectRoot, services));
+      return runInsideCoreMutationBoundary(() => {
+        const paths = services.getProjectPaths(projectRoot);
+        services.refreshDesignState(paths.projectRootAbs);
+        return buildPreviewResult(projectRoot, services);
+      });
     },
 
     async previewPresentation(projectRoot, options = {}) {
@@ -406,8 +421,13 @@ export function createPresentationCore(deps = {}) {
           render: Boolean(options.render),
         });
 
+        const paths = services.getProjectPaths(projectRoot);
+        const designState = services.refreshDesignState(paths.projectRootAbs);
         const nextFocus = Array.isArray(result.nextFocus) ? [...result.nextFocus] : [];
         const evidence = Array.isArray(result.evidence) ? [...result.evidence] : [...nextFocus];
+        if (!evidence.includes(paths.designStateRel)) {
+          evidence.push(paths.designStateRel);
+        }
 
         return {
           kind: 'presentation-audit',
@@ -419,6 +439,7 @@ export function createPresentationCore(deps = {}) {
           issues: result.issues,
           nextFocus,
           evidence,
+          designState,
           families: result.families,
         };
       });
@@ -488,16 +509,20 @@ export function createPresentationCore(deps = {}) {
 
         return await enforceCoreAuthoredContentImmutability(paths.projectRootAbs, 'finalize', async () => {
           const result = await services.finalizePresentation({ projectRoot }, request);
+          const designState = services.refreshDesignState(paths.projectRootAbs);
+          const evidenceUpdated = [
+            paths.renderStateRel,
+            paths.artifactsRel,
+            paths.designStateRel,
+          ];
 
           return {
             kind: 'presentation-finalize',
             projectRoot: paths.projectRootAbs,
             status: result.status,
             outputs: result.outputs,
-            evidenceUpdated: [
-              paths.renderStateRel,
-              paths.artifactsRel,
-            ],
+            designState,
+            evidenceUpdated,
             issues: result.issues || [],
           };
         });
@@ -570,6 +595,12 @@ export function createPresentationCore(deps = {}) {
             throw error;
           }
 
+          const designState = services.refreshDesignState(paths.projectRootAbs);
+          const evidenceUpdated = result.evidenceUpdated || (target === 'pdf' ? [paths.artifactsRel] : []);
+          if (!evidenceUpdated.includes(paths.designStateRel)) {
+            evidenceUpdated.push(paths.designStateRel);
+          }
+
           return {
             kind: 'presentation-export',
             projectRoot: paths.projectRootAbs,
@@ -578,7 +609,8 @@ export function createPresentationCore(deps = {}) {
             outputDir: toProjectRelativeOutputPath(paths.projectRootAbs, result.outputDir, scope),
             artifacts: (result.outputPaths || [])
               .map((outputPath) => toProjectRelativeOutputPath(paths.projectRootAbs, outputPath, scope)),
-            evidenceUpdated: result.evidenceUpdated || (target === 'pdf' ? [paths.artifactsRel] : []),
+            designState,
+            evidenceUpdated,
             issues: result.issues || [],
           };
         });

@@ -25,6 +25,7 @@ import {
   writePresentationPackageManifest,
 } from '../presentation-package.js';
 import { writeInitialPresentationIntent } from '../presentation-intent.js';
+import { refreshDesignState } from '../design-state.js';
 import { ensurePresentationRuntimeStateFiles } from '../presentation-runtime-state.js';
 
 function assertSupportedV1SlideCount(slideCount) {
@@ -228,6 +229,8 @@ function createPendingProjectPaths(projectRootInput) {
     runtimeDirAbs: resolve(systemPaths.systemDirAbs, 'runtime'),
     renderStateRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/render-state.json`,
     renderStateAbs: systemPaths.renderStateAbs,
+    designStateRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/design-state.json`,
+    designStateAbs: systemPaths.designStateAbs,
     artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/runtime/artifacts.json`,
     artifactsAbs: systemPaths.artifactsAbs,
     metadataRel: `${PROJECT_SYSTEM_DIRNAME}/project.json`,
@@ -331,6 +334,7 @@ function scaffoldIntoPaths(paths, options = {}) {
   writeInitialPresentationIntent(paths.sourceDirAbs);
   writePresentationPackageManifest(paths.sourceDirAbs);
   ensurePresentationRuntimeStateFiles(paths.sourceDirAbs);
+  refreshDesignState(paths.sourceDirAbs);
   if (copyFramework) {
     copyFrameworkSnapshot(paths);
   }
@@ -346,6 +350,7 @@ function scaffoldIntoPaths(paths, options = {}) {
   createdFiles.push(paths.packageManifestRel);
   createdFiles.push(paths.runtimeDirRel);
   createdFiles.push(paths.renderStateRel);
+  createdFiles.push(paths.designStateRel);
   createdFiles.push(paths.artifactsRel);
   createdFiles.push(PROJECT_LOCAL_FRAMEWORK_CLI_REL);
   if (copyFramework) {

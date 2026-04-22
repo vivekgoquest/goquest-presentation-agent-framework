@@ -149,12 +149,15 @@ test('presentation core inspectPackage returns manifest, evidence, and status', 
   assert.equal(result.projectRoot, projectRoot);
   assert.equal(result.manifest.counts.slidesTotal, 1);
   assert.equal(result.status.workflow, 'onboarding');
+  assert.equal(result.designState.kind, 'presentation-design-state');
+  assert.equal(result.designState.theme.status, 'working');
   assert.ok(result.renderState);
   assert.ok(result.artifacts);
   assert.deepEqual(result.evidence, [
     '.presentation/package.generated.json',
     '.presentation/runtime/render-state.json',
     '.presentation/runtime/artifacts.json',
+    '.presentation/runtime/design-state.json',
   ]);
 });
 
@@ -442,7 +445,10 @@ test('presentation core exportPresentation defaults to the root pdf deliverable 
   assert.equal(result.projectRoot, projectRoot);
   assert.equal(result.outputDir, '');
   assert.deepEqual(result.artifacts, [rootPdfRel]);
-  assert.deepEqual(result.evidenceUpdated, ['.presentation/runtime/artifacts.json']);
+  assert.deepEqual(result.evidenceUpdated, [
+    '.presentation/runtime/artifacts.json',
+    '.presentation/runtime/design-state.json',
+  ]);
 });
 
 test('presentation core forwards explicit slide selections as filtered export requests and surfaces canonical-root rejections', async (t) => {
