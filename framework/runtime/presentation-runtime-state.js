@@ -54,6 +54,60 @@ export function createInitialRenderState() {
   };
 }
 
+export function createInitialDesignState() {
+  return {
+    schemaVersion: 1,
+    kind: 'presentation-design-state',
+    sourceFingerprint: '',
+    generatedAt: null,
+    project: null,
+    authority: {
+      canvas: 'framework/canvas/canvas-contract.mjs',
+      theme: 'theme.css',
+      intent: '.presentation/intent.json',
+      structure: '.presentation/package.generated.json',
+      runtime: '.presentation/runtime/',
+    },
+    canvas: {
+      status: 'fixed',
+      stage: null,
+      structuralTokens: [],
+      protectedSelectors: [],
+      allowedThemeVariables: [],
+    },
+    theme: {
+      status: 'working',
+      source: 'theme.css',
+      fingerprint: '',
+      observedTokens: [],
+      observedPrimitives: [],
+      canvasVariablesUsed: [],
+      assetReferences: [],
+    },
+    narrative: {
+      status: 'working',
+      sources: ['.presentation/intent.json', 'outline.md', 'slides/'],
+      slideCount: 0,
+      slidePurposes: [],
+    },
+    content: {
+      status: 'working',
+      slideRoots: [],
+      slideCssFiles: [],
+      assetReferences: [],
+    },
+    audit: {
+      lastKnownStatus: 'unknown',
+      families: {},
+    },
+    driftRules: {
+      changeIsAllowed: true,
+      untrackedLayerBypassIsNotAllowed: true,
+    },
+    fingerprints: {},
+  };
+}
+
 export function createInitialArtifacts() {
   return {
     schemaVersion: 1,
@@ -178,6 +232,21 @@ export function writeRenderState(projectRootInput, payload = {}) {
   return renderState;
 }
 
+export function writeDesignState(projectRootInput, payload = {}) {
+  const paths = getProjectPaths(projectRootInput);
+  const base = createInitialDesignState();
+  const designState = {
+    ...base,
+    ...payload,
+    kind: 'presentation-design-state',
+    schemaVersion: 1,
+    sourceFingerprint: payload.sourceFingerprint || base.sourceFingerprint,
+    generatedAt: payload.generatedAt || new Date().toISOString(),
+  };
+  writeJson(paths.designStateAbs, designState);
+  return designState;
+}
+
 export function writeArtifacts(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
   const artifacts = normalizeArtifacts(payload);
@@ -190,6 +259,9 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   if (!existsSync(paths.renderStateAbs)) {
     writeJson(paths.renderStateAbs, createInitialRenderState());
   }
+  if (!existsSync(paths.designStateAbs)) {
+    writeJson(paths.designStateAbs, createInitialDesignState());
+  }
   if (!existsSync(paths.artifactsAbs)) {
     writeJson(paths.artifactsAbs, createInitialArtifacts());
   }
@@ -197,12 +269,18 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   return {
     renderState: readJson(paths.renderStateAbs),
     artifacts: normalizeArtifacts(readJson(paths.artifactsAbs) || {}),
+    designState: readJson(paths.designStateAbs),
   };
 }
 
 export function readRenderState(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
   return readJson(paths.renderStateAbs);
+}
+
+export function readDesignState(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  return readJson(paths.designStateAbs);
 }
 
 export function readArtifacts(projectRootInput) {

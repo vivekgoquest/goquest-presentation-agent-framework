@@ -28,6 +28,36 @@ function collectFingerprintFiles(projectRootAbs, relativePath, files) {
   }
 }
 
+export function computeFileFingerprint(absPath) {
+  const stats = statSync(absPath, { throwIfNoEntry: false });
+  if (!stats || !stats.isFile()) {
+    return '';
+  }
+
+  const hash = createHash('sha256');
+  hash.update(readFileSync(absPath));
+  return `sha256:${hash.digest('hex')}`;
+}
+
+export function computePathFingerprint(projectRootAbs, relativePath) {
+  const files = [];
+  collectFingerprintFiles(projectRootAbs, relativePath, files);
+  files.sort();
+
+  if (files.length === 0) {
+    return '';
+  }
+
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(`${file}\n`);
+    hash.update(readFileSync(resolve(projectRootAbs, file)));
+    hash.update('\n');
+  }
+
+  return `sha256:${hash.digest('hex')}`;
+}
+
 export function computeSourceFingerprint(projectRootAbs) {
   const hash = createHash('sha256');
   const files = [];
