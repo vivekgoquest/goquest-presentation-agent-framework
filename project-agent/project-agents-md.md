@@ -8,19 +8,20 @@ Start here before reading any vendor-specific adapter files.
 
 Read these files in this order:
 
-1. `.presentation/project.json`
-2. `.presentation/package.generated.json`
+1. `.presentation/runtime/design-state.json`
+2. `.presentation/project.json`
 3. `.presentation/intent.json`
-4. `.presentation/runtime/render-state.json` if it exists
-5. `.presentation/runtime/artifacts.json` if it exists
+4. `.presentation/package.generated.json`
+5. `.presentation/runtime/render-state.json`
+6. `.presentation/runtime/artifacts.json`
 
 Then read authored source as needed:
 
-6. `brief.md`
-7. `outline.md` if it exists
-8. `theme.css`
-9. relevant `slides/<NNN-slide-id>/slide.html`
-10. relevant `slides/<NNN-slide-id>/slide.css` if it exists
+7. `brief.md`
+8. `outline.md` if it exists
+9. `theme.css`
+10. relevant `slides/<NNN-slide-id>/slide.html`
+11. relevant `slides/<NNN-slide-id>/slide.css` if it exists
 
 ## What This Package Contains
 
@@ -32,6 +33,18 @@ The presentation is defined by six lanes:
 4. deterministic generated structure
 5. deterministic runtime evidence
 6. git-backed history
+
+## First Orientation Surface
+
+- `.presentation/runtime/design-state.json`
+  - generated evidence and first orientation surface
+  - single context surface, not single authority
+  - not source of truth and not authorable state
+  - pointers to authoritative canvas, theme, content, intent, package, and runtime evidence files
+
+Do not edit `.presentation/runtime/design-state.json` by hand. If it is missing
+or stale, rerun the project-local CLI and follow the ledger pointers to the
+authoritative files before making changes.
 
 ## Package Truth
 
@@ -85,6 +98,7 @@ Do not edit these by hand:
 
 - `.presentation/project.json`
 - `.presentation/package.generated.json`
+- `.presentation/runtime/design-state.json`
 - `.presentation/runtime/render-state.json`
 - `.presentation/runtime/artifacts.json`
 
@@ -101,6 +115,9 @@ These are system-owned or runtime-owned.
 - do not edit generated wrappers or rendered HTML directly
 - do not edit framework internals during normal deck authoring
 - do not treat runtime evidence files as authorable state
+- `.presentation/runtime/design-state.json` is generated evidence and the first orientation surface
+- use `.presentation/runtime/design-state.json` to find the current canvas/theme/content authorities
+- do not edit `.presentation/runtime/design-state.json` by hand; rerun the project-local CLI if it is missing or stale
 
 ## Slide Rules
 

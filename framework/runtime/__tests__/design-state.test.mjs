@@ -33,7 +33,7 @@ test('buildDesignState reports canvas as fixed and theme/content as working', as
   });
 });
 
-test('buildDesignState extracts theme tokens, primitives, canvas hooks, slide roots, and slide intent', async (t) => {
+test('buildDesignState extracts live theme tokens, primitives, canvas hooks, slide roots, slide intent, and content asset refs', async (t) => {
   const [{ createPresentationScaffold }, { buildDesignState }] = await Promise.all([
     import('../services/scaffold-service.mjs'),
     import('../design-state.js'),
@@ -48,12 +48,25 @@ test('buildDesignState extracts theme tokens, primitives, canvas hooks, slide ro
     [
       '@layer theme {',
       '  :root {',
+      '    /* --commented-token: #111111; */',
       '    --color-accent: #a52020;',
       '    --canvas-slide-bg: var(--color-accent);',
+      '    /* background-image: url("./assets/commented-theme.png"); */',
       '  }',
+      '  /* .commented-class { color: red; } */',
       '  .hero-title { color: var(--color-accent); }',
       '  .image-treatment { background-image: url("./assets/hero.png"); }',
       '}',
+      '',
+    ].join('\n')
+  );
+  writeFileSync(
+    resolve(projectRoot, 'slides', '010-intro', 'slide.html'),
+    [
+      '<div class="slide slide-hero">',
+      '  <!-- background-image: url("./assets/commented-slide.png"); -->',
+      '  <h1 class="hero-title" style="background-image: url(\'./assets/live-slide.png\');">Ledger Test</h1>',
+      '</div>',
       '',
     ].join('\n')
   );
@@ -73,10 +86,11 @@ test('buildDesignState extracts theme tokens, primitives, canvas hooks, slide ro
 
   const state = buildDesignState(projectRoot);
 
-  assert.ok(state.theme.observedTokens.includes('--color-accent'));
-  assert.ok(state.theme.observedPrimitives.includes('.hero-title'));
-  assert.ok(state.theme.canvasVariablesUsed.includes('--canvas-slide-bg'));
+  assert.deepEqual(state.theme.observedTokens, ['--canvas-slide-bg', '--color-accent']);
+  assert.deepEqual(state.theme.observedPrimitives, ['.hero-title', '.image-treatment']);
+  assert.deepEqual(state.theme.canvasVariablesUsed, ['--canvas-slide-bg']);
   assert.deepEqual(state.theme.assetReferences, ['./assets/hero.png']);
+  assert.deepEqual(state.content.assetReferences, ['./assets/live-slide.png']);
   assert.deepEqual(state.content.slideRoots, [{ slideId: 'intro', rootClass: 'slide slide-hero' }]);
   assert.deepEqual(state.narrative.slidePurposes, [{
     slideId: 'intro',

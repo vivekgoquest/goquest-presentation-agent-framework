@@ -213,6 +213,8 @@ The practical effect is:
 - theme can style the surface the canvas exposes
 - content cannot quietly redefine the stage
 
+The runtime also generates `.presentation/runtime/design-state.json` as an agent orientation ledger. The ledger records the fixed canvas contract and points agents back to `theme.css`, `.presentation/intent.json`, `outline.md`, and `slides/` for current theme and content truth. It is generated evidence, not authorable state.
+
 ## Base Canvas Assumptions
 
 The rest of the runtime assumes:

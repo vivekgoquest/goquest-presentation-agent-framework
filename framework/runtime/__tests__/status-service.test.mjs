@@ -16,6 +16,7 @@ test('derivePackageStatus returns authoring with stale finalized outputs when so
   assert.deepEqual(status.facets, {
     delivery: 'finalized_stale',
     evidence: 'current',
+    designState: 'unknown',
   });
   assert.deepEqual(status.nextFocus, ['presentation export', 'deck.pdf']);
 });
@@ -32,8 +33,57 @@ test('derivePackageStatus returns ready_for_finalize with export-focused guidanc
   assert.deepEqual(status.facets, {
     delivery: 'not_finalized',
     evidence: 'current',
+    designState: 'unknown',
   });
   assert.deepEqual(status.nextFocus, ['presentation export']);
+});
+
+test('derivePackageStatus focuses audit when design state is stale without blocking authoring', () => {
+  const status = derivePackageStatus({
+    sourceComplete: true,
+    blockerCount: 0,
+    delivery: 'not_finalized',
+    evidence: 'current',
+    designStateEvidence: 'stale',
+  });
+
+  assert.equal(status.workflow, 'authoring');
+  assert.equal(status.facets.designState, 'stale');
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
+});
+
+test('derivePackageStatus focuses audit when design state is stale even if finalized delivery is stale', () => {
+  const status = derivePackageStatus({
+    sourceComplete: true,
+    blockerCount: 0,
+    delivery: 'finalized_stale',
+    evidence: 'current',
+    designStateEvidence: 'stale',
+    canonicalPdfPath: 'deck.pdf',
+  });
+
+  assert.equal(status.workflow, 'authoring');
+  assert.deepEqual(status.facets, {
+    delivery: 'finalized_stale',
+    evidence: 'current',
+    designState: 'stale',
+  });
+  assert.match(status.summary, /design-state ledger is not current/i);
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
+});
+
+test('derivePackageStatus focuses audit when design state is missing without blocking authoring', () => {
+  const status = derivePackageStatus({
+    sourceComplete: true,
+    blockerCount: 0,
+    delivery: 'not_finalized',
+    evidence: 'current',
+    designStateEvidence: 'missing',
+  });
+
+  assert.equal(status.workflow, 'authoring');
+  assert.equal(status.facets.designState, 'missing');
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
 });
 
 test('derivePackageStatus returns blocked when a hard blocker is present', () => {
@@ -48,6 +98,7 @@ test('derivePackageStatus returns blocked when a hard blocker is present', () =>
   assert.deepEqual(status.facets, {
     delivery: 'finalize_blocked',
     evidence: 'stale',
+    designState: 'unknown',
   });
 });
 
@@ -64,6 +115,7 @@ test('derivePackageStatus returns finalized with the canonical root pdf as the n
   assert.deepEqual(status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
+    designState: 'unknown',
   });
   assert.deepEqual(status.nextFocus, ['deck.pdf']);
 });
@@ -81,6 +133,7 @@ test('derivePackageStatus does not promote finalized delivery to finalized when 
   assert.deepEqual(status.facets, {
     delivery: 'finalized_current',
     evidence: 'missing',
+    designState: 'unknown',
   });
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
 });

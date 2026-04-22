@@ -40,6 +40,7 @@ Interpretation:
 Use `.claude/AGENTS.md` plus `.presentation/*` for presentation package truth:
 
 - `.claude/AGENTS.md` defines universal startup order, edit lanes, and required project-local CLI commands
+- `.presentation/runtime/design-state.json` is the first orientation surface
 - `.presentation/project.json` is stable system identity
 - `.presentation/intent.json` is editable authoring intent
 - `.presentation/package.generated.json` is deterministic structure generated from source
@@ -53,6 +54,15 @@ In slide-folder mode:
 - runtime generates the outer `<section id="<slide-id>" data-slide>` wrapper
 - the assembled HTML is served on demand for preview, audit, export, and finalize
 - decks with more than 10 slides must carry a completed `outline.md` before validation passes
+
+## Design State Ledger
+
+Read `.presentation/runtime/design-state.json` first when it exists.
+
+It is a generated context surface, not source of truth and not editable.
+It points to the authoritative canvas, theme, intent, structure, and runtime evidence files.
+
+The rule is: single context surface, not single authority.
 
 ## Structural Primitives
 
@@ -98,5 +108,6 @@ Deck work should not:
 - redefine protected canvas selectors from theme or slide-local CSS
 - restyle runtime chrome selectors from slide-local CSS
 - hand-edit `.presentation/package.generated.json`
+- hand-edit `.presentation/runtime/design-state.json`
 - hand-edit `.presentation/runtime/*.json`
 - create standalone root-level HTML decks when a project workspace is the intended flow

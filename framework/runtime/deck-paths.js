@@ -11,6 +11,7 @@ export const PROJECT_INTENT_FILENAME = 'intent.json';
 export const PROJECT_PACKAGE_MANIFEST_FILENAME = 'package.generated.json';
 export const PROJECT_RUNTIME_DIRNAME = 'runtime';
 export const PROJECT_RENDER_STATE_FILENAME = 'render-state.json';
+export const PROJECT_DESIGN_STATE_FILENAME = 'design-state.json';
 export const PROJECT_ARTIFACTS_FILENAME = 'artifacts.json';
 export const PROJECT_FRAMEWORK_DIRNAME = 'framework';
 export const PROJECT_FRAMEWORK_BASE_DIRNAME = 'base';
@@ -140,6 +141,7 @@ export function getProjectSystemPaths(projectRootInput) {
   const packageManifestAbs = resolve(systemDirAbs, PROJECT_PACKAGE_MANIFEST_FILENAME);
   const runtimeDirAbs = resolve(systemDirAbs, PROJECT_RUNTIME_DIRNAME);
   const renderStateAbs = resolve(runtimeDirAbs, PROJECT_RENDER_STATE_FILENAME);
+  const designStateAbs = resolve(runtimeDirAbs, PROJECT_DESIGN_STATE_FILENAME);
   const artifactsAbs = resolve(runtimeDirAbs, PROJECT_ARTIFACTS_FILENAME);
   const frameworkDirAbs = resolve(systemDirAbs, PROJECT_FRAMEWORK_DIRNAME);
   const frameworkBaseAbs = resolve(frameworkDirAbs, PROJECT_FRAMEWORK_BASE_DIRNAME);
@@ -153,6 +155,7 @@ export function getProjectSystemPaths(projectRootInput) {
     packageManifestAbs,
     runtimeDirAbs,
     renderStateAbs,
+    designStateAbs,
     artifactsAbs,
     frameworkDirAbs,
     frameworkBaseAbs,
@@ -315,6 +318,8 @@ export function getProjectPaths(projectRootInput) {
     runtimeDirAbs: systemPaths.runtimeDirAbs,
     renderStateRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_RENDER_STATE_FILENAME}`,
     renderStateAbs: systemPaths.renderStateAbs,
+    designStateRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_DESIGN_STATE_FILENAME}`,
+    designStateAbs: systemPaths.designStateAbs,
     artifactsRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_RUNTIME_DIRNAME}/${PROJECT_ARTIFACTS_FILENAME}`,
     artifactsAbs: systemPaths.artifactsAbs,
     frameworkDirRel: `${PROJECT_SYSTEM_DIRNAME}/${PROJECT_FRAMEWORK_DIRNAME}`,

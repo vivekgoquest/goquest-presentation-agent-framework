@@ -10,6 +10,15 @@ function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-scaffold-package-'));
 }
 
+function markdownSection(content, heading) {
+  const headingText = `## ${heading}`;
+  const start = content.indexOf(headingText);
+  if (start === -1) return '';
+  const bodyStart = start + headingText.length;
+  const nextHeading = content.indexOf('\n## ', bodyStart);
+  return content.slice(bodyStart, nextHeading === -1 ? undefined : nextHeading);
+}
+
 test('scaffold package moves the Claude packet fully under .claude', async () => {
   const { getProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
 
@@ -36,6 +45,30 @@ test('scaffold package writes AGENTS and CLAUDE files beneath .claude only', asy
   assert.equal(existsSync(resolve(projectRoot, '.claude', 'CLAUDE.md')), true);
   assert.equal(existsSync(resolve(projectRoot, 'AGENTS.md')), false);
   assert.match(readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8'), /\.presentation\/package\.generated\.json/);
+});
+
+test('scaffolded guidance orients agents through the design state ledger', async (t) => {
+  const { writeProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
+  const projectRoot = createTempProjectRoot();
+  t.after(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  writeProjectAgentScaffoldPackage(projectRoot, { frameworkRoot: process.cwd() });
+
+  const agentsContent = readFileSync(resolve(projectRoot, '.claude', 'AGENTS.md'), 'utf8');
+  assert.match(agentsContent, /\.presentation\/runtime\/design-state\.json/);
+  assert.match(agentsContent, /generated evidence/i);
+  assert.match(agentsContent, /single context surface/);
+  assert.match(agentsContent, /not source of truth/);
+  assert.match(agentsContent, /not single authority/);
+  const orientationSection = markdownSection(agentsContent, 'First Orientation Surface');
+  assert.match(orientationSection, /\.presentation\/runtime\/design-state\.json/);
+  assert.doesNotMatch(orientationSection, /(?:design-state|\.presentation\/runtime\/design-state\.json)[^\n]*(?<!not )source of truth/i);
+  assert.doesNotMatch(orientationSection, /(?:design-state|\.presentation\/runtime\/design-state\.json)[^\n]*(?<!not )single authority/i);
+  assert.doesNotMatch(agentsContent, /(?:design-state|\.presentation\/runtime\/design-state\.json)\s+is\s+(?!not\b)[^\n]*(?:source of truth|single authority)/i);
+
+  const frameworkContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'framework.md'), 'utf8');
+  assert.match(frameworkContent, /single context surface/);
+  assert.match(frameworkContent, /not source of truth/);
 });
 
 test('scaffold package keeps the Claude packet shell-less and CLI-first', async (t) => {

@@ -156,6 +156,7 @@ test('presentation-cli status returns workflow and facets', async (t) => {
   assert.equal(json.status, 'ok');
   assert.ok(json.workflow);
   assert.ok(json.facets);
+  assert.ok(json.evidence.includes('.presentation/runtime/design-state.json'));
 });
 
 test('presentation-cli inspect package returns a structured package envelope', async (t) => {
@@ -171,6 +172,7 @@ test('presentation-cli inspect package returns a structured package envelope', a
   assert.equal(json.status, 'ok');
   assert.deepEqual(json.scope, { kind: 'package', projectRoot });
   assert.equal(json.data.manifest.counts.slidesTotal, 2);
+  assert.equal(json.data.designState.kind, 'presentation-design-state');
   assert.ok(json.freshness);
 });
 

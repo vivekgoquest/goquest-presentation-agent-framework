@@ -112,7 +112,17 @@ test('presentation core delegates initProject and previewPresentation through in
         sourceDir: target.projectRoot,
         slideCount: options.slideCount,
         files: ['brief.md'],
+        };
+      },
+    getProjectPaths(projectRoot) {
+      calls.push(['getProjectPaths', projectRoot]);
+      return {
+        projectRootAbs: projectRoot,
       };
+    },
+    refreshDesignState(projectRootAbs) {
+      calls.push(['refreshDesignState', projectRootAbs]);
+      return { kind: 'presentation-design-state' };
     },
     async previewPresentation(projectRoot, options = {}) {
       calls.push(['previewPresentation', projectRoot, options]);
@@ -132,6 +142,8 @@ test('presentation core delegates initProject and previewPresentation through in
   assert.equal(previewResult.previewUrl, 'http://127.0.0.1:4173/preview/');
   assert.deepEqual(calls, [
     ['createProjectScaffold', { projectRoot: '/tmp/core-init-project' }, { slideCount: 4, copyFramework: false }],
+    ['getProjectPaths', '/tmp/core-preview-project'],
+    ['refreshDesignState', '/tmp/core-preview-project'],
     ['previewPresentation', '/tmp/core-preview-project', { mode: 'serve' }],
   ]);
 });
@@ -149,12 +161,15 @@ test('presentation core inspectPackage returns manifest, evidence, and status', 
   assert.equal(result.projectRoot, projectRoot);
   assert.equal(result.manifest.counts.slidesTotal, 1);
   assert.equal(result.status.workflow, 'onboarding');
+  assert.equal(result.designState.kind, 'presentation-design-state');
+  assert.equal(result.designState.theme.status, 'working');
   assert.ok(result.renderState);
   assert.ok(result.artifacts);
   assert.deepEqual(result.evidence, [
     '.presentation/package.generated.json',
     '.presentation/runtime/render-state.json',
     '.presentation/runtime/artifacts.json',
+    '.presentation/runtime/design-state.json',
   ]);
 });
 
@@ -177,6 +192,7 @@ test('presentation core status and inspect report finalized after a successful r
   assert.deepEqual(status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
+    designState: 'current',
   });
   assert.equal(status.nextBoundary, 'maintain');
   assert.deepEqual(status.nextFocus, [rootPdfRel]);
@@ -184,6 +200,7 @@ test('presentation core status and inspect report finalized after a successful r
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_current',
     evidence: 'current',
+    designState: 'current',
   });
   assert.equal(inspection.status.nextBoundary, 'maintain');
   assert.deepEqual(inspection.status.nextFocus, [rootPdfRel]);
@@ -213,14 +230,18 @@ test('presentation core marks finalized delivery stale after authored source cha
   assert.deepEqual(status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'stale',
   });
-  assert.deepEqual(status.nextFocus, ['presentation export', rootPdfRel]);
+  assert.match(status.summary, /design-state ledger is not current/i);
+  assert.deepEqual(status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'stale',
   });
-  assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
+  assert.match(inspection.status.summary, /design-state ledger is not current/i);
+  assert.deepEqual(inspection.status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.artifacts.finalized.exists, true);
 });
 
@@ -254,6 +275,7 @@ test('presentation core keeps stale finalized status after an explicit non-canon
   assert.deepEqual(inspection.status.facets, {
     delivery: 'finalized_stale',
     evidence: 'stale',
+    designState: 'current',
   });
   assert.deepEqual(inspection.status.nextFocus, ['presentation export', rootPdfRel]);
   assert.equal(inspection.artifacts.finalized.exists, true);
@@ -290,6 +312,7 @@ test('presentation core does not treat failed validation evidence as ready for f
   assert.deepEqual(status.facets, {
     delivery: 'not_finalized',
     evidence: 'stale',
+    designState: 'stale',
   });
   assert.equal(inspection.renderState.status, 'fail');
   assert.equal(inspection.status.workflow, 'authoring');
@@ -442,7 +465,10 @@ test('presentation core exportPresentation defaults to the root pdf deliverable 
   assert.equal(result.projectRoot, projectRoot);
   assert.equal(result.outputDir, '');
   assert.deepEqual(result.artifacts, [rootPdfRel]);
-  assert.deepEqual(result.evidenceUpdated, ['.presentation/runtime/artifacts.json']);
+  assert.deepEqual(result.evidenceUpdated, [
+    '.presentation/runtime/artifacts.json',
+    '.presentation/runtime/design-state.json',
+  ]);
 });
 
 test('presentation core forwards explicit slide selections as filtered export requests and surfaces canonical-root rejections', async (t) => {

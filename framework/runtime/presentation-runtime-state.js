@@ -35,6 +35,64 @@ function deriveOutputDir(pathRecord) {
   return artifactPath.split('/').slice(0, -1).join('/');
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function mergePlainObjects(base, patch) {
+  if (!isPlainObject(base)) {
+    return isPlainObject(patch) ? { ...patch } : patch;
+  }
+
+  if (!isPlainObject(patch)) {
+    return base;
+  }
+
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(base[key])) {
+      merged[key] = mergePlainObjects(base[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+function mergeDesignStatePayload(base, payload = {}) {
+  const merged = { ...base, ...payload };
+  const branchKeys = [
+    'project',
+    'authority',
+    'canvas',
+    'theme',
+    'narrative',
+    'content',
+    'audit',
+    'driftRules',
+    'fingerprints',
+  ];
+
+  for (const key of branchKeys) {
+    if (key in payload) {
+      merged[key] = mergePlainObjects(base[key], payload[key]);
+    }
+  }
+
+  return merged;
+}
+
+function normalizeDesignState(payload = {}) {
+  const base = createInitialDesignState();
+  const designState = mergeDesignStatePayload(base, payload);
+  designState.kind = 'presentation-design-state';
+  designState.schemaVersion = 1;
+  designState.sourceFingerprint = payload.sourceFingerprint || base.sourceFingerprint;
+  designState.generatedAt = payload.generatedAt || base.generatedAt;
+  return designState;
+}
+
 export function createInitialRenderState() {
   return {
     schemaVersion: 1,
@@ -51,6 +109,60 @@ export function createInitialRenderState() {
     failures: [],
     issues: [],
     lastCheckedAt: null,
+  };
+}
+
+export function createInitialDesignState() {
+  return {
+    schemaVersion: 1,
+    kind: 'presentation-design-state',
+    sourceFingerprint: '',
+    generatedAt: null,
+    project: null,
+    authority: {
+      canvas: 'framework/canvas/canvas-contract.mjs',
+      theme: 'theme.css',
+      intent: '.presentation/intent.json',
+      structure: '.presentation/package.generated.json',
+      runtime: '.presentation/runtime/',
+    },
+    canvas: {
+      status: 'fixed',
+      stage: null,
+      structuralTokens: [],
+      protectedSelectors: [],
+      allowedThemeVariables: [],
+    },
+    theme: {
+      status: 'working',
+      source: 'theme.css',
+      fingerprint: '',
+      observedTokens: [],
+      observedPrimitives: [],
+      canvasVariablesUsed: [],
+      assetReferences: [],
+    },
+    narrative: {
+      status: 'working',
+      sources: ['.presentation/intent.json', 'outline.md', 'slides/'],
+      slideCount: 0,
+      slidePurposes: [],
+    },
+    content: {
+      status: 'working',
+      slideRoots: [],
+      slideCssFiles: [],
+      assetReferences: [],
+    },
+    audit: {
+      lastKnownStatus: 'unknown',
+      families: {},
+    },
+    driftRules: {
+      changeIsAllowed: true,
+      untrackedLayerBypassIsNotAllowed: true,
+    },
+    fingerprints: {},
   };
 }
 
@@ -178,6 +290,15 @@ export function writeRenderState(projectRootInput, payload = {}) {
   return renderState;
 }
 
+export function writeDesignState(projectRootInput, payload = {}) {
+  const paths = getProjectPaths(projectRootInput);
+  const existing = normalizeDesignState(readJson(paths.designStateAbs) || {});
+  const designState = normalizeDesignState(mergeDesignStatePayload(existing, payload));
+  designState.generatedAt = payload.generatedAt || new Date().toISOString();
+  writeJson(paths.designStateAbs, designState);
+  return designState;
+}
+
 export function writeArtifacts(projectRootInput, payload = {}) {
   const paths = getProjectPaths(projectRootInput);
   const artifacts = normalizeArtifacts(payload);
@@ -190,6 +311,9 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   if (!existsSync(paths.renderStateAbs)) {
     writeJson(paths.renderStateAbs, createInitialRenderState());
   }
+  if (!existsSync(paths.designStateAbs)) {
+    writeJson(paths.designStateAbs, createInitialDesignState());
+  }
   if (!existsSync(paths.artifactsAbs)) {
     writeJson(paths.artifactsAbs, createInitialArtifacts());
   }
@@ -197,12 +321,19 @@ export function ensurePresentationRuntimeStateFiles(projectRootInput) {
   return {
     renderState: readJson(paths.renderStateAbs),
     artifacts: normalizeArtifacts(readJson(paths.artifactsAbs) || {}),
+    designState: readDesignState(projectRootInput),
   };
 }
 
 export function readRenderState(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
   return readJson(paths.renderStateAbs);
+}
+
+export function readDesignState(projectRootInput) {
+  const paths = getProjectPaths(projectRootInput);
+  const designState = readJson(paths.designStateAbs);
+  return designState ? normalizeDesignState(designState) : null;
 }
 
 export function readArtifacts(projectRootInput) {

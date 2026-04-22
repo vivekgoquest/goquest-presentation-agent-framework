@@ -21,6 +21,13 @@ const EVIDENCE_FACETS = new Set([
   'unknown',
 ]);
 
+const DESIGN_STATE_FACETS = new Set([
+  'current',
+  'stale',
+  'missing',
+  'unknown',
+]);
+
 function normalizeBlockers(blockers) {
   return Array.isArray(blockers)
     ? blockers.map((blocker) => String(blocker || '').trim()).filter(Boolean)
@@ -43,6 +50,18 @@ function normalizeEvidenceFacet(evidence) {
   return 'unknown';
 }
 
+function normalizeDesignStateFacet(designStateEvidence) {
+  if (DESIGN_STATE_FACETS.has(designStateEvidence)) {
+    return designStateEvidence;
+  }
+
+  return 'unknown';
+}
+
+function designStateNeedsAudit(facets) {
+  return facets.designState === 'stale' || facets.designState === 'missing';
+}
+
 function buildSummary(workflow, facets) {
   switch (workflow) {
     case 'onboarding':
@@ -55,6 +74,9 @@ function buildSummary(workflow, facets) {
       return 'Source is complete, no hard blockers are active, and current evidence says the package is ready for presentation export.';
     case 'authoring':
     default:
+      if (designStateNeedsAudit(facets)) {
+        return 'Authoring is still active because the generated design-state ledger is not current.';
+      }
       if (facets.delivery === 'finalized_stale') {
         return 'Authoring is still active because the latest source has moved beyond the canonical root PDF.';
       }
@@ -112,6 +134,9 @@ function buildNextFocus(workflow, facets, facts = {}) {
       return canonicalPdfFocus.length > 0 ? canonicalPdfFocus : ['presentation export'];
     case 'authoring':
     default:
+      if (designStateNeedsAudit(facets)) {
+        return ['presentation audit all'];
+      }
       if (facets.delivery === 'finalized_stale') {
         return canonicalPdfFocus.length > 0
           ? ['presentation export', ...canonicalPdfFocus]
@@ -131,6 +156,7 @@ export function derivePackageStatus(facts = {}) {
   const facets = {
     delivery: normalizeDeliveryFacet(facts.delivery, blockerCount),
     evidence: normalizeEvidenceFacet(facts.evidence),
+    designState: normalizeDesignStateFacet(facts.designStateEvidence),
   };
 
   let workflow = 'authoring';
@@ -138,6 +164,8 @@ export function derivePackageStatus(facts = {}) {
     workflow = 'onboarding';
   } else if (blockerCount > 0 || facets.delivery === 'finalize_blocked') {
     workflow = 'blocked';
+  } else if (designStateNeedsAudit(facets)) {
+    workflow = 'authoring';
   } else if (facets.delivery === 'finalized_current' && facets.evidence === 'current') {
     workflow = 'finalized';
   } else if (facets.evidence === 'current' && facets.delivery !== 'finalized_stale') {

@@ -6,7 +6,7 @@ import {
   getProjectPaths,
 } from './deck-paths.js';
 import { ensurePresentationPackageFiles } from './presentation-package.js';
-import { readArtifacts, readRenderState } from './presentation-runtime-state.js';
+import { readArtifacts, readDesignState, readRenderState } from './presentation-runtime-state.js';
 import { derivePackageStatus, toLegacyProjectStatus } from './status-service.js';
 import { validateSlideDeckWorkspace } from './deck-policy.js';
 import { listSlideSourceEntries } from './deck-source.js';
@@ -55,6 +55,19 @@ function resolveEvidenceFacet(renderState, currentSourceFingerprint) {
   }
 
   return renderFingerprint === currentSourceFingerprint ? 'current' : 'stale';
+}
+
+function resolveDesignStateFacet(designState, currentSourceFingerprint) {
+  if (!designState) {
+    return 'missing';
+  }
+
+  const designStateFingerprint = String(designState?.sourceFingerprint || '').trim();
+  if (!designStateFingerprint || !currentSourceFingerprint) {
+    return 'stale';
+  }
+
+  return designStateFingerprint === currentSourceFingerprint ? 'current' : 'stale';
 }
 
 function resolveDeliveryFacet({
@@ -143,6 +156,7 @@ export function getProjectState(projectRootInput) {
   const paths = getProjectPaths(target.projectRootAbs);
   const { manifest } = ensurePresentationPackageFiles(paths.projectRootAbs);
   const renderState = readRenderState(paths.projectRootAbs);
+  const designState = readDesignState(paths.projectRootAbs);
   const artifacts = readArtifacts(paths.projectRootAbs);
   const slideEntries = listSlideSourceEntries(paths).filter((entry) => entry.isValidName);
 
@@ -195,11 +209,13 @@ export function getProjectState(projectRootInput) {
     artifacts,
   });
   const evidence = resolveEvidenceFacet(renderState, currentSourceFingerprint);
+  const designStateEvidence = resolveDesignStateFacet(designState, currentSourceFingerprint);
   const packageStatus = derivePackageStatus({
     sourceComplete,
     blockerCount,
     delivery,
     evidence,
+    designStateEvidence,
     blockers: validationError ? [validationError] : [],
     canonicalPdfPath: paths.rootPdfRel,
     briefComplete,
@@ -221,6 +237,8 @@ export function getProjectState(projectRootInput) {
     nextStep = authoringNextStep;
   } else if (workflow === 'blocked') {
     nextStep = 'Run presentation audit all and fix the current policy violation before preview or export.';
+  } else if (packageStatus.facets.designState === 'stale' || packageStatus.facets.designState === 'missing') {
+    nextStep = 'Run presentation audit all because the generated design-state ledger is not current.';
   } else if (packageStatus.facets.delivery === 'finalized_stale') {
     nextStep = 'Run presentation export again to refresh the canonical root PDF for the latest source.';
   } else if (packageStatus.facets.evidence !== 'current') {
@@ -251,8 +269,10 @@ export function getProjectState(projectRootInput) {
     summaryReady,
     packageStateAvailable: Boolean(manifest),
     runtimeEvidenceAvailable: Boolean(renderState),
+    designStateAvailable: Boolean(designState),
     lastRenderStatus: renderState?.status || 'unknown',
     lastCheckedAt: renderState?.lastCheckedAt || renderState?.generatedAt || '',
+    lastDesignStateGeneratedAt: designState?.generatedAt || '',
     lastPolicyError: validationError || '',
     policyCategory,
     nextStep,

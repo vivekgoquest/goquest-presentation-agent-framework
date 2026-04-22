@@ -236,6 +236,7 @@ function buildInspectPackageEnvelope(command, inspection) {
       manifest: inspection.manifest,
       renderState: inspection.renderState,
       artifacts: inspection.artifacts,
+      designState: inspection.designState,
     },
     evidence: inspection.evidence,
     freshness: inspection.freshness,
