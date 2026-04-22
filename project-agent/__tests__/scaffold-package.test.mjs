@@ -10,6 +10,15 @@ function createTempProjectRoot() {
   return mkdtempSync(join(tmpdir(), 'pf-scaffold-package-'));
 }
 
+function markdownSection(content, heading) {
+  const headingText = `## ${heading}`;
+  const start = content.indexOf(headingText);
+  if (start === -1) return '';
+  const bodyStart = start + headingText.length;
+  const nextHeading = content.indexOf('\n## ', bodyStart);
+  return content.slice(bodyStart, nextHeading === -1 ? undefined : nextHeading);
+}
+
 test('scaffold package moves the Claude packet fully under .claude', async () => {
   const { getProjectAgentScaffoldPackage } = await import('../scaffold-package.mjs');
 
@@ -51,6 +60,11 @@ test('scaffolded guidance orients agents through the design state ledger', async
   assert.match(agentsContent, /single context surface/);
   assert.match(agentsContent, /not source of truth/);
   assert.match(agentsContent, /not single authority/);
+  const orientationSection = markdownSection(agentsContent, 'First Orientation Surface');
+  assert.match(orientationSection, /\.presentation\/runtime\/design-state\.json/);
+  assert.doesNotMatch(orientationSection, /(?:design-state|\.presentation\/runtime\/design-state\.json)[^\n]*(?<!not )source of truth/i);
+  assert.doesNotMatch(orientationSection, /(?:design-state|\.presentation\/runtime\/design-state\.json)[^\n]*(?<!not )single authority/i);
+  assert.doesNotMatch(agentsContent, /(?:design-state|\.presentation\/runtime\/design-state\.json)\s+is\s+(?!not\b)[^\n]*(?:source of truth|single authority)/i);
 
   const frameworkContent = readFileSync(resolve(projectRoot, '.claude', 'rules', 'framework.md'), 'utf8');
   assert.match(frameworkContent, /single context surface/);
