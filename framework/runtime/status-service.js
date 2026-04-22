@@ -74,11 +74,11 @@ function buildSummary(workflow, facets) {
       return 'Source is complete, no hard blockers are active, and current evidence says the package is ready for presentation export.';
     case 'authoring':
     default:
-      if (facets.delivery === 'finalized_stale') {
-        return 'Authoring is still active because the latest source has moved beyond the canonical root PDF.';
-      }
       if (designStateNeedsAudit(facets)) {
         return 'Authoring is still active because the generated design-state ledger is not current.';
+      }
+      if (facets.delivery === 'finalized_stale') {
+        return 'Authoring is still active because the latest source has moved beyond the canonical root PDF.';
       }
       if (facets.evidence !== 'current') {
         return 'Authoring is still active because runtime evidence is not current enough to trust presentation export.';

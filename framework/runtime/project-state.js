@@ -237,10 +237,10 @@ export function getProjectState(projectRootInput) {
     nextStep = authoringNextStep;
   } else if (workflow === 'blocked') {
     nextStep = 'Run presentation audit all and fix the current policy violation before preview or export.';
-  } else if (packageStatus.facets.delivery === 'finalized_stale') {
-    nextStep = 'Run presentation export again to refresh the canonical root PDF for the latest source.';
   } else if (packageStatus.facets.designState === 'stale' || packageStatus.facets.designState === 'missing') {
     nextStep = 'Run presentation audit all because the generated design-state ledger is not current.';
+  } else if (packageStatus.facets.delivery === 'finalized_stale') {
+    nextStep = 'Run presentation export again to refresh the canonical root PDF for the latest source.';
   } else if (packageStatus.facets.evidence !== 'current') {
     nextStep = renderState?.status === 'fail'
       ? 'Fix the current render or validation issues, then rerun presentation audit all.'

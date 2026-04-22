@@ -68,6 +68,7 @@ test('derivePackageStatus focuses audit when design state is stale even if final
     evidence: 'current',
     designState: 'stale',
   });
+  assert.match(status.summary, /design-state ledger is not current/i);
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
 });
 

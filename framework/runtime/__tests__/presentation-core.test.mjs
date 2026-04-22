@@ -232,6 +232,7 @@ test('presentation core marks finalized delivery stale after authored source cha
     evidence: 'stale',
     designState: 'stale',
   });
+  assert.match(status.summary, /design-state ledger is not current/i);
   assert.deepEqual(status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.status.workflow, 'authoring');
   assert.deepEqual(inspection.status.facets, {
@@ -239,6 +240,7 @@ test('presentation core marks finalized delivery stale after authored source cha
     evidence: 'stale',
     designState: 'stale',
   });
+  assert.match(inspection.status.summary, /design-state ledger is not current/i);
   assert.deepEqual(inspection.status.nextFocus, ['presentation audit all']);
   assert.equal(inspection.artifacts.finalized.exists, true);
 });
