@@ -22,6 +22,8 @@ const CLASS_SELECTOR_RE = /(^|[\s,{])\.([a-z][a-z0-9_-]*)\b/gi;
 const CSS_URL_RE = /url\((['"]?)(.*?)\1\)/gi;
 const HTML_URL_RE = /\b(?:src|href|poster)\s*=\s*(["'])(.*?)\1/gi;
 const SLIDE_ROOT_RE = /<([a-z][a-z0-9-]*)\b[^>]*class=(["'])([^"']*\bslide(?:\s|\b)[^"']*)\2/i;
+const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 
 function getDesignStateAbs(projectRootInput) {
   const paths = getProjectPaths(projectRootInput);
@@ -50,25 +52,36 @@ function uniqueSorted(values) {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
+function stripCssComments(source) {
+  return String(source || '').replace(CSS_COMMENT_RE, '');
+}
+
+function stripHtmlComments(source) {
+  return String(source || '').replace(HTML_COMMENT_RE, '');
+}
+
 function extractCssVariables(css) {
-  return uniqueSorted([...css.matchAll(CSS_VARIABLE_RE)].map((match) => match[1]));
+  const source = stripCssComments(css);
+  return uniqueSorted([...source.matchAll(CSS_VARIABLE_RE)].map((match) => match[1]));
 }
 
 function extractCssClasses(css) {
-  return uniqueSorted([...css.matchAll(CLASS_SELECTOR_RE)].map((match) => `.${match[2]}`));
+  const source = stripCssComments(css);
+  return uniqueSorted([...source.matchAll(CLASS_SELECTOR_RE)].map((match) => `.${match[2]}`));
 }
 
 function extractUrlReferences(source) {
+  const normalizedSource = stripHtmlComments(stripCssComments(source));
   const references = [];
 
-  for (const match of source.matchAll(CSS_URL_RE)) {
+  for (const match of normalizedSource.matchAll(CSS_URL_RE)) {
     const value = String(match[2] || '').trim();
     if (value && !value.startsWith('data:') && !value.startsWith('#')) {
       references.push(value);
     }
   }
 
-  for (const match of source.matchAll(HTML_URL_RE)) {
+  for (const match of normalizedSource.matchAll(HTML_URL_RE)) {
     const value = String(match[2] || '').trim();
     if (value && !value.startsWith('data:') && !value.startsWith('#')) {
       references.push(value);
